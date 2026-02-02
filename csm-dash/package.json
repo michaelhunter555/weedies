@@ -1,0 +1,36 @@
+{
+  "name": "hunter-expenses",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@emotion/react": "^11.13.3",
+    "@emotion/styled": "^11.13.0",
+    "@mui/icons-material": "^6.1.6",
+    "@mui/material": "^6.1.6",
+    "@mui/types": "^7.2.19",
+    "@mui/x-charts": "^7.22.1",
+    "@mui/x-data-grid": "^7.22.1",
+    "@mui/x-date-pickers": "^7.22.1",
+    "@tanstack/react-query": "^5.59.17",
+    "axios": "^1.11.0",
+    "dayjs": "^1.11.13",
+    "mongoose": "^8.8.0",
+    "next": "15.0.2",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "eslint": "^8",
+    "eslint-config-next": "15.0.2",
+    "typescript": "^5"
+  }
+}
