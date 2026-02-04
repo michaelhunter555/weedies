@@ -5,11 +5,11 @@ import ListItemIcon from "@mui/material/ListItemIcon";
 import ListItemText from "@mui/material/ListItemText";
 
 const benefits = [
-  "Store-pickup Discount",
-  "Free-Shipping via Fed-Ex",
-  "Complete Fitness bike with Tablet Display",
-  "Increase + or Decrease - intensity",
-  "Easily adjustable handlebar & seat height",
+  "Lab-tested products (COA available)",
+  "Discreet packaging",
+  "Fast local pickup or delivery options",
+  "Secure checkout",
+  "Fresh inventory",
 ];
 
 const BenefitsList = () => {

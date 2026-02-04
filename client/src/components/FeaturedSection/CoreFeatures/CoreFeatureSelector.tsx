@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import Box from "@mui/material/Box";
 import CardMedia from "@mui/material/CardMedia";
@@ -15,6 +15,13 @@ const CoreFeaturePreview = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const isTablet = useMediaQuery(theme.breakpoints.down("md"));
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const effectiveIsMobile = mounted ? isMobile : false;
 
   const handleFeatureChange = (path: string) => {
     setPath(path);
@@ -23,15 +30,15 @@ const CoreFeaturePreview = () => {
   return (
     <Grid
       container
-      direction={isMobile ? "column" : "row"}
+      direction={effectiveIsMobile ? "column" : "row"}
       justifyContent="center"
       spacing={2}
     >
-      <Grid size={isMobile ? 12 : 4} order={isMobile ? 2 : undefined}>
+      <Grid size={effectiveIsMobile ? 12 : 4} order={effectiveIsMobile ? 2 : undefined}>
         <FeaturedCards onClick={handleFeatureChange} />
       </Grid>
       <Divider orientation="vertical" flexItem />
-      <Grid size={isMobile ? 12 : 7}>
+      <Grid size={effectiveIsMobile ? 12 : 7}>
         <Box sx={{ border: "1px solid #b1b1b1", borderRadius: 2 }}>
           <CardMedia
             component="img"

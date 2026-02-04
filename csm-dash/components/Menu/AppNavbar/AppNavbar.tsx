@@ -71,7 +71,7 @@ export default function AppNavbar() {
               component="h1"
               sx={{ color: "text.primary" }}
             >
-              Dashboard
+              Weedies CMS
             </Typography>
           </Stack>
           <ColorModeIconDropdown />

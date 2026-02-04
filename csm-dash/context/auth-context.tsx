@@ -34,7 +34,7 @@ export const AuthProvider = ({ children }: {children: React.ReactNode}) => {
         name: "",
         id: "",
         isLoggedIn: false,
-        jwtTokent: null
+        jwtToken: null
     })
     const [hydrated, setHydrated] = useState<boolean>(false);
 
@@ -69,7 +69,7 @@ export const AuthProvider = ({ children }: {children: React.ReactNode}) => {
         mutationFn: async (p:{email: string, password: string}) => {
             const { email, password } = p;
             return await request(
-                `admin/login`, 
+                `/login`, 
                 'POST', 
                 JSON.stringify({ email, password }),
                 {"Content-Type":"application/json"}
@@ -81,12 +81,12 @@ export const AuthProvider = ({ children }: {children: React.ReactNode}) => {
         if(password && email) {
             login.mutate({ email, password}, {
                 onSuccess: (data) => {
-                    console.log("userloggedin:",data)
+                    const admin = data?.admin;
                     const newUser = {
-                        name: data.name,
-                        id: data.id,
+                        name: admin?.name ?? "",
+                        id: admin?.id ?? "",
                         isLoggedIn: true,
-                        jwtToken: data.token,
+                        jwtToken: data.accessToken ?? null,
                     }
                     setUser(newUser)
 
@@ -103,7 +103,7 @@ export const AuthProvider = ({ children }: {children: React.ReactNode}) => {
 
     const handleLogout = async () => {
         await request(
-            `user/logout`, 
+            `/logout`, 
             'POST', 
             null, 
             {

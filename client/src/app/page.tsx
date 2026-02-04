@@ -1,5 +1,5 @@
 "use client";
-import { useContext, useState } from "react";
+import { useContext, useEffect, useState } from "react";
 
 import Image from "next/image";
 
@@ -31,12 +31,16 @@ import Chip from "@mui/material/Chip";
 import Container from "@mui/material/Container";
 import Divider from "@mui/material/Divider";
 import Grid from "@mui/material/Grid2";
+import Paper from "@mui/material/Paper";
 import Stack from "@mui/material/Stack";
 import useTheme from "@mui/material/styles/useTheme";
 import Typography from "@mui/material/Typography";
 import useMediaQuery from "@mui/material/useMediaQuery";
 
-import { Content, PageContainer } from "../components/Footer/FooterStyles";
+import ProductCard from "@/components/Products/ProductCard";
+import Collection from "@/components/Collections/Collection";
+import ParkRoundedIcon from '@mui/icons-material/ParkRounded';
+import ReviewsSection from "@/components/Reviews/ReviewsSection";
 
 export default function Home() {
   const auth = useContext(AuthContext);
@@ -46,6 +50,10 @@ export default function Home() {
 
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const isTablet = useMediaQuery(theme.breakpoints.down("md"));
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  const effectiveIsMobile = mounted ? isMobile : false;
+  const effectiveIsTablet = mounted ? isTablet : false;
   const [imagePath, setImagePath] = useState<string>("/1.jpg");
   const [price, setPrice] = useState<number>(135);
   const [shipping, setShipping] = useState<boolean>(false);
@@ -90,11 +98,9 @@ export default function Home() {
   };
 
   return (
-    <PageContainer>
-      <Content>
-        <CartModal open={openCartModal} onClose={handleAddToCartModal} />
-        <Container maxWidth="lg" sx={{ marginTop: 5 }}>
-          <Stack spacing={2}>
+    <Container maxWidth="lg" sx={{ py: 4 }}>
+      <CartModal open={openCartModal} onClose={handleAddToCartModal} />
+      <Stack spacing={2}>
             <Stack alignItems="center" sx={{ width: "100%" }}>
               <Stack alignItems="center" width="100%">
                 <StyledText variant="h6">
@@ -130,11 +136,15 @@ export default function Home() {
               </Stack>
               <Divider
                 flexItem
-                sx={{ margin: "0 auto", width: { xs: "100%", md: "50%" } }}
+                sx={{ margin: "10px auto", width: { xs: "100%", md: "50%" } }}
               />
               <StyledStack visible={true} delay={0.1}>
-                <FeaturedBanner />
+               
+                  <FeaturedBanner />
+              
               </StyledStack>
+              {/* HomePage Products */}
+              <Collection collectionName="Featured Products" />
             </Stack>
             <Divider>
               {/* Product info & Photos */}
@@ -145,11 +155,13 @@ export default function Home() {
                 spacing={1}
               >
                 <StyledText variant="subtitle2">
-                  The Mihe X-900 Fitness Bike
+                  TODAY'S PROMO OFFER
                 </StyledText>
-                <DirectionsBikeIcon />
+                <ParkRoundedIcon />
               </Stack>
             </Divider>
+
+            {/* FEATURED PRODUCT SECTION */}
 
             <StyledStack
               visible={true}
@@ -161,139 +173,99 @@ export default function Home() {
                 Limited Inventory! Take action to avoid missing out. Get 2 bikes
                 for $200!
               </Alert>
-              <Grid
-                container
-                spacing={2}
-                direction={isMobile ? "column" : "row"}
-              >
-                <Grid size={isMobile ? 12 : 7}>
-                  <CardMedia
-                    component="img"
-                    src={imagePath}
-                    alt="featured_image"
-                    sx={{
-                      width: { xs: "100%", md: "100%" },
-                      height: { xs: "100%", md: "100%" },
-                      borderRadius: 5,
-                      border: "1px solid #b1b1b1",
-                    }}
-                  />
-                </Grid>
-                {isMobile && (
-                  <StyledStack
-                    visible={true}
-                    delay={0.3}
-                    yAxis={5}
-                    direction="row"
-                    spacing={1}
-                    sx={{ overFlowX: "auto" }}
-                  >
-                    <ImageList
-                      onImageClick={(imagePath: string) =>
-                        handleImagePathChange(imagePath)
-                      }
-                    />
-                  </StyledStack>
-                )}
-                <Divider orientation="vertical" flexItem />
-                <Grid size={isMobile ? 12 : 4}>
-                  <Stack
-                    direction="column"
-                    justifyContent="center"
-                    sx={{ width: "100%" }}
-                    spacing={1}
-                  >
-                    <StyledText variant="h5">
-                      Mihe X-900 Fitness Bike
-                    </StyledText>
-                    <ProductRatings />
-                    <StyledText variant="h4">
-                      ${price}.<span style={{ fontSize: 14 }}>00</span>{" "}
-                      <s style={{ color: "#b1b1b1" }}>$249.99</s>
-                    </StyledText>
-                    <ViewCounter />
-                    <BenefitsList />
-                    <Stack direction="row" spacing={2}>
-                      <Alert
-                        severity="info"
-                        sx={{ borderRadius: 10, paddingTop: 0 }}
-                      >
-                        This offer is available for store pick-up only.
-                      </Alert>
-                    </Stack>
-                    <ShippingMessage isShipping={shipping} />
-                    <Stack direction="row" alignItems="center">
-                      <QuantitySelector
-                        quantity={quantity}
-                        onQuantity={(action: string) => handleQuantity(action)}
+              <Grid container spacing={{ xs: 2, md: 3 }} alignItems="stretch">
+                {/* Column 1: Image + thumbnails */}
+                <Grid size={{ xs: 12, md: 4 }}>
+                  <Paper variant="outlined" sx={{ p: 2, borderRadius: 3, height: "100%" }}>
+                    <Stack spacing={2}>
+                      <CardMedia
+                        component="img"
+                        src={imagePath}
+                        alt="featured_image"
+                        sx={{
+                          width: "100%",
+                          height: { xs: 220, md: 280 },
+                          objectFit: "cover",
+                          borderRadius: 3,
+                          border: "1px solid #e5e5e5",
+                        }}
                       />
+
+                      {/* Thumbnails: always in the DOM, responsive display to avoid layout/hydration weirdness */}
+                      <Stack
+                        direction="row"
+                        spacing={1}
+                        sx={{
+                          width: "100%",
+                          overflowX: "auto",
+                          py: 0.5,
+                          display: { xs: "flex", md: "flex" },
+                        }}
+                      >
+                        <ImageList onImageClick={(p: string) => handleImagePathChange(p)} />
+                      </Stack>
                     </Stack>
-                    <Button
-                      endIcon={<StoreIcon />}
-                      variant="outlined"
-                      sx={{ borderRadius: 10 }}
-                      onClick={handlePhoneCall}
-                    >
-                      Contact Store
-                    </Button>
-                  </Stack>
+                  </Paper>
+                </Grid>
+
+                {/* Column 2: Purchase box */}
+                <Grid size={{ xs: 12, md: 4 }}>
+                  <Paper variant="outlined" sx={{ p: 2, borderRadius: 3, height: "100%" }}>
+                    <Stack direction="column" sx={{ width: "100%" }} spacing={1.5}>
+                      <StyledText variant="h5">Mihe X-900 Fitness Bike</StyledText>
+                      <ProductRatings />
+                      <StyledText variant="h4">
+                        ${price}.<span style={{ fontSize: 14 }}>00</span>{" "}
+                        <s style={{ color: "#b1b1b1" }}>$249.99</s>
+                      </StyledText>
+
+                      <ViewCounter />
+
+                      <Alert severity="info" sx={{ borderRadius: 3 }}>
+                        Store pickup only (9am–5pm).
+                      </Alert>
+
+                      <ShippingMessage isShipping={shipping} />
+
+                      <Stack direction="row" alignItems="center">
+                        <QuantitySelector
+                          quantity={quantity}
+                          onQuantity={(action: string) => handleQuantity(action)}
+                        />
+                      </Stack>
+
+                      <Button
+                        endIcon={<StoreIcon />}
+                        variant="outlined"
+                        sx={{ borderRadius: 2 }}
+                        onClick={handlePhoneCall}
+                      >
+                        Contact Store
+                      </Button>
+                    </Stack>
+                  </Paper>
+                </Grid>
+
+                {/* Column 3: Benefits */}
+                <Grid size={{ xs: 12, md: 4 }}>
+                  <Paper variant="outlined" sx={{ p: 2, borderRadius: 3, height: "100%" }}>
+                    <Stack spacing={1}>
+                      <Typography variant="subtitle2" color="text.secondary">
+                        Why you’ll love it
+                      </Typography>
+                      <BenefitsList />
+                    </Stack>
+                  </Paper>
                 </Grid>
               </Grid>
             </StyledStack>
 
-            {!isMobile && (
-              <StyledStack
-                visible={true}
-                delay={0.3}
-                yAxis={5}
-                direction="row"
-                spacing={1}
-              >
-                <ImageList
-                  onImageClick={(imagePath: string) =>
-                    handleImagePathChange(imagePath)
-                  }
-                />
-              </StyledStack>
-            )}
 
-            {/* Product Tabs (Descriptions, features, warranty can go here) */}
-            <ProductTabs />
-
-            <Divider>
-              <Stack
-                id="highlight"
-                direction="row"
-                spacing={1}
-                alignItems="center"
-              >
-                <StyledText variant="subtitle2">Highlights</StyledText>
-                <AutoAwesomeIcon />
-              </Stack>
-            </Divider>
-            <Stack spacing={2}>
-              <HighlightNotes isMobile={isMobile} />
-            </Stack>
-            <Divider>
-              <Stack id="faqs" direction="row" alignItems="center" spacing={1}>
-                <StyledText variant="subtitle2">FAQS</StyledText>
-                <LiveHelpIcon />
-              </Stack>
-            </Divider>
-            <FaqSection isMobile={isMobile} />
           </Stack>
-        </Container>
-      </Content>
-      <Divider sx={{ margin: "1rem auto", width: "100%" }} />
-      {/* Footer */}
-      <Stack direction="row" alignItems="center" spacing={2}>
-        <Stack>
-          <Image src="mihe_logo.svg" alt="mihe-logo" width={100} height={75} />
-        </Stack>
-        <Stack>
-          <Copyright />
-        </Stack>
-      </Stack>
-    </PageContainer>
+            <Divider sx={{ margin: '4rem auto' }} />
+            <Stack id="reviews" sx={{ marginTop: 1 }} spacing={2}>
+              <ReviewsSection />
+            </Stack>
+    </Container>
   );
 }

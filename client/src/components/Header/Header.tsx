@@ -1,20 +1,19 @@
 "use client";
 
-import React, { useContext, useState } from "react";
+import React, { useEffect, useState } from "react";
 
-import { scrollToSection } from "@/utils/sectionScroll";
 import MenuIcon from "@mui/icons-material/Menu";
-import { Chip, ListItemIcon } from "@mui/material";
+import { Box, Chip, ListItemIcon } from "@mui/material";
 import Drawer from "@mui/material/Drawer";
 import IconButton from "@mui/material/IconButton";
 import List from "@mui/material/List";
 import ListItem from "@mui/material/ListItem";
 import ListItemText from "@mui/material/ListItemText";
 import MenuItem from "@mui/material/MenuItem";
+import Link from "next/link";
 import useTheme from "@mui/material/styles/useTheme";
 import useMediaQuery from "@mui/material/useMediaQuery";
 
-import { AuthContext } from "../../context/auth-context";
 import { StyledBox, StyledContainer } from "./HeaderStyles";
 import { MainMenuItems } from "./menuItems";
 
@@ -29,10 +28,16 @@ type OpenMenuProps = {
 };
 
 const Header = () => {
-  const auth = useContext(AuthContext);
   const [openDrawer, setOpenDrawer] = useState(false);
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const effectiveIsMobile = mounted ? isMobile : false;
 
   // const handleLogout = () => {
   //   auth.logout();
@@ -42,31 +47,21 @@ const Header = () => {
     setOpenDrawer((prev) => !prev);
   };
 
-  const handleScrollToSection = (id: string) => {
-    scrollToSection(id);
-    setOpenDrawer(false);
-  };
-
   return (
-    <StyledContainer isMobile={isMobile}>
-      {isMobile && (
+    <StyledContainer isMobile={effectiveIsMobile}>
+      {effectiveIsMobile && (
         <IconButton onClick={handleOpenMenu}>
           <MenuIcon />
         </IconButton>
       )}
-      <StyledBox>
-        {!isMobile && (
+      {!effectiveIsMobile && (
+        <StyledBox>
           <List sx={{ display: "flex", alignItems: "center" }}>
-            {MainMenuItems?.filter((menu) => {
-              if (auth.isLoggedIn) {
-                return menu.text !== "Login";
-              } else {
-                return menu.text !== "Logout";
-              }
-            }).map((menu, i) => (
+            {MainMenuItems.map((menu) => (
               <MenuItem
-                key={`${menu.component}--${i}`}
-                onClick={() => handleScrollToSection(menu?.route as string)}
+                key={menu.href}
+                component={Link}
+                href={menu.href}
                 sx={{ "&:hover": { backgroundColor: "#fff" } }}
               >
                 <ListItem>
@@ -84,18 +79,11 @@ const Header = () => {
                 </ListItem>
               </MenuItem>
             ))}
-            <Chip
-              clickable
-              label="Contact us"
-              color="primary"
-              onClick={() => {
-                window.location.href = "tel:410-866-1063";
-              }}
-            />
           </List>
-        )}
+        </StyledBox>
+      )}
 
-        {isMobile && (
+        {effectiveIsMobile && (
           <Drawer open={openDrawer} onClose={handleOpenMenu}>
             <List
               sx={{
@@ -104,16 +92,12 @@ const Header = () => {
                 flexDirection: "column",
               }}
             >
-              {MainMenuItems?.filter((menu) => {
-                if (auth.isLoggedIn) {
-                  return menu.text !== "Login";
-                } else {
-                  return menu.text !== "Logout";
-                }
-              }).map((menu, i) => (
+              {MainMenuItems.map((menu) => (
                 <MenuItem
-                  key={menu?.text}
-                  onClick={() => handleScrollToSection(menu?.route as string)}
+                  key={menu.href}
+                  component={Link}
+                  href={menu.href}
+                  onClick={() => setOpenDrawer(false)}
                 >
                   <ListItem>
                     <ListItemText
@@ -132,16 +116,16 @@ const Header = () => {
               ))}
               <Chip
                 clickable
-                label="Contact us"
+                label="Contact"
                 color="primary"
                 onClick={() => {
-                  window.location.href = "tel:410-866-1063";
+                  window.location.href = "/contact-us";
                 }}
               />
             </List>
           </Drawer>
         )}
-      </StyledBox>
+      
     </StyledContainer>
   );
 };

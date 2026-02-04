@@ -1,7 +1,5 @@
 import * as React from "react";
 
-import Image from "next/image";
-
 import Avatar from "@mui/material/Avatar";
 import Box from "@mui/material/Box";
 import Divider from "@mui/material/Divider";
@@ -9,6 +7,7 @@ import MuiDrawer, { drawerClasses } from "@mui/material/Drawer";
 import Stack from "@mui/material/Stack";
 import { styled } from "@mui/material/styles";
 import Typography from "@mui/material/Typography";
+import ParkRoundedIcon from "@mui/icons-material/ParkRounded";
 
 import MenuContent from "./MenuContent";
 import OptionsMenu from "./OptionsMenu";
@@ -46,9 +45,14 @@ export default function SideMenu() {
           p: 1.5,
         }}
       >
-        <Image src="/logohhs.jpeg" width={110} height={50} alt="hhs-logo" />
-        <Typography color="text.secondary" variant="subtitle2">
-          Hunter Expenses
+        <Stack direction="row" spacing={1} alignItems="center">
+          <ParkRoundedIcon color="success" />
+          <Typography variant="h6" sx={{ fontWeight: 800 }}>
+            Weedies CMS
+          </Typography>
+        </Stack>
+        <Typography color="text.secondary" variant="caption">
+          Admin Console
         </Typography>
       </Box>
       <Divider />

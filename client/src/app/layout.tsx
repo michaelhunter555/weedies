@@ -2,15 +2,17 @@ import type { Metadata } from "next";
 
 import MainNavigation from "@/components/Header/MainNavigation";
 import QueryClientWrapper from "@/components/Shared/QueryClient/QueryClientProvider";
-import NextAuthProvider from "@/components/Shared/Session/SessionProvider";
 
 import { Content, PageContainer } from "../components/Footer/FooterStyles";
 import AuthProvider from "../context/auth-context";
 import CartContextProvider from "../context/cart/cart-context";
+import { SocketProvider } from "../context/socket-io/socket-provider";
+import Footer from "@/components/Footer/Footer";
+import Copyright from "@/components/Footer/Copyright";
 
 export const metadata: Metadata = {
-  title: "Mihe Fitness X900 Exercise Bike",
-  description: "An effective exercise bike for an effective price.",
+  title: "Weedies - The Best Weed in Town",
+  description: "The Best Weed in Town",
 };
 
 export default function RootLayout({
@@ -21,18 +23,21 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <NextAuthProvider>
-          <QueryClientWrapper>
-            <AuthProvider>
+        <QueryClientWrapper>
+          <AuthProvider>
+            <SocketProvider>
               <CartContextProvider>
                 <PageContainer>
                   <MainNavigation />
                   <Content>{children}</Content>
+                  <Footer>
+                    <Copyright />
+                  </Footer>
                 </PageContainer>
               </CartContextProvider>
-            </AuthProvider>
-          </QueryClientWrapper>
-        </NextAuthProvider>
+            </SocketProvider>
+          </AuthProvider>
+        </QueryClientWrapper>
       </body>
     </html>
   );

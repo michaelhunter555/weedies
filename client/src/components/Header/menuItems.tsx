@@ -4,34 +4,32 @@ import React from "react";
 interface MenuItemsProps {
   text: string;
   icon?: React.ReactNode;
-  component?: string;
-  route?: string;
+  href: string;
 }
 
 export const MainMenuItems: MenuItemsProps[] = [
   {
-    text: "Mihe X-900",
-    component: "PRODUCTS",
-    route: "product",
+    text: "Shop",
+    href: "/products",
   },
   {
-    text: "Highlights",
-    component: "PRODUCTS",
-    route: "highlight",
+    text: "Edibles",
+    href: "/products?category=edibles",
   },
   {
-    text: "Core Features",
-    component: "PRODUCTS",
-    route: "feature",
+    text: "Flower",
+    href: "/products?category=flower",
   },
   {
-    text: "Video",
-    component: "PRODUCTS",
-    route: "video",
+    text: "Vapes",
+    href: "/products?category=vapes",
   },
   {
-    text: "FAQs",
-    component: "FAQS",
-    route: "faqs",
+    text: "Support",
+    href: "/support",
+  },
+  {
+    text: "About",
+    href: "/about-us",
   },
 ];

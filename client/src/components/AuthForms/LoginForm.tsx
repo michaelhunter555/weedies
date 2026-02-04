@@ -5,16 +5,18 @@ import {
   useState,
 } from 'react';
 
-import {
-  signIn,
-  useSession,
-} from 'next-auth/react';
 import { useRouter } from 'next/navigation';
+import {
+  GoogleAuthProvider,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signInWithPopup,
+} from "firebase/auth";
 
 import StyledText from '@/components/Shared/Text/StyledText';
 import { AuthContext } from '@/context/auth-context';
 import { useForm } from '@/hooks/useForm';
-import { useUser } from '@/hooks/user-hook';
+import { auth as firebaseAuth } from "@/lib/firebase";
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import MuiCard from '@mui/material/Card';
@@ -50,11 +52,10 @@ const validateEmail = (email: string) => {
 };
 
 const LoginForm = () => {
-  const { data: session, status } = useSession();
   const auth = useContext(AuthContext);
   const [isLogin, setIsLogin] = useState<boolean>(true);
   const [formState, inputHandler, setFormData] = useForm(loginFields, false);
-  const { signupUser, loginUser } = useUser();
+  const [error, setError] = useState<string | null>(null);
 
   const router = useRouter();
 
@@ -91,15 +92,15 @@ const LoginForm = () => {
   ]);
 
   useEffect(() => {
-    if (status === "authenticated" && router) {
+    if (auth.isLoggedIn) {
       router.push("/");
-      //auth.login()
     }
-  }, [status, router])
+  }, [auth.isLoggedIn, router]);
 
   //login or signup user
   const handleFormSubmit = async (event: React.FormEvent<HTMLElement>) => {
     event.preventDefault();
+    setError(null);
     const user: UserProps = {
       //add additional field if sign-up
       ...(formState?.inputs?.userName?.value
@@ -109,32 +110,21 @@ const LoginForm = () => {
       password: formState?.inputs?.password?.value as string,
     };
 
-    if (isLogin) {
-      await signIn("credentials", {
-        email: user.email,
-        password: user.password,
-      });
-      
-    } else {
-      signupUser.mutate(user);
-      //reset form if successful
-      if (signupUser.isSuccess) {
-        auth.login(signupUser.data?.user, signupUser.data?.token);
-        await signIn("credentials", {
-          email: user.email,
-          password: user.password,
-        });
+    try {
+      if (isLogin) {
+        const cred = await signInWithEmailAndPassword(firebaseAuth, user.email, user.password);
+        const idToken = await cred.user.getIdToken();
+        await auth.loginWithProviderToken("firebase", idToken);
+      } else {
+        const cred = await createUserWithEmailAndPassword(firebaseAuth, user.email, user.password);
+        const idToken = await cred.user.getIdToken();
+        await auth.loginWithProviderToken("firebase", idToken);
         setFormData(loginFields, false);
-        if (router) {
-          router.push("/");
-        }
       }
-      //signIn with nextAuth
-      //   loginUser.mutate(user);
-      //   if (loginUser.isSuccess) {
-      //     auth.login(loginUser.data.user, loginUser.data.token);
-      //     setFormData(loginFields, false);
-      //   }
+
+      router.push("/");
+    } catch (e: any) {
+      setError(e?.message || "Authentication failed");
     }
   };
 
@@ -143,7 +133,40 @@ const LoginForm = () => {
     setIsLogin((prev) => !prev);
   };
 
-  const handleForgotPassword = () => {};
+  const handleForgotPassword = async () => {
+    const email = String(formState?.inputs?.email?.value || "").trim();
+    if (!email) {
+      setError("Enter your email first, then click 'Forgot your password?'");
+      return;
+    }
+    try {
+      const base = process.env.NEXT_PUBLIC_SERVER;
+      if (!base) throw new Error("Missing NEXT_PUBLIC_SERVER");
+      const apiBase = base.endsWith("/api") ? base : `${base}/api`;
+      const resp = await fetch(`${apiBase}/user/password-reset`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      if (!resp.ok) throw new Error("Could not send reset email");
+      setError("Password reset email sent. Check your inbox.");
+    } catch (e: any) {
+      setError(e?.message || "Could not send reset email");
+    }
+  };
+
+  const handleGoogle = async () => {
+    setError(null);
+    try {
+      const provider = new GoogleAuthProvider();
+      const result = await signInWithPopup(firebaseAuth, provider);
+      const idToken = await result.user.getIdToken();
+      await auth.loginWithProviderToken("firebase", idToken);
+      router.push("/");
+    } catch (e: any) {
+      setError(e?.message || "Google sign-in failed");
+    }
+  };
 
   return (
     <Card variant="outlined">
@@ -159,6 +182,11 @@ const LoginForm = () => {
         noValidate
         sx={{ display: "flex", flexDirection: "column", width: "100%", gap: 2 }}
       >
+        {error && (
+          <StyledText variant="subtitle2" sx={{ color: "error.main" }}>
+            {error}
+          </StyledText>
+        )}
         {/* for new user include userName field */}
         {!isLogin && (
           <FormControl>
@@ -244,6 +272,14 @@ const LoginForm = () => {
             disabled={!formState.isValid}
           >
             {isLogin ? "Login" : "Sign Up"}
+          </Button>
+          <Button
+            sx={{ marginTop: "0.5rem" }}
+            variant="outlined"
+            type="button"
+            onClick={handleGoogle}
+          >
+            Continue with Google
           </Button>
           <StyledText variant="subtitle1" sx={{ textAlign: "center" }}>
             Don&apos;t have an account?{" "}
