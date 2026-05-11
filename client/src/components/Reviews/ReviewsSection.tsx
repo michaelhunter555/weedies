@@ -6,14 +6,17 @@ import Paper from "@mui/material/Paper";
 import Rating from "@mui/material/Rating";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
+import VerifiedRoundedIcon from "@mui/icons-material/VerifiedRounded";
 
 type ReviewItem = {
   id: string;
   name: string;
+  handle: string;
   rating: number;
-  orderDate: string;
+  purchaseDate: string;
   productImage: string;
-  productTitle: string;
+  appTitle: string;
+  tier: string;
   title: string;
   body: string;
 };
@@ -22,32 +25,41 @@ const dummyReviews: ReviewItem[] = [
   {
     id: "r1",
     name: "Jordan P.",
+    handle: "@jordanp",
     rating: 5,
-    orderDate: "Jan 18, 2026",
-    productImage: "/1.jpg",
-    productTitle: "Alpine Kush (3.5g)",
-    title: "Fast pickup + great quality",
-    body: "Placed my order and pickup was smooth. Packaging was discreet and the product was fresh.",
+    purchaseDate: "Apr 18, 2026",
+    productImage: "/5.jpg",
+    appTitle: "PromptForge",
+    tier: "Pro",
+    title: "Replaced 3 of my prompt tools",
+    body:
+      "The A/B test view is chef's kiss. I shipped a new copy variant to prod in about 20 minutes. Wild that this was vibecoded.",
   },
   {
     id: "r2",
     name: "Sam R.",
+    handle: "@samr",
     rating: 4,
-    orderDate: "Dec 02, 2025",
-    productImage: "/1.jpg",
-    productTitle: "Alpine Kush (7g)",
-    title: "Solid selection",
-    body: "Good variety and the staff answered my questions. Would love more edible options, but overall great.",
+    purchaseDate: "Mar 02, 2026",
+    productImage: "/3.jpg",
+    appTitle: "Focuspace",
+    tier: "Free",
+    title: "My best focus app in years",
+    body:
+      "Ambient rooms are super clean. I'd pay for a Pro tier the moment there's team rooms — take my money.",
   },
   {
     id: "r3",
     name: "Avery K.",
+    handle: "@averyk",
     rating: 5,
-    orderDate: "Nov 11, 2025",
-    productImage: "/1.jpg",
-    productTitle: "Alpine Kush (14g)",
-    title: "Exactly what I wanted",
-    body: "Clean experience, easy checkout, and the product matched the description. Will order again.",
+    purchaseDate: "Feb 11, 2026",
+    productImage: "/9.jpg",
+    appTitle: "ShipKit",
+    tier: "Lifetime",
+    title: "Paid for itself in a weekend",
+    body:
+      "Saved me probably 30 hours of plumbing. Auth, billing, DB — all wired up. Now I just build the fun part.",
   },
 ];
 
@@ -56,10 +68,10 @@ export default function ReviewsSection() {
     <Stack spacing={2}>
       <Stack>
         <Typography variant="h4" fontWeight={800}>
-          Trust, Respect & Transparency
+          Loved by builders & buyers
         </Typography>
         <Typography variant="subtitle2" color="text.secondary">
-          Real feedback from customers.
+          Real reviews from people running these apps in production.
         </Typography>
       </Stack>
 
@@ -68,23 +80,38 @@ export default function ReviewsSection() {
           <Paper key={r.id} variant="outlined" sx={{ p: 2, borderRadius: 3 }}>
             <Stack spacing={1}>
               <Stack direction="row" spacing={1.5} alignItems="center">
-                <Avatar sx={{ bgcolor: "success.main", width: 36, height: 36 }}>
+                <Avatar
+                  sx={{
+                    bgcolor: "secondary.main",
+                    width: 36,
+                    height: 36,
+                  }}
+                >
                   {r.name.slice(0, 1)}
                 </Avatar>
                 <Stack sx={{ flex: 1 }}>
-                  <Stack direction="row" justifyContent="space-between" alignItems="center">
+                  <Stack
+                    direction="row"
+                    justifyContent="space-between"
+                    alignItems="center"
+                    flexWrap="wrap"
+                  >
                     <Stack direction="row" spacing={1} alignItems="center">
                       <Typography fontWeight={700}>{r.name}</Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {r.handle}
+                      </Typography>
                       <Chip
                         size="small"
                         color="success"
                         variant="outlined"
-                        label="Verified"
-                        sx={{ fontSize: 12 }}
+                        icon={<VerifiedRoundedIcon sx={{ fontSize: 14 }} />}
+                        label="Verified buyer"
+                        sx={{ fontSize: 11 }}
                       />
                     </Stack>
                     <Typography variant="body2" color="text.secondary">
-                      Order date: {r.orderDate}
+                      Purchased: {r.purchaseDate}
                     </Typography>
                   </Stack>
                   <Rating value={r.rating} readOnly size="small" />
@@ -95,18 +122,23 @@ export default function ReviewsSection() {
                 <CardMedia
                   component="img"
                   src={r.productImage}
-                  alt="reviewed-product"
-                  sx={{ width: 64, height: 64, borderRadius: 2, objectFit: "cover", border: "1px solid #eee" }}
+                  alt="reviewed-app"
+                  sx={{
+                    width: 64,
+                    height: 64,
+                    borderRadius: 2,
+                    objectFit: "cover",
+                    border: "1px solid #eee",
+                  }}
                 />
                 <Stack>
                   <Typography variant="body2" color="text.secondary">
-                    Ordered: <b>{r.productTitle}</b>
+                    App: <b>{r.appTitle}</b> · <i>{r.tier}</i> license
                   </Typography>
                   <Typography fontWeight={700}>{r.title}</Typography>
                   <Typography color="text.secondary">{r.body}</Typography>
                 </Stack>
               </Stack>
-
             </Stack>
             {idx !== dummyReviews.length - 1 && <Divider sx={{ mt: 2 }} />}
           </Paper>
@@ -115,5 +147,3 @@ export default function ReviewsSection() {
     </Stack>
   );
 }
-
-

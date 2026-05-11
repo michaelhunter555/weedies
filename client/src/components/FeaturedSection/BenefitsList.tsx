@@ -5,11 +5,11 @@ import ListItemIcon from "@mui/material/ListItemIcon";
 import ListItemText from "@mui/material/ListItemText";
 
 const benefits = [
-  "Lab-tested products (COA available)",
-  "Discreet packaging",
-  "Fast local pickup or delivery options",
-  "Secure checkout",
-  "Fresh inventory",
+  "Keep 90% of revenue — no hidden fees",
+  "Instant payouts via Stripe",
+  "Built-in licensing and refunds",
+  "Reviews & analytics out of the box",
+  "Curated discovery — reach real buyers",
 ];
 
 const BenefitsList = () => {

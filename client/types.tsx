@@ -1,4 +1,14 @@
-//form hook
+//
+// Client-side shared types.
+//
+// NOTE: Keep this file free of React/MUI/JSX imports — it's consumed by both
+// UI components and context/reducers.
+//
+
+// =========================
+// useForm hook
+// =========================
+
 /**
  * @name: Inputs
  * @description - Form Inputs for useForm() hook.
@@ -49,11 +59,17 @@ export type SetFormAction = {
  * @description - Action types for useForm hook
  */
 export type Action = InputChangeAction | SetFormAction;
-//endof formhook types
+
+// =========================
+// Auth / user
+// =========================
+
+export type UserRole = "user" | "admin";
+export type AuthProvider = "local" | "firebase" | "google";
 
 /**
- * @name UserProps
- * @description - properties for login and signup
+ * Credentials for the email/password login + signup flows.
+ * The server handles provider-specific auth (firebase/google) itself.
  */
 export type UserProps = {
   userName?: string;
@@ -62,20 +78,56 @@ export type UserProps = {
 };
 
 /**
- * @name UserObject
- * @Description - properties of a user who has signed up
+ * Shape of the currently-authenticated user as held by the auth context.
+ * This mirrors what the backend returns from /api/user/{login,sign-up}
+ * (see backend/controllers/customers/signup.ts) plus a handful of
+ * marketplace-creator counters used across the UI.
  */
-
-export type UserObject = {
+export interface UserObject {
   id: string;
-  name?: string;
-  userName?: string;
   email: string;
-  role?: "user" | "admin";
-  authProvider?: "local" | "firebase" | "google";
-  reviews?: number[];
+  name?: string;
+  mode?: "customer" | "seller";
+  /** Backwards-compatible alias for `name` used by older UI bits. */
+  userName?: string;
+  role?: UserRole;
+  authProvider?: AuthProvider;
+
+  // Provider identifiers (only one is set depending on authProvider)
+  firebaseUid?: string | null;
+  googleSub?: string | null;
+
+  // Marketplace-creator stats (driven by backend aggregates)
+  totalListings?: number;
+  totalListingsSold?: number;
+  totalSales?: number;
+  totalReviews?: number;
+  rewardPoints?: number;
   cred?: number;
-};
+
+  // Payouts / billing
+  stripeCustomerId?: string;
+  stripeConnectAccountId?: string;
+  stripeDefaultPaymentMethodId?: string | null;
+  outstandingBalance?: number;
+  /** Whether the seller has completed Stripe Connect onboarding. */
+  isOnboarded?: boolean;
+  /**
+   * @deprecated Typo for `isOnboarded`. Retained as an optional alias so
+   * older call sites don't break while they migrate.
+   */
+  isOboarded?: boolean;
+  defaultPaymentIntendId?: string;
+
+  // Verification badges
+  isVerifiedCreator?: boolean;
+  hasVerifiedAnalytics?: boolean;
+
+  // Timestamps
+  lastLoginDate?: string | Date | null;
+  createdAt?: string | Date;
+  updatedAt?: string | Date;
+}
 
 // =========================
 // Backend model types (client-friendly)
@@ -92,35 +144,12 @@ export type TShippingAddress = {
   country: string;
 };
 
-export type UserRole = "user" | "admin";
-export type AuthProvider = "local" | "firebase" | "google";
-
-export type User = {
-  _id?: string;
-  name: string;
-  email: string;
-  password?: string | null;
-  role: UserRole;
-  authProvider: AuthProvider;
-  firebaseUid?: string | null;
-  googleSub?: string | null;
-  rewardPoints: number;
-  totalOrders: number;
-  totalSpent: number;
-  lastOrderDate?: string | Date | null;
-  lastLoginDate?: string | Date | null;
-  defaultShippingAddress?: TShippingAddress | null;
-  defaultPaymentMethod?: string | null;
-  paymentMethods?: string[];
-  createdAt?: string | Date;
-  updatedAt?: string | Date;
-};
-
 export type Product = {
   _id?: string;
   name: string;
   description: string;
   price: number;
+  buyItNowPrice?: number;
   previousPrice?: number;
   image: string[];
   category: string;
@@ -133,7 +162,105 @@ export type Product = {
   sku?: string;
   createdAt?: string | Date;
   updatedAt?: string | Date;
+  isListingVerified?: boolean;
+  isAnalyticsVerified?: boolean;
 };
+
+// =========================
+// Marketplace listing (form + API payload)
+// =========================
+
+export type ListingCategory =
+  | "ai-tools"
+  | "productivity"
+  | "games"
+  | "dev-tools"
+  | "design"
+  | "extensions";
+
+export type ListingTurnaround = "24h" | "3d" | "1w" | "2w" | "1m";
+
+export type ListingDifficulty = "beginner" | "intermediate" | "advanced";
+
+export type AnalyticsProvider =
+  | "revenuecat"
+  | "google-analytics"
+  | "stripe"
+  | "mixpanel"
+  | "plausible";
+
+export type ListingSaleType = "fixed" | "auction";
+
+export type ListingStatus =
+  | "draft"
+  | "pending_review"
+  | "live"
+  | "paused"
+  | "rejected"
+  | "sold"
+  | "removed";
+
+/**
+ * Shape of a new listing submission. Mirrors the form on /products?list=new
+ * and the backend `Listing` model.
+ */
+export type Listing = {
+  _id?: string;
+  sellerId: string;
+  slug?: string;
+  appName: string;
+  tagline: string;
+  appDescription: string;
+  category: ListingCategory;
+  difficulty: ListingDifficulty;
+  turnaround: ListingTurnaround;
+  ageOfBusinessMonths: number;
+
+  saleType?: ListingSaleType;
+  startingPrice: number;
+  buyItNowPrice?: number;
+  auctionStartDate?: string | Date;
+  auctionEndDate?: string | Date;
+  currency?: string;
+
+  photos: string[];
+  coverIndex?: number;
+  demoUrl?: string;
+  repoUrl?: string;
+  liveUrl?: string;
+
+  tags?: string[];
+  techStack?: string[];
+
+  monthlyRevenue?: number;
+  monthlyActiveUsers?: number;
+
+  hasSalesToVerify?: boolean;
+  hasAnalyticsToVerify?: boolean;
+  verifiedProviders?: AnalyticsProvider[];
+  isListingVerified?: boolean;
+  isAnalyticsVerified?: boolean;
+
+  status?: ListingStatus;
+  rejectionReason?: string;
+  agreedToTermsAt?: string | Date;
+  publishedAt?: string | Date;
+  soldAt?: string | Date;
+  buyerId?: string;
+
+  views?: number;
+  favoritesCount?: number;
+  totalReviews?: number;
+  averageRating?: number;
+  paymentIntentId?: string | null;
+
+  createdAt?: string | Date;
+  updatedAt?: string | Date;
+};
+
+// =========================
+// Orders / reviews / promos / issues
+// =========================
 
 export type OrderDiscountType = "percentage" | "fixed";
 
@@ -156,9 +283,15 @@ export type Order = {
 
 export type Review = {
   _id?: string;
-  productId: string;
+  /** Marketplace listing being reviewed. */
+  listingId: string;
+  /** Reviewer (buyer). */
   userId: string;
-  orderId: string;
+  /** Seller of the listing — denormalised for fast aggregates. */
+  sellerId: string;
+  /** Legacy e-commerce fields. Kept optional so pre-migration records still type-check. */
+  productId?: string;
+  orderId?: string;
   rating: number;
   datePosted: string | Date;
   purchaseDate: string | Date;
@@ -204,4 +337,172 @@ export type Issue = {
   issueResolution?: string;
   issueResolutionDate?: string | Date;
   issueResolutionImages?: string[];
+};
+
+// =========================
+// Messaging
+// =========================
+
+/**
+ * A single message inside a conversation — mirrors `backend/models/messages.ts`.
+ */
+export type Message = {
+  _id?: string;
+  chatId: string;
+  senderId: string;
+  text: string;
+  read: boolean;
+  createdAt?: string | Date;
+  updatedAt?: string | Date;
+};
+
+/**
+ * Participant metadata denormalised onto a conversation so the inbox list
+ * doesn't have to join on User.
+ *
+ * NOTE: the backend `role` enum is still the legacy `"user" | "barber" | "admin"`.
+ * Surface the marketplace term `"seller"` as an alias until the model is migrated.
+ */
+export type ChatParticipant = {
+  id: string;
+  name: string;
+  image: string;
+  role: "user" | "seller" | "barber" | "admin";
+  pushToken?: string;
+};
+
+/**
+ * Conversation between a buyer and a seller. Mirrors
+ * `backend/models/conversations.ts` (the Mongoose model is still named `Chat`
+ * and references the legacy `bookingId` / `Barber` refs).
+ */
+export type Chat = {
+  _id?: string;
+  participants: string[];
+  participantInfo: ChatParticipant[];
+  lastMessage?: string;
+  lastMessageTime?: string | Date;
+  /** @deprecated — mirrors the legacy `bookingId` field. Use `listingId`. */
+  bookingId?: string;
+  /** Marketplace linkage to the listing the chat is about. */
+  listingId?: string;
+  chatIsComplete?: boolean;
+  createdAt?: string | Date;
+  updatedAt?: string | Date;
+};
+
+// Convenience alias — most of the app thinks in "conversations".
+export type Conversation = Chat;
+
+// =========================
+// Payments — transactions, disputes, payouts
+// =========================
+
+export type PaymentStatus = "succeeded" | "failed" | "canceled" | "pending";
+
+/**
+ * Ledger entry for every successful buyer checkout.
+ * Mirrors `backend/models/transactions.ts` (note the capitalised `ListingId`
+ * matches the Mongoose schema key — don't rename it without migrating the
+ * data).
+ */
+export type Transaction = {
+  _id?: string;
+  ListingId: string;
+  customerId: string;
+  sellerId: string;
+  stripePaymentIntentId: string;
+  stripeCustomerId: string;
+  amountCharged: number;
+  amountPaid: number;
+  billingReason: string;
+  serviceFee: number;
+  paymentStatus?: PaymentStatus;
+  chargeId?: string;
+  currency?: string;
+  invoiceUrl?: string;
+  hasDispute?: boolean;
+  disputeStartDate?: string | Date;
+  disputeId?: string;
+  paidOut?: boolean;
+  payoutDate?: string | Date;
+  refundId?: string;
+  createdAt?: string | Date;
+  updatedAt?: string | Date;
+};
+
+export type DisputeInitiator = "user" | "barber";
+export type DisputeCategory =
+  | "no_show"
+  | "service_not_provided"
+  | "unsafe_environment"
+  | "client_behavoir"
+  | "barber_behavoir"
+  | "incorrect_charge_amount";
+export type DisputeStatus =
+  | "awaiting_barber_response"
+  | "in_review"
+  | "awaiting_user_response"
+  | "closed";
+export type DisputeDecision =
+  | "in_favor_barber"
+  | "in_favor_user"
+  | "settled";
+export type DisputeAction = "none" | "refund" | "partial_refund" | "pending";
+export type DesiredDisputeAction =
+  | "full_refund"
+  | "partial_refund"
+  | "strike_account";
+
+/**
+ * Mirrors `backend/models/disputes.ts`.
+ *
+ * NOTE: the backend model is still carrying the barber/booking field names
+ * from the legacy app. Think of `barberId` as `sellerId` and `bookingId` as
+ * `listingId` until the model is migrated.
+ */
+export type Dispute = {
+  _id?: string;
+  userId: string;
+  barberId: string;
+  bookingId: string;
+  transactionId: string;
+  disputeExplanation: string;
+  disputeDate: string | Date;
+  initiator: DisputeInitiator;
+  initiatorName: string;
+  amountPaid: number;
+  stripePaymentIntentId: string;
+  barberName: string;
+  barberResponse?: string;
+  imageOne?: string;
+  imageTwo?: string;
+  category: DisputeCategory;
+  disputeStatus?: DisputeStatus;
+  decision?: DisputeDecision;
+  action?: DisputeAction;
+  platformResponse?: string;
+  desiredAction?: DesiredDisputeAction;
+  requestedRefundAmount?: number;
+  createdAt?: string | Date;
+  updatedAt?: string | Date;
+};
+
+export type PayoutStatus = "pending" | "paid" | "failed" | "canceled";
+
+/**
+ * Aggregated seller payout covering 1..N `Transaction`s.
+ * Mirrors `backend/models/payoutBatch.ts`.
+ */
+export type PayoutBatch = {
+  _id?: string;
+  sellerId: string;
+  transactions: string[];
+  amount: number;
+  status: PayoutStatus;
+  stripePayoutId?: string | null;
+  payoutDate?: string | Date | null;
+  currency?: string | null;
+  createdAt?: string | Date;
+  updatedAt?: string | Date;
 };

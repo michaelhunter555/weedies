@@ -7,29 +7,29 @@ interface MenuItemsProps {
   href: string;
 }
 
+/**
+ * Keep this short (4–5 items). Sub-categories live on the /products page
+ * via filter chips and the hero category strip on the homepage.
+ */
 export const MainMenuItems: MenuItemsProps[] = [
   {
-    text: "Shop",
+    text: "Discover",
     href: "/products",
   },
   {
-    text: "Edibles",
-    href: "/products?category=edibles",
+    text: "AI Tools",
+    href: "/products?category=ai-tools",
   },
   {
-    text: "Flower",
-    href: "/products?category=flower",
+    text: "Dev Tools",
+    href: "/products?category=dev-tools",
   },
   {
-    text: "Vapes",
-    href: "/products?category=vapes",
+    text: "Games",
+    href: "/products?category=games",
   },
   {
-    text: "Support",
-    href: "/support",
-  },
-  {
-    text: "About",
-    href: "/about-us",
+    text: "Sell",
+    href: "/products?list=new",
   },
 ];

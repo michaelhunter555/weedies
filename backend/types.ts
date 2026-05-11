@@ -5,4 +5,52 @@ export type TShippingAddress = {
     state: string;
     zip: string;
     country: string;
-}
+};
+
+// =========================
+// Marketplace listings
+// =========================
+
+export type ListingCategory =
+    | "ai-tools"
+    | "productivity"
+    | "games"
+    | "dev-tools"
+    | "design"
+    | "extensions";
+
+export type ListingTurnaround = "24h" | "3d" | "1w" | "2w" | "1m";
+
+export type ListingDifficulty = "beginner" | "intermediate" | "advanced";
+
+/**
+ * Lifecycle of a listing in the marketplace. Listings start as `draft` while
+ * the seller is still filling out the form, move to `pending_review` on
+ * submit, `live` once approved, and end in `sold` / `removed` / `rejected`.
+ * `paused` is a seller-initiated hide without deleting.
+ */
+export type ListingStatus =
+    | "draft"
+    | "pending_review"
+    | "live"
+    | "paused"
+    | "rejected"
+    | "sold"
+    | "removed";
+
+/**
+ * How the listing is priced. Fixed = starting-price + optional buy-it-now,
+ * auction = time-bounded bidding.
+ */
+export type ListingSaleType = "fixed" | "auction";
+
+/**
+ * Third-party providers a seller can connect to verify sales / analytics.
+ * Mirrors the client-side AnalyticsProvider in client/types.tsx.
+ */
+export type AnalyticsProvider =
+    | "revenuecat"
+    | "google-analytics"
+    | "stripe"
+    | "mixpanel"
+    | "plausible";

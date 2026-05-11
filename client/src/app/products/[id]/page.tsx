@@ -3,131 +3,180 @@
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
-import BenefitsList from "@/components/FeaturedSection/BenefitsList";
-import QuantitySelector from "@/components/FeaturedSection/SelectQuantity";
 import ImageList from "@/components/ImagesList/ImageList";
 import ProductRatings from "@/components/Ratings/Ratings";
 import { StyledStack } from "@/components/Shared/FadeIn/StyledFadeIn";
 import StyledText from "@/components/Shared/Text/StyledText";
-import ShippingMessage from "@/components/ShippingOption/ShippingMessage";
 import ViewCounter from "@/components/ViewCounter/ViewCounter";
 import { useCart } from "@/context/cart/cart-context";
-import StorefrontIcon from "@mui/icons-material/Storefront";
-import Alert from "@mui/material/Alert";
-import Button from "@mui/material/Button";
-import CardMedia from "@mui/material/CardMedia";
-import Chip from "@mui/material/Chip";
-import Container from "@mui/material/Container";
-import Divider from "@mui/material/Divider";
+
+import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
+import BoltRoundedIcon from "@mui/icons-material/BoltRounded";
+import CheckRoundedIcon from "@mui/icons-material/CheckRounded";
+import DownloadRoundedIcon from "@mui/icons-material/DownloadRounded";
+import RocketLaunchRoundedIcon from "@mui/icons-material/RocketLaunchRounded";
+import VerifiedRoundedIcon from "@mui/icons-material/VerifiedRounded";
+import {
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
+  Alert,
+  Avatar,
+  Box,
+  Button,
+  CardMedia,
+  Chip,
+  Container,
+  Divider,
+  Paper,
+  Stack,
+  Typography,
+  useMediaQuery,
+} from "@mui/material";
 import Grid from "@mui/material/Grid2";
-import Stack from "@mui/material/Stack";
 import useTheme from "@mui/material/styles/useTheme";
-import Typography from "@mui/material/Typography";
-import useMediaQuery from "@mui/material/useMediaQuery";
-import { Accordion, AccordionDetails, AccordionSummary, Box } from "@mui/material";
+
+type Tier = {
+  id: string;
+  name: string;
+  price: number;
+  billing: "month" | "one-time" | "free";
+  features: string[];
+};
 
 export default function ProductDetailsPage() {
   const params = useParams<{ id: string }>();
   const cart = useCart();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
+
   const [mounted, setMounted] = useState(false);
-  const [expanded, setExpanded] = useState<{[key: string]: boolean}>({
+  const [expanded, setExpanded] = useState<{ [k: string]: boolean }>({
     description: true,
-    shipping: false,
+    features: true,
+    changelog: false,
     faqs: false,
   });
   useEffect(() => setMounted(true), []);
   const effectiveIsMobile = mounted ? isMobile : false;
 
-  const product = useMemo(() => {
-    // TODO: Replace with a backend fetch by `params.id` once product APIs are implemented.
+  const app = useMemo(() => {
     return {
-      id: params?.id || "product-0",
-      name: "Alpine Kush",
-      previousPrice: 49.99,
-      heroImage: "/1.jpg",
+      id: params?.id || "app-featured",
+      name: "PromptForge",
+      tagline: "Build, test & ship AI prompts in seconds.",
+      creator: "@zane",
+      category: "AI Tools",
+      heroImage: "/5.jpg",
+      previousPrice: 32,
+      verified: true,
+      description:
+        "PromptForge is a playground and version-control system for AI prompts. Fork prompts from the community, A/B test variants against your own test cases, and deploy the winners as versioned endpoints your app can call.",
     };
   }, [params?.id]);
 
-  const [imagePath, setImagePath] = useState<string>(product.heroImage);
-  const [quantity, setQuantity] = useState<number>(1);
-  const [shipping, setShipping] = useState<boolean>(false);
+  const [imagePath, setImagePath] = useState<string>(app.heroImage);
 
-  // Variant/amount price options (mirrors your ProductCard selection)
-  const [priceOptions] = useState<{ amount: string; price: number; stock: number }[]>([
-    { amount: "3.5g", price: 39.99, stock: 10 },
-    { amount: "7g", price: 79.99, stock: 1 },
-    { amount: "14g", price: 149.99, stock: 10 },
-    { amount: "28g", price: 249.99, stock: 10 },
-  ]);
-  const [selectedAmount, setSelectedAmount] = useState<string>(priceOptions[0].amount);
-  const [selectedUnitPrice, setSelectedUnitPrice] = useState<number>(priceOptions[0].price);
-  const selectedStock = useMemo(
-    () => priceOptions.find((o) => o.amount === selectedAmount)?.stock ?? 0,
-    [priceOptions, selectedAmount]
-  );
-
-  const totalPrice = useMemo(
-    () => Number((selectedUnitPrice * quantity).toFixed(2)),
-    [selectedUnitPrice, quantity]
-  );
-
-  const handleAmountClick = (amount: string, price: number) => {
-    setSelectedAmount(amount);
-    setSelectedUnitPrice(price);
-  };
+  const tiers: Tier[] = [
+    {
+      id: "free",
+      name: "Free",
+      price: 0,
+      billing: "free",
+      features: ["Up to 20 prompts", "Community library", "1 test case per prompt"],
+    },
+    {
+      id: "pro",
+      name: "Pro",
+      price: 19,
+      billing: "month",
+      features: ["Unlimited prompts", "Unlimited tests", "Deploy as API", "Priority support"],
+    },
+    {
+      id: "lifetime",
+      name: "Lifetime",
+      price: 149,
+      billing: "one-time",
+      features: ["Everything in Pro", "Lifetime updates", "Commercial license"],
+    },
+  ];
+  const [selectedTier, setSelectedTier] = useState<string>("pro");
+  const currentTier = tiers.find((t) => t.id === selectedTier) || tiers[1];
 
   const handleImagePathChange = (path: string) => {
     setImagePath(path.startsWith("/") ? path : `/${path}`);
   };
 
-  const handleQuantity = (action: string) => {
-    setQuantity((prev) => {
-      if (action === "increment") return prev + 1;
-      if (action === "decrement") return prev > 1 ? prev - 1 : 1;
-      return prev;
-    });
-  };
-
-  const handleAddToCart = () => {
-    const numericId = Number(String(product.id).replace(/\D/g, "")) || 1;
+  const handleInstall = () => {
+    const numericId = Number(String(app.id).replace(/\D/g, "")) || 1;
     cart.addToCart({
       id: numericId,
-      price: totalPrice,
-      quantity,
+      price: currentTier.price,
+      quantity: 1,
     });
   };
 
-  const handleAccordionChange = (panel: string) => (event: React.SyntheticEvent, isExpanded: boolean) => {
-    setExpanded((prev) => ({ ...prev, [panel]: isExpanded }));
-  };
+  const handleAccordion =
+    (panel: string) => (_: React.SyntheticEvent, isExpanded: boolean) => {
+      setExpanded((prev) => ({ ...prev, [panel]: isExpanded }));
+    };
+
+  const priceLabel =
+    currentTier.billing === "free"
+      ? "Free"
+      : currentTier.billing === "month"
+      ? `$${currentTier.price}/mo`
+      : `$${currentTier.price}`;
 
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
       <StyledStack visible={true} delay={0.1} direction="column" spacing={3}>
-        <Stack>
-          <Typography variant="h3" fontWeight={800}>
-            {product.name}
-          </Typography>
-          <Typography color="text.secondary">Premium flower • Fresh inventory</Typography>
+        <Stack direction="row" alignItems="center" spacing={1}>
+          <Chip label={app.category} size="small" color="secondary" sx={{ fontWeight: 700 }} />
+          <Chip
+            label="Top 1% this week"
+            size="small"
+            variant="outlined"
+            icon={<BoltRoundedIcon sx={{ fontSize: 14 }} />}
+          />
         </Stack>
 
-        <Alert severity="warning">
-          Limited Inventory! Take action to avoid missing out.
-        </Alert>
+        <Stack>
+          <Typography variant="h3" fontWeight={900}>
+            {app.name}
+          </Typography>
+          <Typography variant="h6" color="text.secondary" fontWeight={500}>
+            {app.tagline}
+          </Typography>
+          <Stack direction="row" alignItems="center" spacing={1} sx={{ mt: 1 }}>
+            <Avatar sx={{ width: 26, height: 26, bgcolor: "#7c3aed", fontSize: 12 }}>
+              {app.creator.slice(1, 2).toUpperCase()}
+            </Avatar>
+            <Typography variant="body2">by <b>{app.creator}</b></Typography>
+            {app.verified && (
+              <Chip
+                size="small"
+                icon={<VerifiedRoundedIcon sx={{ fontSize: 14 }} />}
+                label="Verified creator"
+                color="success"
+                variant="outlined"
+              />
+            )}
+          </Stack>
+        </Stack>
 
         <Grid container spacing={2} direction={effectiveIsMobile ? "column" : "row"}>
           <Grid size={effectiveIsMobile ? 12 : 7}>
             <CardMedia
               component="img"
               src={imagePath}
-              alt="product-image"
+              alt="app-screenshot"
               sx={{
                 width: "100%",
-                height: "100%",
-                borderRadius: 5,
-                border: "1px solid #b1b1b1",
+                height: { xs: 260, md: 420 },
+                objectFit: "cover",
+                borderRadius: 4,
+                border: "1px solid #ececec",
               }}
             />
           </Grid>
@@ -145,102 +194,217 @@ export default function ProductDetailsPage() {
             </StyledStack>
           )}
 
-          <Divider orientation="vertical" flexItem />
+          <Grid size={effectiveIsMobile ? 12 : 5}>
+            <Paper variant="outlined" sx={{ borderRadius: 3, p: 2.5, height: "100%" }}>
+              <Stack spacing={1.5}>
+                <StyledText variant="h5">{app.name}</StyledText>
+                <ProductRatings />
 
-          <Grid size={effectiveIsMobile ? 12 : 4}>
-            <Stack direction="column" justifyContent="center" sx={{ width: "100%" }} spacing={1}>
-              <StyledText variant="h5">{product.name}</StyledText>
-              <ProductRatings />
+                <Stack direction="row" alignItems="baseline" spacing={1}>
+                  <StyledText variant="h4">{priceLabel}</StyledText>
+                  {currentTier.price > 0 && (
+                    <Typography color="text.secondary">
+                      <s>${app.previousPrice}</s>
+                    </Typography>
+                  )}
+                </Stack>
 
-              <StyledText variant="h4">
-                ${totalPrice}.<span style={{ fontSize: 14 }}>00</span>{" "}
-                <s style={{ color: "#b1b1b1" }}>${product.previousPrice.toFixed(2)}</s>
-              </StyledText>
+                <ViewCounter />
 
-              <ViewCounter />
-              <BenefitsList />
-
-            
-
-              <Stack direction="column" spacing={1}>
-                <Typography variant="subtitle2" color="text.secondary">Select amount</Typography>
-              <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap" }}>
-                {priceOptions.map((option) => (
+                <Stack direction="row" spacing={1}>
                   <Chip
-                    key={option.amount}
-                    clickable
                     size="small"
-                    label={option.amount}
-                    color={selectedAmount === option.amount ? "success" : "default"}
-                    variant={selectedAmount === option.amount ? "filled" : "outlined"}
-                    onClick={() => handleAmountClick(option.amount, option.price)}
+                    variant="outlined"
+                    icon={<DownloadRoundedIcon sx={{ fontSize: 14 }} />}
+                    label="12.4k installs"
                   />
-                ))}
+                  <Chip
+                    size="small"
+                    variant="outlined"
+                    icon={<BoltRoundedIcon sx={{ fontSize: 14 }} />}
+                    label="Instant access"
+                  />
+                </Stack>
+
+                <Divider sx={{ my: 1 }} />
+
+                <Typography variant="subtitle2" color="text.secondary">
+                  Choose a license
+                </Typography>
+                <Stack spacing={1}>
+                  {tiers.map((t) => {
+                    const selected = t.id === selectedTier;
+                    return (
+                      <Paper
+                        key={t.id}
+                        variant="outlined"
+                        onClick={() => setSelectedTier(t.id)}
+                        sx={{
+                          p: 1.5,
+                          borderRadius: 2,
+                          cursor: "pointer",
+                          borderColor: selected
+                            ? "rgba(124,58,237,0.7)"
+                            : "#ececec",
+                          background: selected
+                            ? "linear-gradient(135deg, #faf5ff 0%, #fdf2f8 100%)"
+                            : "#fff",
+                        }}
+                      >
+                        <Stack
+                          direction="row"
+                          justifyContent="space-between"
+                          alignItems="center"
+                        >
+                          <Stack>
+                            <Stack direction="row" spacing={1} alignItems="center">
+                              <Typography fontWeight={700}>{t.name}</Typography>
+                              {t.id === "pro" && (
+                                <Chip
+                                  label="Popular"
+                                  size="small"
+                                  color="secondary"
+                                  icon={<AutoAwesomeIcon sx={{ fontSize: 12 }} />}
+                                  sx={{ height: 20, fontSize: 10 }}
+                                />
+                              )}
+                            </Stack>
+                            <Typography variant="caption" color="text.secondary">
+                              {t.features.slice(0, 2).join(" · ")}
+                            </Typography>
+                          </Stack>
+                          <Typography fontWeight={800}>
+                            {t.billing === "free"
+                              ? "Free"
+                              : t.billing === "month"
+                              ? `$${t.price}/mo`
+                              : `$${t.price}`}
+                          </Typography>
+                        </Stack>
+                      </Paper>
+                    );
+                  })}
+                </Stack>
+
+                <Button
+                  onClick={handleInstall}
+                  variant="contained"
+                  size="large"
+                  endIcon={<RocketLaunchRoundedIcon />}
+                  sx={{
+                    mt: 1,
+                    borderRadius: 2,
+                    textTransform: "none",
+                    fontWeight: 700,
+                    background:
+                      "linear-gradient(135deg, #7c3aed 0%, #ec4899 100%)",
+                    boxShadow: "none",
+                  }}
+                >
+                  {currentTier.billing === "free" ? "Install for free" : `Get ${currentTier.name}`}
+                </Button>
+
+                <Alert severity="info" sx={{ borderRadius: 2 }}>
+                  Secure checkout. 14-day refund on paid licenses.
+                </Alert>
               </Stack>
-              </Stack>
-
-              <Alert severity="info" sx={{ borderRadius: 3 }}>
-                {selectedStock} in stock • {selectedAmount}
-              </Alert>
-
-              <ShippingMessage isShipping={shipping} />
-
-              <Stack direction="row" alignItems="center">
-                <QuantitySelector quantity={quantity} onQuantity={handleQuantity} />
-              </Stack>
-
-              <Button
-                startIcon={<StorefrontIcon />}
-                variant="contained"
-                color="success"
-                sx={{ borderRadius: 2 }}
-                onClick={handleAddToCart}
-              >
-                Add to cart
-              </Button>
-            </Stack>
+            </Paper>
           </Grid>
         </Grid>
 
         {!effectiveIsMobile && (
-          <StyledStack visible={true} delay={0.3} yAxis={5} direction="row" spacing={1} sx={{ overflowX: "auto" }}>
+          <StyledStack
+            visible={true}
+            delay={0.3}
+            yAxis={5}
+            direction="row"
+            spacing={1}
+            sx={{ overflowX: "auto" }}
+          >
             <ImageList onImageClick={handleImagePathChange} />
           </StyledStack>
         )}
 
-        <Divider sx={{ margin: "1rem auto", width: "100%" }} />
+        <Divider sx={{ my: 1, width: "100%" }} />
+
         <Box>
-        {/* Product Description */}
-        <Accordion expanded={expanded.description} onChange={handleAccordionChange("description")}>
+          <Accordion
+            expanded={expanded.description}
+            onChange={handleAccordion("description")}
+          >
             <AccordionSummary>
-                <Typography variant="subtitle2" color="text.secondary">Description</Typography>
+              <Typography fontWeight={700}>About this app</Typography>
             </AccordionSummary>
             <AccordionDetails>
-                <Typography variant="subtitle2" color="text.secondary">Description</Typography>
+              <Typography color="text.secondary">{app.description}</Typography>
             </AccordionDetails>
-        </Accordion>
-        {/* Shipping Policy */}
-            <Accordion expanded={expanded.shipping} onChange={handleAccordionChange("shipping")}>
+          </Accordion>
+
+          <Accordion
+            expanded={expanded.features}
+            onChange={handleAccordion("features")}
+          >
             <AccordionSummary>
-                <Typography variant="subtitle2" color="text.secondary">Shipping Information</Typography>
+              <Typography fontWeight={700}>What's included</Typography>
             </AccordionSummary>
             <AccordionDetails>
-                <Typography variant="subtitle2" color="text.secondary">Shipping Policy goes here</Typography>
+              <Stack spacing={1}>
+                {currentTier.features.map((f) => (
+                  <Stack
+                    key={f}
+                    direction="row"
+                    alignItems="center"
+                    spacing={1}
+                  >
+                    <CheckRoundedIcon color="success" fontSize="small" />
+                    <Typography color="text.secondary">{f}</Typography>
+                  </Stack>
+                ))}
+              </Stack>
             </AccordionDetails>
-        </Accordion>
-        {/* Product Description */}
-        <Accordion expanded={expanded.faqs} onChange={handleAccordionChange("faqs")}>
+          </Accordion>
+
+          <Accordion
+            expanded={expanded.changelog}
+            onChange={handleAccordion("changelog")}
+          >
             <AccordionSummary>
-                <Typography variant="subtitle2" color="text.secondary">Reviews</Typography>
+              <Typography fontWeight={700}>Changelog</Typography>
             </AccordionSummary>
             <AccordionDetails>
-                <Typography variant="subtitle2" color="text.secondary">Render reviews</Typography>
+              <Stack spacing={1}>
+                <Typography variant="body2">
+                  <b>v1.4.0</b> — Added multi-model A/B testing.
+                </Typography>
+                <Typography variant="body2">
+                  <b>v1.3.2</b> — New dark theme, fixed import bug.
+                </Typography>
+                <Typography variant="body2">
+                  <b>v1.3.0</b> — Prompt version history.
+                </Typography>
+              </Stack>
             </AccordionDetails>
-        </Accordion>
+          </Accordion>
+
+          <Accordion expanded={expanded.faqs} onChange={handleAccordion("faqs")}>
+            <AccordionSummary>
+              <Typography fontWeight={700}>FAQs</Typography>
+            </AccordionSummary>
+            <AccordionDetails>
+              <Stack spacing={1}>
+                <Typography variant="body2" color="text.secondary">
+                  <b>Can I cancel anytime?</b> — Yes, Pro is monthly and
+                  cancellable anytime.
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  <b>Does it include source code?</b> — Only the Lifetime license
+                  includes full source access.
+                </Typography>
+              </Stack>
+            </AccordionDetails>
+          </Accordion>
         </Box>
       </StyledStack>
     </Container>
   );
 }
-
-

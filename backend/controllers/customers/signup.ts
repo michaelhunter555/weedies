@@ -4,6 +4,7 @@ import UserModel from "../../models/user";
 import { signAccessToken, signRefreshToken } from "../../lib/jwt";
 import { verifyFirebaseIdToken } from "../../lib/verifyFirebaseIdToken";
 import { verifyGoogleIdToken } from "../../lib/verifyGoogleIdToken";
+import stripe from "../../utils/stripe";
 
 function fallbackName(email?: string) {
   if (!email) return "User";
@@ -50,6 +51,7 @@ export async function signup(req: Request, res: Response) {
     user.email = email;
     user.name = name || user.name || fallbackName(email);
     user.authProvider = authProvider;
+    user.mode = "customer";
     if (firebaseUid) user.firebaseUid = firebaseUid;
     if (googleSub) user.googleSub = googleSub;
     user.lastLoginDate = new Date();
@@ -70,6 +72,15 @@ export async function signup(req: Request, res: Response) {
       maxAge: 1000 * 60 * 60 * 24 * 30,
     });
 
+    if (!user.stripeCustomerId) {
+      const customer = await stripe.customers.create({
+          email: user.email,
+          name: user.name,
+      })
+      user.stripeCustomerId = customer.id;
+      await user.save();
+  }
+
     return res.status(200).json({
       isNewUser,
       user: {
@@ -78,11 +89,34 @@ export async function signup(req: Request, res: Response) {
         email: user.email,
         role: user.role,
         authProvider: user.authProvider,
+        firebaseUid: user.firebaseUid ?? null,
+        googleSub: user.googleSub ?? null,
+
+        // Marketplace-creator stats
+        totalListings: user.totalListings ?? 0,
+        totalSales: user.totalSales ?? 0,
+        totalReviews: user.totalReviews ?? 0,
+        rewardPoints: user.rewardPoints ?? 0,
+
+        // Payouts / billing
+        stripeCustomerId: user.stripeCustomerId ?? null,
+        stripeConnectAccountId: user.stripeConnectAccountId ?? null,
+        outstandingBalance: user.outstandingBalance ?? 0,
+
+        // Verification badges
+        isVerifiedCreator: user.isVerifiedCreator ?? false,
+        hasVerifiedAnalytics: user.hasVerifiedAnalytics ?? false,
+
+        // Timestamps
+        lastLoginDate: user.lastLoginDate ?? null,
+        createdAt: (user as any).createdAt,
+        updatedAt: (user as any).updatedAt,
       },
       accessToken,
       refreshToken,
     });
   } catch (err) {
+    console.log("signup error", err)
     return res.status(401).json({ message: "Signup failed" });
   }
 }

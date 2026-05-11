@@ -43,12 +43,14 @@ const formReducer = (state: State, action: Action) => {
   }
 };
 
+type InputValue = string | number | boolean | string[];
+
 export const useForm = (
   initialInputs: Record<string, Inputs>,
   initialFormValidity: boolean
 ): [
   State,
-  (id: string, value: string | number | boolean, isValid: boolean) => void,
+  (id: string, value: InputValue, isValid: boolean) => void,
   (inputData: Record<string, Inputs>, formValidity: boolean) => void
 ] => {
   const [formState, dispatch] = useReducer(formReducer, {
@@ -57,7 +59,7 @@ export const useForm = (
   });
 
   const inputHandler = useCallback(
-    (id: string, value: string | number | boolean, isValid: boolean) => {
+    (id: string, value: InputValue, isValid: boolean) => {
       dispatch({
         type: "INPUT_CHANGE",
         value: value,

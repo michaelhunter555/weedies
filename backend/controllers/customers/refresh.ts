@@ -7,16 +7,20 @@ import { signAccessToken, signRefreshToken, verifyRefreshToken } from "../../lib
 export async function refresh(req: Request, res: Response) {
   try {
     const incoming = (req.body?.refreshToken as string | undefined) || getCookie(req, "refreshToken");
-    if (!incoming) return res.status(401).json({ message: "Missing refresh token" });
+    if (!incoming)
+      return res.status(401).json({ message: "Missing refresh token", code: "NO_REFRESH" });
 
     const payload = verifyRefreshToken(incoming);
-    if (payload.typ !== "refresh") return res.status(401).json({ message: "Invalid refresh token" });
+    if (payload.typ !== "refresh")
+      return res.status(401).json({ message: "Invalid refresh token", code: "BAD_REFRESH" });
 
     const user = await UserModel.findById(payload.sub);
-    if (!user?.refreshTokenHash) return res.status(401).json({ message: "Refresh token revoked" });
+    if (!user?.refreshTokenHash)
+      return res.status(401).json({ message: "Refresh token revoked", code: "BAD_REFRESH" });
 
     const ok = await bcrypt.compare(incoming, user.refreshTokenHash);
-    if (!ok) return res.status(401).json({ message: "Refresh token mismatch" });
+    if (!ok)
+      return res.status(401).json({ message: "Refresh token mismatch", code: "BAD_REFRESH" });
 
     const newRefresh = signRefreshToken(String(user._id));
     user.refreshTokenHash = await bcrypt.hash(newRefresh, 10);
@@ -37,7 +41,9 @@ export async function refresh(req: Request, res: Response) {
       refreshToken: newRefresh,
     });
   } catch (err) {
-    return res.status(401).json({ message: "Could not refresh session" });
+    return res
+      .status(401)
+      .json({ message: "Could not refresh session", code: "BAD_REFRESH" });
   }
 }
 

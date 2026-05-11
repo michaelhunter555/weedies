@@ -7,12 +7,16 @@ import { Content, PageContainer } from "../components/Footer/FooterStyles";
 import AuthProvider from "../context/auth-context";
 import CartContextProvider from "../context/cart/cart-context";
 import { SocketProvider } from "../context/socket-io/socket-provider";
+import SocketEventsListener from "@/components/SocketEventsListener/SocketEventsListener";
+import Toaster from "@/components/Toaster/Toaster";
 import Footer from "@/components/Footer/Footer";
 import Copyright from "@/components/Footer/Copyright";
+import StripeCheckoutProvider from "@/components/StripeProvider/StripeCheckoutProvider";
 
 export const metadata: Metadata = {
-  title: "Weedies - The Best Weed in Town",
-  description: "The Best Weed in Town",
+  title: "VibeStack — Discover & Sell Vibecoded Apps",
+  description:
+    "VibeStack is the marketplace for vibecoded apps. Discover, buy, and launch AI-assisted apps — or list your own and get paid.",
 };
 
 export default function RootLayout({
@@ -24,6 +28,7 @@ export default function RootLayout({
     <html lang="en">
       <body>
         <QueryClientWrapper>
+          <StripeCheckoutProvider>
           <AuthProvider>
             <SocketProvider>
               <CartContextProvider>
@@ -34,9 +39,12 @@ export default function RootLayout({
                     <Copyright />
                   </Footer>
                 </PageContainer>
+                <SocketEventsListener />
+                <Toaster />
               </CartContextProvider>
             </SocketProvider>
           </AuthProvider>
+          </StripeCheckoutProvider>
         </QueryClientWrapper>
       </body>
     </html>

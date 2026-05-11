@@ -33,11 +33,11 @@ const CartModal = ({ open, onClose }: CartModalProps) => {
       <StyledBoxContainer width="500px" sx={{ height: "350px" }}>
         <PageContainer minHeight="100%">
           <Content>
-            <StyledText variant="h4">Your Cart</StyledText>
+            <StyledText variant="h4">Your library</StyledText>
             <Divider sx={{ marginBottom: "2rem" }} />
             {cart.quantity === 0 ? (
               <StyledText variant="h6">
-                There are no items in your cart
+                No apps queued — explore the marketplace to add one.
               </StyledText>
             ) : (
               <StyledStack
@@ -50,8 +50,8 @@ const CartModal = ({ open, onClose }: CartModalProps) => {
                   <Grid size={2}>
                     <CardMedia
                       component="img"
-                      src="/2.jpg"
-                      alt="mihe-cart-img"
+                      src="/5.jpg"
+                      alt="app-library-cover"
                       sx={{
                         width: "70%",
                         height: "70%",
@@ -63,14 +63,14 @@ const CartModal = ({ open, onClose }: CartModalProps) => {
 
                   <Grid size={2}>
                     <StyledText variant="subtitle2">
-                      {cart.quantity} X
+                      {cart.quantity} ×
                     </StyledText>
                   </Grid>
 
                   <Grid size={7}>
-                    <StyledText variant="subtitle2">Mihe X-900</StyledText>
+                    <StyledText variant="subtitle2">PromptForge</StyledText>
                     <Divider />
-                    <StyledText variant="subtitle2">Shipping</StyledText>
+                    <StyledText variant="subtitle2">Pro license</StyledText>
                   </Grid>
                 </Grid>
               </StyledStack>
@@ -93,7 +93,7 @@ const CartModal = ({ open, onClose }: CartModalProps) => {
                 onClose();
               }}
             >
-              Clear Cart?
+              Clear library?
             </Button>
             <FormHelperText>
               <b>Total:</b> ${cart.totalPrice.toFixed(2)}
