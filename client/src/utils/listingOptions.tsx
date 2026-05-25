@@ -31,7 +31,7 @@ export const CATEGORY_META: Record<string, { title: string; subtitle: string }> 
   },
   productivity: {
     title: "Productivity",
-    subtitle: "Ship more, stress less — apps that give you back your time.",
+    subtitle: "Ship more, stress less - apps that give you back your time.",
   },
   games: {
     title: "Games",
@@ -96,7 +96,7 @@ export const DIFFICULTY_OPTIONS: {
     label: "Beginner friendly",
     summary: "No code changes needed to run.",
     details:
-      "New owner can launch and operate with no technical background — just follow the README.",
+      "New owner can launch and operate with no technical background - just follow the README.",
     icon: <SchoolRoundedIcon />,
   },
   {
@@ -118,25 +118,86 @@ export const DIFFICULTY_OPTIONS: {
 ];
 
 /**
- * VibeStack's success-fee rate applied to the sale price once the app sells.
- * Tiered so expensive listings keep more of their revenue.
+ * Success-fee tiers applied when a listing sells (buyer checkout uses the same
+ * logic on the server in `backend/lib/listing-asset-sale-fee.ts`).
  */
-export const determineApplicationFee = (startingPrice: number): number => {
-  if (startingPrice < 500) return 0.2;
-  if (startingPrice < 1000) return 0.15;
-  if (startingPrice < 10000) return 0.1;
-  if (startingPrice < 50000) return 0.08;
-  return 0.05;
+export type ApplicationFeeTier = {
+  /** Inclusive lower bound in USD. */
+  minPrice: number;
+  /** Exclusive upper bound in USD, or null for no cap. */
+  maxPrice: number | null;
+  /** Platform fee as a fraction of sale price (0.1 = 10%). */
+  rate: number;
+  /** Human-readable price band for tables. */
+  priceRangeLabel: string;
 };
 
-/**
- * Up-front listing fee. First listing is on the house so new sellers can try
- * VibeStack risk-free; subsequent listings cost a flat $2.99 each.
- */
-export const FLAT_LISTING_FEE = 2.99;
+export const APPLICATION_FEE_TIERS: ApplicationFeeTier[] = [
+  {
+    minPrice: 0,
+    maxPrice: 50,
+    rate: 0.2,
+    priceRangeLabel: "Under $50",
+  },
+  {
+    minPrice: 50,
+    maxPrice: 1000,
+    rate: 0.1,
+    priceRangeLabel: "$50 – $999",
+  },
+  {
+    minPrice: 1000,
+    maxPrice: 10000,
+    rate: 0.08,
+    priceRangeLabel: "$1,000 – $9,999",
+  },
+  {
+    minPrice: 10000,
+    maxPrice: null,
+    rate: 0.06,
+    priceRangeLabel: "$10,000 and above",
+  },
+];
 
-export const computeListingFee = (totalListings: number | undefined): number => {
+export function determineApplicationFee(startingPrice: number): number {
+  const price = Math.max(0, Number(startingPrice) || 0);
+  for (const tier of APPLICATION_FEE_TIERS) {
+    if (price >= tier.minPrice && (tier.maxPrice == null || price < tier.maxPrice)) {
+      return tier.rate;
+    }
+  }
+  return APPLICATION_FEE_TIERS[APPLICATION_FEE_TIERS.length - 1].rate;
+}
+
+export function formatApplicationFeePercent(rate: number): string {
+  return `${Math.round(rate * 100)}%`;
+}
+
+/**
+ * Up-front listing fee. First {FREE_LISTINGS_COUNT} listings are free so new
+ * sellers can try Dap & Flip risk-free; subsequent listings cost $2.99 each.
+ */
+export const FREE_LISTINGS_COUNT = 3;
+export const FLAT_LISTING_FEE = 2.99;
+export const PRIVATE_LISTING_FEE = 4.99;
+
+export function freeListingsRemaining(totalListings: number | undefined): number {
   const n = Number(totalListings ?? 0);
-  if (!Number.isFinite(n) || n <= 0) return 0;
-  return FLAT_LISTING_FEE;
+  if (!Number.isFinite(n) || n < 0) return FREE_LISTINGS_COUNT;
+  return Math.max(0, FREE_LISTINGS_COUNT - n);
+}
+
+export function isWithinFreeListingTier(totalListings: number | undefined): boolean {
+  return freeListingsRemaining(totalListings) > 0;
+}
+
+export const computeListingFee = (
+  totalListings: number | undefined,
+  isPrivateListing?: boolean,
+): number => {
+  const n = Number(totalListings ?? 0);
+  const base =
+    !Number.isFinite(n) || n < FREE_LISTINGS_COUNT ? 0 : FLAT_LISTING_FEE;
+  const privateAddon = isPrivateListing ? PRIVATE_LISTING_FEE : 0;
+  return base + privateAddon;
 };

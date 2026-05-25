@@ -14,8 +14,10 @@ import {
   Typography,
 } from "@mui/material";
 import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
-import DownloadRoundedIcon from "@mui/icons-material/DownloadRounded";
+import LockRoundedIcon from "@mui/icons-material/LockRounded";
+import VisibilityRoundedIcon from "@mui/icons-material/VisibilityRounded";
 import VerifiedRoundedIcon from "@mui/icons-material/VerifiedRounded";
+import { BRAND_PALETTE } from "@/theme/brand-palette";
 import type { Listing } from "../../../types";
 
 interface IProductCard {
@@ -28,16 +30,16 @@ interface IProductCard {
 const PLACEHOLDER_COVER = "/placeholder-app-cover.svg";
 
 const ACCENT_PALETTE = [
-  "#7c3aed",
-  "#10b981",
-  "#f59e0b",
-  "#ec4899",
-  "#2563eb",
-  "#06b6d4",
-  "#8b5cf6",
-  "#ef4444",
-  "#0ea5e9",
-  "#d946ef",
+  BRAND_PALETTE.seafoam,
+  BRAND_PALETTE.charcoal,
+  BRAND_PALETTE.sage,
+  "#6f9d92",
+  "#5a8f83",
+  "#4a7d72",
+  "#3d6b61",
+  "#2f5951",
+  "#244a44",
+  "#1a3a36",
 ];
 
 function hashIndex(id: string | undefined, mod: number) {
@@ -55,6 +57,14 @@ function formatCategory(raw?: string) {
     .join(" ");
 }
 
+function formatMoney(amount: number, currency = "USD") {
+  return new Intl.NumberFormat(undefined, {
+    style: "currency",
+    currency: currency.toUpperCase(),
+    maximumFractionDigits: 0,
+  }).format(amount);
+}
+
 function extractSellerName(
   sellerId: Listing["sellerId"] | undefined,
 ): string | null {
@@ -70,10 +80,21 @@ export default function ProductCard({ listing, id }: IProductCard) {
   const router = useRouter();
   const [hover, setHover] = useState<boolean>(false);
 
-  const resolvedId = listing?._id || id;
+  const pathSegment = listing?.slug || listing?._id || id;
+  const isPrivateRestricted = Boolean(
+    listing?.isPrivateListing && listing?.privateAccess?.canView === false,
+  );
   const resolvedName = listing?.appName || "Untitled app";
   const resolvedTagline =
-    listing?.tagline || "No tagline yet — check back soon.";
+    listing?.tagline || "No tagline yet - check back soon.";
+  const monthlyRevenueLabel =
+    listing?.monthlyRevenue != null &&
+    Number.isFinite(Number(listing.monthlyRevenue))
+      ? formatMoney(
+          Number(listing.monthlyRevenue),
+          listing?.currency ?? "USD",
+        )
+      : null;
   const category = formatCategory(listing?.category);
   const cover = useMemo(() => {
     if (!listing?.photos || listing.photos.length === 0) return PLACEHOLDER_COVER;
@@ -85,8 +106,8 @@ export default function ProductCard({ listing, id }: IProductCard) {
   }, [listing]);
 
   const accent = useMemo(
-    () => ACCENT_PALETTE[hashIndex(resolvedId, ACCENT_PALETTE.length)],
-    [resolvedId],
+    () => ACCENT_PALETTE[hashIndex(pathSegment, ACCENT_PALETTE.length)],
+    [pathSegment],
   );
 
   const price = Number(listing?.startingPrice ?? 0);
@@ -108,7 +129,17 @@ export default function ProductCard({ listing, id }: IProductCard) {
   const reviews = listing?.totalReviews ?? 0;
 
   const handleOpen = () => {
-    if (resolvedId) router.push(`/products/${resolvedId}`);
+    const mongoId = listing?._id ? String(listing._id) : null;
+    const slug = listing?.slug ? String(listing.slug).trim() : "";
+    if (slug && mongoId) {
+      router.push(
+        `/products/${encodeURIComponent(mongoId)}/${encodeURIComponent(slug)}`,
+      );
+    } else if (mongoId) {
+      router.push(`/products/${encodeURIComponent(mongoId)}`);
+    } else if (slug) {
+      router.push(`/products/${encodeURIComponent(slug)}`);
+    }
   };
 
   return (
@@ -122,10 +153,10 @@ export default function ProductCard({ listing, id }: IProductCard) {
         overflow: "hidden",
         transition:
           "transform .18s ease, box-shadow .18s ease, border-color .18s ease",
-        borderColor: hover ? "rgba(124,58,237,0.45)" : "#ececec",
+        borderColor: hover ? BRAND_PALETTE.seafoam : BRAND_PALETTE.borderSubtle,
         transform: hover ? "translateY(-2px)" : "none",
         boxShadow: hover ? "0 10px 24px rgba(17,17,17,0.08)" : "none",
-        cursor: resolvedId ? "pointer" : "default",
+        cursor: pathSegment ? "pointer" : "default",
       }}
       onClick={handleOpen}
     >
@@ -138,17 +169,29 @@ export default function ProductCard({ listing, id }: IProductCard) {
             width: "100%",
             height: 160,
             objectFit: "cover",
-            background: `linear-gradient(135deg, ${accent}22 0%, ${accent}0a 100%)`,
+            backgroundColor: BRAND_PALETTE.mint,
           }}
         />
         <Box
           sx={{
             position: "absolute",
             inset: 0,
-            background:
-              "linear-gradient(180deg, rgba(0,0,0,0) 40%, rgba(0,0,0,0.55) 100%)",
+            backgroundColor: "rgba(37, 52, 58, 0.42)",
           }}
         />
+        {isPrivateRestricted ? (
+          <Stack
+            sx={{
+              position: "absolute",
+              inset: 0,
+              alignItems: "center",
+              justifyContent: "center",
+              color: "#fff",
+            }}
+          >
+            <LockRoundedIcon sx={{ fontSize: 38, opacity: 0.95 }} />
+          </Stack>
+        ) : null}
         <Stack
           direction="row"
           spacing={1}
@@ -204,9 +247,16 @@ export default function ProductCard({ listing, id }: IProductCard) {
               sx={{ color: "#fff", fontWeight: 700, lineHeight: 1.1 }}
               variant="subtitle2"
             >
-              {resolvedName}
+              {isPrivateRestricted ? "Private listing" : resolvedName}
             </Typography>
-            {creator && (
+            {isPrivateRestricted ? (
+              <Typography
+                variant="caption"
+                sx={{ color: "rgba(255,255,255,0.85)" }}
+              >
+                Seller hidden
+              </Typography>
+            ) : creator && (
               <Stack direction="row" alignItems="center" spacing={0.5}>
                 <Typography
                   variant="caption"
@@ -237,8 +287,16 @@ export default function ProductCard({ listing, id }: IProductCard) {
             overflow: "hidden",
           }}
         >
-          {resolvedTagline}
+          {isPrivateRestricted
+            ? "Request access to unlock full listing details."
+            : resolvedTagline}
         </Typography>
+
+        {monthlyRevenueLabel ? (
+          <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
+            {monthlyRevenueLabel}/mo revenue
+          </Typography>
+        ) : null}
 
         <Stack
           direction="row"
@@ -248,11 +306,11 @@ export default function ProductCard({ listing, id }: IProductCard) {
           <Stack direction="row" alignItems="center" spacing={0.5}>
             <Rating value={rating} precision={0.1} readOnly size="small" />
             <Typography variant="caption" color="text.secondary">
-              {rating ? rating.toFixed(1) : "—"} ({reviews})
+              {rating ? rating.toFixed(1) : "-"} ({reviews})
             </Typography>
           </Stack>
           <Stack direction="row" alignItems="center" spacing={0.5}>
-            <DownloadRoundedIcon
+            <VisibilityRoundedIcon
               sx={{ fontSize: 16, color: "text.secondary" }}
             />
             <Typography variant="caption" color="text.secondary">
@@ -276,16 +334,20 @@ export default function ProductCard({ listing, id }: IProductCard) {
             }}
             size="small"
             variant="contained"
-            disabled={!resolvedId}
+            disabled={!pathSegment}
             sx={{
               borderRadius: 999,
               textTransform: "none",
               boxShadow: "none",
-              background: "linear-gradient(135deg, #111827 0%, #374151 100%)",
+              backgroundColor: BRAND_PALETTE.charcoal,
               "&:hover": { background: "#111827" },
             }}
           >
-            {isFree ? "Get app" : "View app"}
+            {isPrivateRestricted
+              ? "Request access"
+              : isFree
+                ? "Get app"
+                : "View app"}
           </Button>
         </Stack>
       </Stack>

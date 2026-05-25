@@ -5,6 +5,7 @@ import stripe from "../../../utils/stripe";
 import { checkRoom } from "../../../utils/check-socket-room";
 import { io } from "../../../app";
 import Listing from "../../../models/listing";
+import ListingExchange from "../../../models/exchange";
 import Transaction from "../../../models/transactions";
 import User from "../../../models/user";
 import Disputes from "../../../models/disputes";
@@ -39,6 +40,13 @@ function readPaymentType(
   metadata: Record<string, string | undefined> | null | undefined,
 ): PaymentType {
   return metadata?.paymentType === "listing-fee" ? "listing-fee" : "asset-sale";
+}
+
+/** Approximate last moment to capture an authorized card payment (PI `created` + 7d). */
+function approximateCaptureAuthorizationExpires(pi: Stripe.PaymentIntent): Date {
+  const createdSec =
+    typeof pi.created === "number" ? pi.created : Math.floor(Date.now() / 1000);
+  return new Date(createdSec * 1000 + 7 * 24 * 60 * 60 * 1000);
 }
 
 /**
@@ -79,17 +87,216 @@ export default async function appWebhook(req: Request, res: Response) {
       // ────────────────────────────────────────────────────────────────
       case "setup_intent.succeeded": {
         const setupIntent = event.data.object as Stripe.SetupIntent;
-        const buyer = await User.findOne({
-          stripeCustomerId: setupIntent.customer,
-        }).select("_id");
+        const customerId =
+          typeof setupIntent.customer === "string"
+            ? setupIntent.customer
+            : setupIntent.customer?.id ?? null;
+        const rawPm = setupIntent.payment_method;
+        const pmId =
+          typeof rawPm === "string"
+            ? rawPm
+            : rawPm && typeof rawPm === "object" && "id" in rawPm
+              ? String((rawPm as { id: string }).id)
+              : null;
 
-        if (!buyer) break;
+        const buyer = customerId
+          ? await User.findOne({ stripeCustomerId: customerId }).select("_id")
+          : null;
 
-        if (checkRoom(io, String(buyer._id))) {
+        if (buyer && customerId && pmId) {
+          try {
+            const customer = await stripe.customers.retrieve(customerId);
+            if (!("deleted" in customer && customer.deleted)) {
+              const c = customer as Stripe.Customer;
+              const currentInv = c.invoice_settings?.default_payment_method;
+              const currentId =
+                typeof currentInv === "string"
+                  ? currentInv
+                  : currentInv && typeof currentInv === "object" && "id" in currentInv
+                    ? String((currentInv as { id: string }).id)
+                    : null;
+
+              if (!currentId) {
+                await stripe.customers.update(customerId, {
+                  invoice_settings: { default_payment_method: pmId },
+                });
+              }
+
+              const refreshed = await stripe.customers.retrieve(customerId);
+              const cr = refreshed as Stripe.Customer;
+              const inv = cr.invoice_settings?.default_payment_method;
+              const resolvedDefault =
+                typeof inv === "string"
+                  ? inv
+                  : inv && typeof inv === "object" && "id" in inv
+                    ? String((inv as { id: string }).id)
+                    : pmId;
+
+              await User.findByIdAndUpdate(buyer._id, {
+                $set: { defaultPaymentIntendId: resolvedDefault },
+              });
+            }
+          } catch (e) {
+            console.error("setup_intent.succeeded: sync default PM to user", e);
+          }
+        }
+
+        if (buyer && checkRoom(io, String(buyer._id))) {
           io.to(String(buyer._id)).emit(Events.CARD_ADDED, {
             message: "Card added successfully.",
             text: "You're all set to buy listings.",
           });
+        }
+        break;
+      }
+
+      // ────────────────────────────────────────────────────────────────
+      // Checkout Session completed (buyer finished Hosted Checkout). With
+      // `capture_method: manual`, Stripe often sets `payment_status` to
+      // `unpaid` while the PI is `requires_capture` — do **not** require
+      // `payment_status === "paid"` or we never finalize. We gate on a
+      // complete session + PI state after retrieve below.
+      // ────────────────────────────────────────────────────────────────
+      case "checkout.session.completed": {
+        const session = event.data.object as Stripe.Checkout.Session;
+        if (session.mode !== "payment") {
+          break;
+        }
+        if (session.status !== "complete") {
+          break;
+        }
+        const piRef = session.payment_intent;
+        const piId =
+          typeof piRef === "string" ? piRef : piRef && typeof piRef === "object" && "id" in piRef
+            ? String((piRef as { id: string }).id)
+            : "";
+        if (!piId) {
+          break;
+        }
+        let pi: Stripe.PaymentIntent;
+        try {
+          pi = await stripe.paymentIntents.retrieve(piId);
+        } catch (e) {
+          console.error("checkout.session.completed: retrieve PI", e);
+          break;
+        }
+        const allowedPi: Stripe.PaymentIntent.Status[] = [
+          "requires_capture",
+          "processing",
+          "succeeded",
+        ];
+        if (!pi.status || !allowedPi.includes(pi.status)) {
+          break;
+        }
+        const metadata = pi.metadata || {};
+        if (readPaymentType(metadata) !== "asset-sale") {
+          break;
+        }
+        const { listingId, buyerId, sellerId, serviceFee } = metadata;
+        if (!listingId || !buyerId || !sellerId) {
+          break;
+        }
+        const dupTx = await Transaction.findOne({ stripePaymentIntentId: pi.id });
+        if (dupTx) {
+          break;
+        }
+        const listingPre = await Listing.findById(listingId).select("status buyerId");
+        if (
+          listingPre?.status === "sold" &&
+          listingPre.buyerId &&
+          String(listingPre.buyerId) === buyerId
+        ) {
+          break;
+        }
+        const dbSession = await mongoose.startSession();
+        dbSession.startTransaction();
+        try {
+          const listing = await Listing.findById(listingId).session(dbSession);
+          if (!listing) {
+            await dbSession.abortTransaction();
+            dbSession.endSession();
+            break;
+          }
+
+          const chargeId =
+            typeof pi.latest_charge === "string" ? pi.latest_charge : "";
+          const amountFmt = (pi.amount / 100).toFixed(2);
+          const paymentStatus: "pending" | "succeeded" =
+            pi.status === "requires_capture" || pi.status === "processing"
+              ? "pending"
+              : "succeeded";
+          const transaction = new Transaction({
+            ListingId: listing._id,
+            customerId: buyerId,
+            sellerId,
+            stripePaymentIntentId: pi.id,
+            stripeCustomerId:
+              typeof pi.customer === "string" ? pi.customer : String(pi.customer ?? ""),
+            amountCharged: pi.amount,
+            amountPaid: pi.amount,
+            serviceFee: Number(serviceFee) || 0,
+            billingReason: "Listing purchase",
+            paymentStatus,
+            chargeId: chargeId || undefined,
+            currency: pi.currency,
+          });
+          await transaction.save({ session: dbSession });
+          listing.status = "sold";
+          listing.buyerId = new mongoose.Types.ObjectId(buyerId);
+          listing.soldAt = new Date();
+          await listing.save({ session: dbSession });
+          await ListingExchange.updateOne(
+            { listingId: listing._id },
+            {
+              $set: {
+                sellerId: listing.sellerId,
+                buyerId: new mongoose.Types.ObjectId(buyerId),
+                paymentReceivedAt: new Date(),
+                paymentStatus: "pending",
+                sellerCapturedPayment: false,
+                paymentCaptureExpiration: approximateCaptureAuthorizationExpires(pi),
+              },
+              $setOnInsert: {
+                listingId: listing._id,
+                deliverables: [],
+              },
+            },
+            { upsert: true, session: dbSession },
+          );
+
+          await User.findByIdAndUpdate(
+            sellerId,
+            { $inc: { totalSales: 1 } },
+            { session: dbSession },
+          );
+
+          await dbSession.commitTransaction();
+          dbSession.endSession();
+
+          const payload = {
+            listingId: String(listing._id),
+            transactionId: String(transaction._id),
+            amount: amountFmt,
+            currency: pi.currency,
+          };
+
+          if (checkRoom(io, String(sellerId))) {
+            io.to(String(sellerId)).emit(Events.PURCHASE_SUCCEEDED, {
+              ...payload,
+              message: `Your listing "${listing.appName}" just sold!`,
+            });
+          }
+
+          if (checkRoom(io, String(buyerId))) {
+            io.to(String(buyerId)).emit(Events.PURCHASE_SUCCEEDED, {
+              ...payload,
+              message: `Purchase confirmed for "${listing.appName}"`,
+            });
+          }
+        } catch (err) {
+          await dbSession.abortTransaction();
+          dbSession.endSession();
+          console.log("checkout.session.completed error:", err);
         }
         break;
       }
@@ -112,6 +319,46 @@ export default async function appWebhook(req: Request, res: Response) {
           return void res.status(200).send({ received: true });
         }
 
+        // ── Asset-sale + Checkout (manual capture), normal order ─────────
+        // 1) `checkout.session.completed` creates the Transaction (often
+        //    `paymentStatus: "pending"`) and marks the listing sold.
+        // 2) `payment_intent.succeeded` fires only after capture → we only
+        //    **update** that row (above). We return here whenever a row
+        //    already exists so we never insert a second transaction for the
+        //    same `stripePaymentIntentId`.
+        //
+        // The `new Transaction` block below is the **fallback** when (1) never
+        // ran (e.g. only PI webhooks configured, or rare ordering) — not the
+        // steady-state Checkout path.
+        if (paymentType === "asset-sale") {
+          const existing = await Transaction.findOne({ stripePaymentIntentId: pi.id });
+          if (existing) {
+            if (existing.paymentStatus === "pending" && pi.status === "succeeded") {
+              const chargeId =
+                typeof pi.latest_charge === "string" ? pi.latest_charge : "";
+              await Transaction.findByIdAndUpdate(existing._id, {
+                $set: {
+                  paymentStatus: "succeeded",
+                  ...(chargeId ? { chargeId } : {}),
+                },
+              });
+              if (mongoose.isValidObjectId(listingId)) {
+                await ListingExchange.updateOne(
+                  { listingId: new mongoose.Types.ObjectId(listingId) },
+                  {
+                    $set: {
+                      paymentStatus: "succeeded",
+                      sellerCapturedPayment: true,
+                      paymentCaptureExpiration: null,
+                    },
+                  },
+                );
+              }
+            }
+            return void res.status(200).send({ received: true });
+          }
+        }
+
         const dbSession = await mongoose.startSession();
         dbSession.startTransaction();
 
@@ -128,7 +375,7 @@ export default async function appWebhook(req: Request, res: Response) {
           const amountFmt = (pi.amount / 100).toFixed(2);
 
           // ────────────────────────────────────────────────────────────
-          // Listing fee — seller paid the platform to publish a listing.
+          // Listing fee - seller paid the platform to publish a listing.
           // ────────────────────────────────────────────────────────────
           if (paymentType === "listing-fee") {
             if (!sellerId) {
@@ -139,14 +386,14 @@ export default async function appWebhook(req: Request, res: Response) {
 
             const transaction = new Transaction({
               ListingId: listing._id,
-              // Payer is the seller — they ARE the customer on a listing fee.
+              // Payer is the seller - they ARE the customer on a listing fee.
               customerId: sellerId,
               sellerId,
               stripePaymentIntentId: pi.id,
               stripeCustomerId: pi.customer,
               amountCharged: pi.amount,
               amountPaid: pi.amount,
-              // Listing fees are 100% platform revenue — no seller share.
+              // Listing fees are 100% platform revenue - no seller share.
               serviceFee: pi.amount,
               billingReason: "Listing fee",
               paymentStatus: "succeeded",
@@ -155,23 +402,21 @@ export default async function appWebhook(req: Request, res: Response) {
             });
             await transaction.save({ session: dbSession });
 
-            listing.status = "live";
-            listing.publishedAt = new Date();
+            // Never auto-publish from payment webhooks.
+            // Admin moderation is the only path to `live`.
+            listing.status = "pending_review";
             await listing.save({ session: dbSession });
 
-            await User.findByIdAndUpdate(
-              sellerId,
-              { $inc: { totalListings: 1 } },
-              { session: dbSession },
-            );
+            // totalListings is incremented when the draft is created (create-listing),
+            // not here, so we do not $inc again on listing-fee success.
 
             await dbSession.commitTransaction();
             dbSession.endSession();
 
             if (checkRoom(io, String(sellerId))) {
               io.to(String(sellerId)).emit(Events.LISTING_FEE_PAID, {
-                message: `"${listing.appName}" is live!`,
-                text: "Your listing is now visible to buyers.",
+                message: `"${listing.appName}" submitted for review`,
+                text: "Your payment succeeded. Admin review is required before this goes live.",
                 listingId: String(listing._id),
                 transactionId: String(transaction._id),
                 amount: amountFmt,
@@ -184,9 +429,19 @@ export default async function appWebhook(req: Request, res: Response) {
           }
 
           // ────────────────────────────────────────────────────────────
-          // Asset sale — buyer paid the seller for the listing.
+          // Asset sale — fallback when no Transaction row yet (see comment
+          // on `asset-sale` early-return above). Idempotent vs checkout race.
           // ────────────────────────────────────────────────────────────
           if (!buyerId || !sellerId) {
+            await dbSession.abortTransaction();
+            dbSession.endSession();
+            return void res.status(200).send({ received: true });
+          }
+
+          const dupByPi = await Transaction.findOne({ stripePaymentIntentId: pi.id }).session(
+            dbSession,
+          );
+          if (dupByPi) {
             await dbSession.abortTransaction();
             dbSession.endSession();
             return void res.status(200).send({ received: true });
@@ -212,6 +467,25 @@ export default async function appWebhook(req: Request, res: Response) {
           listing.buyerId = new mongoose.Types.ObjectId(buyerId);
           listing.soldAt = new Date();
           await listing.save({ session: dbSession });
+
+          await ListingExchange.updateOne(
+            { listingId: listing._id },
+            {
+              $set: {
+                sellerId: listing.sellerId,
+                buyerId: new mongoose.Types.ObjectId(buyerId),
+                paymentReceivedAt: new Date(),
+                paymentStatus: "succeeded",
+                sellerCapturedPayment: true,
+                paymentCaptureExpiration: null,
+              },
+              $setOnInsert: {
+                listingId: listing._id,
+                deliverables: [],
+              },
+            },
+            { upsert: true, session: dbSession },
+          );
 
           await User.findByIdAndUpdate(
             sellerId,
@@ -275,6 +549,13 @@ export default async function appWebhook(req: Request, res: Response) {
             listingId,
             paymentType,
           });
+        }
+
+        if (paymentType === "asset-sale" && mongoose.isValidObjectId(listingId)) {
+          await ListingExchange.updateOne(
+            { listingId: new mongoose.Types.ObjectId(listingId) },
+            { $set: { paymentStatus: "canceled", sellerCapturedPayment: false } },
+          );
         }
         break;
       }
@@ -349,7 +630,7 @@ export default async function appWebhook(req: Request, res: Response) {
       }
 
       // ────────────────────────────────────────────────────────────────
-      // Refund failed — commonly insufficient funds on the connected account.
+      // Refund failed - commonly insufficient funds on the connected account.
       // Attempt to reverse the transfer, otherwise charge the seller's
       // default payment method, otherwise record as seller debt.
       // ────────────────────────────────────────────────────────────────
@@ -419,7 +700,7 @@ export default async function appWebhook(req: Request, res: Response) {
                       currency: "usd",
                       customer: seller.stripeCustomerId,
                       metadata: {
-                        reason: "Refund failed — insufficient seller balance",
+                        reason: "Refund failed - insufficient seller balance",
                         listingId: String(listingId),
                       },
                     },
@@ -452,7 +733,7 @@ export default async function appWebhook(req: Request, res: Response) {
       }
 
       // ────────────────────────────────────────────────────────────────
-      // Refund completed — record a negative transaction, close any
+      // Refund completed - record a negative transaction, close any
       // related dispute, notify buyer + seller.
       // ────────────────────────────────────────────────────────────────
       case "refund.updated": {

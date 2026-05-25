@@ -9,7 +9,7 @@ export const paymentUpdateLimiter = rateLimit({
   limit: 10,
   standardHeaders: "draft-7",
   legacyHeaders: false,
-  message: { message: "Too many payment requests — please slow down." },
+  message: { message: "Too many payment requests - please slow down." },
 });
 
 /**
@@ -21,5 +21,5 @@ export const writeLimiter = rateLimit({
   limit: 30,
   standardHeaders: "draft-7",
   legacyHeaders: false,
-  message: { message: "Too many requests — please try again shortly." },
+  message: { message: "Too many requests - please try again shortly." },
 });

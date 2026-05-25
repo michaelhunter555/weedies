@@ -14,8 +14,10 @@ import Link from "next/link";
 import useTheme from "@mui/material/styles/useTheme";
 import useMediaQuery from "@mui/material/useMediaQuery";
 
+import { useAuth } from "@/context/auth-context";
+
 import { StyledBox, StyledContainer } from "./HeaderStyles";
-import { MainMenuItems } from "./menuItems";
+import { getMainMenuItems } from "./menuItems";
 
 const logoStyle = {
   width: "250px",
@@ -33,11 +35,17 @@ const Header = () => {
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const [mounted, setMounted] = useState(false);
 
+  const { user, isLoggedIn, hydrated } = useAuth();
+
   useEffect(() => {
     setMounted(true);
   }, []);
 
   const effectiveIsMobile = mounted ? isMobile : false;
+
+  const mainMenuItems = getMainMenuItems(
+    hydrated && isLoggedIn && user?.id ? { userId: String(user.id) } : undefined,
+  );
 
   // const handleLogout = () => {
   //   auth.logout();
@@ -57,7 +65,7 @@ const Header = () => {
       {!effectiveIsMobile && (
         <StyledBox>
           <List sx={{ display: "flex", alignItems: "center" }}>
-            {MainMenuItems.map((menu) => (
+            {mainMenuItems.map((menu) => (
               <MenuItem
                 key={menu.href}
                 component={Link}
@@ -92,7 +100,7 @@ const Header = () => {
                 flexDirection: "column",
               }}
             >
-              {MainMenuItems.map((menu) => (
+              {mainMenuItems.map((menu) => (
                 <MenuItem
                   key={menu.href}
                   component={Link}
@@ -114,6 +122,26 @@ const Header = () => {
                   </ListItem>
                 </MenuItem>
               ))}
+              <MenuItem
+                component={Link}
+                href={
+                  hydrated && isLoggedIn && user?.id
+                    ? `/my-settings/${encodeURIComponent(String(user.id))}`
+                    : "/signup"
+                }
+                onClick={() => setOpenDrawer(false)}
+              >
+                <ListItem>
+                  <ListItemText
+                    primary={hydrated && isLoggedIn ? "Account" : "Sign in"}
+                    sx={{
+                      color: "text.secondary",
+                      fontSize: 12,
+                      fontWeight: 700,
+                    }}
+                  />
+                </ListItem>
+              </MenuItem>
               <Chip
                 clickable
                 label="Contact"

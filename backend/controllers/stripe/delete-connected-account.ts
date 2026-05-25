@@ -3,7 +3,7 @@ import stripe from "../../utils/stripe";
 import User from "../../models/user";
 
 /**
- * DANGER — test-only helper.
+ * DANGER - test-only helper.
  *
  * Detaches a seller's Stripe Connect account on both Stripe and our DB so
  * they can re-run onboarding from scratch. Gated behind `requireRole("admin")`

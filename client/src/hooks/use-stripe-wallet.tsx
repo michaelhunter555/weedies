@@ -23,7 +23,43 @@ export type StripePaymentMethod = {
 
 export type PaymentMethodsResponse = {
   hasCard: boolean;
+  /** Stripe customer `invoice_settings.default_payment_method`, if any. */
+  defaultPaymentMethodId?: string | null;
   paymentMethods: { data: StripePaymentMethod[] };
+};
+
+export type SellerOnboardingStartResult = {
+  url: string;
+  stripeConnectAccountId: string;
+  stripeAccountId: string;
+};
+
+export type BillingHistoryResponse = {
+  ok?: boolean;
+  items: Array<{
+    transactionId: string;
+    listingId: string;
+    slug: string;
+    appName: string;
+    coverUrl: string | null;
+    billingReason: string;
+    amountCents: number;
+    currency: string;
+    paymentStatus?: string;
+    purchasedAt: string;
+  }>;
+};
+
+export type ConnectBalanceResponse = {
+  ok?: boolean;
+  connected: boolean;
+  currency: string;
+  /** Major units (e.g. dollars). */
+  available: number;
+  pending: number;
+  reserved: number;
+  instantAvailable: number;
+  isOnboarded?: boolean;
 };
 
 export const useStripeWallet = () => {
@@ -31,21 +67,18 @@ export const useStripeWallet = () => {
 
   /** List saved cards for a Stripe customer. */
   const getPaymentMethods = useCallback(
-    async (stripeCustomerId: string): Promise<PaymentMethodsResponse | undefined> => {
+    async (stripeCustomerId: string): Promise<PaymentMethodsResponse> => {
       try {
-        const data = await apiFetch<PaymentMethodsResponse | { error?: any}>(
+        const data = await apiFetch<PaymentMethodsResponse>(
           `/stripe/payment-methods?stripeCustomerId=${encodeURIComponent(stripeCustomerId)}`,
           "GET",
         );
-        if(!data) {
-          throw new Error((data as { error?: string })?.error || "No data returned from API");
-        }
-        return data as PaymentMethodsResponse;
-      } catch(err) {
+        return data;
+      } catch (err) {
         console.error("Error getting payment methods", err);
         throw err;
       }
-      },
+    },
     [apiFetch],
   );
 
@@ -85,15 +118,69 @@ export const useStripeWallet = () => {
    * refresh the onboarding link; otherwise we create the account + link.
    */
   const startSellerOnboarding = useCallback(
-    async (opts: { hasExistingAccount: boolean }): Promise<string> => {
+    async (opts: {
+      hasExistingAccount: boolean;
+      countryCode: string;
+    }): Promise<SellerOnboardingStartResult> => {
       const path = opts.hasExistingAccount
         ? "/stripe/refreshed-onboarding-link"
         : "/stripe/create-connect-account";
       const method = opts.hasExistingAccount ? "GET" : "POST";
 
-      const data = await apiFetch<{ url?: string }>(path, method);
-      return String(data?.url || "");
+      const data = await apiFetch<{
+        url?: string;
+        stripeConnectAccountId?: string;
+        stripeAccountId?: string;
+      }>(
+        `${path}?countryCode=${encodeURIComponent(opts.countryCode)}`,
+        method,
+      );
+      const url = String(data?.url || "");
+      const stripeConnectAccountId = String(
+        data?.stripeConnectAccountId ?? data?.stripeAccountId ?? "",
+      );
+      const stripeAccountId = String(
+        data?.stripeAccountId ?? data?.stripeConnectAccountId ?? "",
+      );
+      return { url, stripeConnectAccountId, stripeAccountId };
     },
+    [apiFetch],
+  );
+
+  const createCheckoutSession = useCallback(
+    async (listingId: string): Promise<string> => {
+      const data = await apiFetch<{ url?: string }>(
+        "/stripe/create-checkout-session",
+        "POST",
+        { listingId },
+      );
+      return String(data?.url ?? "");
+    },
+    [apiFetch],
+  );
+
+  const managePaymentCapture = useCallback( async (listingId: string, sellerAction: "capture" | "cancel") => {
+      const data = await apiFetch<{ ok: boolean }>("/stripe/handle-payment-intent", "POST", { listingId, sellerAction });
+      return data.ok;
+  } ,[apiFetch]);
+
+  /**
+   * Seller Connect balance snapshot - amounts come back in MAJOR units (dollars).
+   * Returns `connected: false` when the seller has not started onboarding yet.
+   */
+  const getConnectBalance = useCallback(
+    async (): Promise<ConnectBalanceResponse> =>
+      apiFetch<ConnectBalanceResponse>("/stripe/connect-balance", "GET"),
+    [apiFetch],
+  );
+
+  /** Charges on this user's Stripe customer (listing fees, purchases, etc.). */
+  const getBillingHistory = useCallback(
+    async (limit = 50): Promise<BillingHistoryResponse> =>
+      apiFetch<BillingHistoryResponse>(
+        `/stripe/billing-history?limit=${encodeURIComponent(String(limit))}`,
+        "GET",
+      ),
     [apiFetch],
   );
 
@@ -103,5 +190,9 @@ export const useStripeWallet = () => {
     updateDefaultPayment,
     deletePaymentMethods,
     startSellerOnboarding,
+    createCheckoutSession,
+    managePaymentCapture,
+    getConnectBalance,
+    getBillingHistory,
   };
 };

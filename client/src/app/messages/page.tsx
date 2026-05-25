@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Alert,
   Avatar,
   Box,
   Button,
+  Chip,
   CircularProgress,
   Container,
   IconButton,
@@ -18,18 +20,68 @@ import {
   Typography,
 } from "@mui/material";
 import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
+import OpenInNewRoundedIcon from "@mui/icons-material/OpenInNewRounded";
 import PersonRoundedIcon from "@mui/icons-material/PersonRounded";
 import SendRoundedIcon from "@mui/icons-material/SendRounded";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { useAuth } from "@/context/auth-context";
+import { useApiFetchOrThrow } from "@/hooks/use-api-fetch";
+import { useListings } from "@/hooks/use-listings";
+import { BRAND_PALETTE } from "@/theme/brand-palette";
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Mock data. Once you have a messages API, replace the two arrays below with
-// fetched state (React Query) and hand the real ids to the message list.
-// Socket events can append to `messagesByConversation` keyed on the active id.
-// ─────────────────────────────────────────────────────────────────────────────
-const MAX_ACTIVE_CHATS = 10;
-const PAGE_SIZE = 5;
+const LIST_LIMIT = 10;
+
+type ViewerCounterpart = {
+  id: string | null;
+  displayName: string;
+  image: string;
+  masked: boolean;
+};
+
+type ChatListingSummary = {
+  id: string;
+  appName: string;
+  slug?: string;
+  productPath: string;
+};
+
+type ApiChatRow = {
+  _id: string;
+  lastMessage?: string;
+  lastMessageTime?: string;
+  updatedAt?: string;
+  listingId?: string;
+  listing?: ChatListingSummary | null;
+  viewerCounterpart: ViewerCounterpart;
+  /** Server-computed: messages addressed to the viewer that are still `read: false`. */
+  unreadCount?: number;
+};
+
+type GetChatsResponse = {
+  chats: ApiChatRow[];
+  page: number;
+  totalPages: number;
+  totalChats: number;
+  limit: number;
+  ok?: boolean;
+};
+
+type ApiMessageRow = {
+  _id: string;
+  text: string;
+  read: boolean;
+  createdAt?: string;
+  fromMe: boolean;
+  senderLabel: string;
+  senderId: string;
+};
+
+type GetMessagesResponse = {
+  chatPreview?: ApiChatRow;
+  chatMessages: ApiMessageRow[];
+  ok?: boolean;
+};
 
 type Conversation = {
   id: string;
@@ -37,117 +89,17 @@ type Conversation = {
   avatarUrl?: string | null;
   lastMessagePreview: string;
   lastMessageAt: Date;
+  listing?: ChatListingSummary | null;
   unreadCount?: number;
 };
 
 type ChatMessage = {
   id: string;
-  conversationId: string;
   body: string;
   at: Date;
-  /** true if the message was sent by the currently logged-in user */
   fromMe: boolean;
+  senderLabel: string;
 };
-
-const SAMPLE_CONVERSATIONS: Conversation[] = [
-  {
-    id: "c1",
-    name: "Ajarn William",
-    lastMessagePreview: "you there!",
-    lastMessageAt: new Date("2026-02-27T22:26:00"),
-    unreadCount: 1,
-  },
-  {
-    id: "c2",
-    name: "Mustafa Al",
-    lastMessagePreview: "yo",
-    lastMessageAt: new Date("2026-02-27T15:10:00"),
-  },
-  {
-    id: "c3",
-    name: "mihakl kal",
-    lastMessagePreview: "yo",
-    lastMessageAt: new Date("2026-02-24T13:45:00"),
-  },
-  {
-    id: "c4",
-    name: "Erica Thomas",
-    lastMessagePreview: "yo",
-    lastMessageAt: new Date("2026-02-24T09:12:00"),
-  },
-  {
-    id: "c5",
-    name: "Michael Hunter",
-    lastMessagePreview: "hello",
-    lastMessageAt: new Date("2026-02-24T08:40:00"),
-  },
-  {
-    id: "c6",
-    name: "Dana Brooks",
-    lastMessagePreview: "sounds good, ship it!",
-    lastMessageAt: new Date("2026-02-22T18:10:00"),
-  },
-];
-
-const SAMPLE_MESSAGES: Record<string, ChatMessage[]> = {
-  c1: [
-    {
-      id: "m1",
-      conversationId: "c1",
-      body: "hey",
-      at: new Date("2026-02-26T22:02:00"),
-      fromMe: false,
-    },
-    {
-      id: "m2",
-      conversationId: "c1",
-      body: "hey bud",
-      at: new Date("2026-02-26T22:02:30"),
-      fromMe: false,
-    },
-    {
-      id: "m3",
-      conversationId: "c1",
-      body: "still a cool feature",
-      at: new Date("2026-02-27T18:24:00"),
-      fromMe: false,
-    },
-    {
-      id: "m4",
-      conversationId: "c1",
-      body: "test",
-      at: new Date("2026-02-27T18:25:00"),
-      fromMe: false,
-    },
-    {
-      id: "m5",
-      conversationId: "c1",
-      body: "hey",
-      at: new Date("2026-02-27T18:25:45"),
-      fromMe: true,
-    },
-    {
-      id: "m6",
-      conversationId: "c1",
-      body: "you there!",
-      at: new Date("2026-02-27T18:26:00"),
-      fromMe: false,
-    },
-  ],
-  c2: [
-    {
-      id: "m7",
-      conversationId: "c2",
-      body: "yo",
-      at: new Date("2026-02-27T15:10:00"),
-      fromMe: false,
-    },
-  ],
-};
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Utilities
-// ─────────────────────────────────────────────────────────────────────────────
 
 const fmtConversationDate = (d: Date) =>
   d.toLocaleDateString(undefined, {
@@ -184,9 +136,38 @@ const sameDay = (a: Date, b: Date) =>
   a.getMonth() === b.getMonth() &&
   a.getDate() === b.getDate();
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Sub-components (kept in-file for now; split out if this grows)
-// ─────────────────────────────────────────────────────────────────────────────
+function isMongoObjectId(s: string): boolean {
+  return /^[a-f\d]{24}$/i.test(s.trim());
+}
+
+type ComposeIntent = {
+  recipientId: string;
+  listingId: string;
+  listingName: string;
+};
+
+function mapApiChatToConversation(c: ApiChatRow): Conversation {
+  const t = c.lastMessageTime ?? c.updatedAt;
+  return {
+    id: c._id,
+    name: c.viewerCounterpart.displayName,
+    avatarUrl: c.viewerCounterpart.masked ? null : c.viewerCounterpart.image || null,
+    lastMessagePreview: String(c.lastMessage ?? ""),
+    lastMessageAt: t ? new Date(t) : new Date(),
+    listing: c.listing ?? null,
+    unreadCount: Number(c.unreadCount ?? 0),
+  };
+}
+
+function mapApiMessages(rows: ApiMessageRow[]): ChatMessage[] {
+  return rows.map((m) => ({
+    id: m._id,
+    body: m.text,
+    at: m.createdAt ? new Date(m.createdAt) : new Date(),
+    fromMe: m.fromMe,
+    senderLabel: m.senderLabel,
+  }));
+}
 
 function ConversationRow({
   conversation,
@@ -211,14 +192,10 @@ function ConversationRow({
         cursor: "pointer",
         borderLeft: "3px solid transparent",
         transition: "background 120ms ease",
-        background: selected
-          ? "linear-gradient(135deg, #faf5ff 0%, #fdf2f8 100%)"
-          : "transparent",
-        borderLeftColor: selected ? "#7c3aed" : "transparent",
+        backgroundColor: selected ? BRAND_PALETTE.mint : "transparent",
+        borderLeftColor: selected ? BRAND_PALETTE.seafoam : "transparent",
         "&:hover": {
-          background: selected
-            ? "linear-gradient(135deg, #faf5ff 0%, #fdf2f8 100%)"
-            : "#fafafa",
+          backgroundColor: selected ? BRAND_PALETTE.mint : "#fafafa",
         },
       }}
     >
@@ -229,10 +206,10 @@ function ConversationRow({
             width: 42,
             height: 42,
             fontWeight: 700,
-            background: conversation.avatarUrl
+            bgcolor: conversation.avatarUrl
               ? undefined
-              : "linear-gradient(135deg, #7c3aed 0%, #ec4899 100%)",
-            color: "#fff",
+              : BRAND_PALETTE.seafoam,
+            color: BRAND_PALETTE.onPrimary,
           }}
         >
           {initialsOf(conversation.name)}
@@ -257,27 +234,40 @@ function ConversationRow({
             >
               {conversation.name}
             </Typography>
-            {conversation.unreadCount ? (
+            {conversation.unreadCount && conversation.unreadCount > 0 ? (
               <Box
+                component="span"
                 sx={{
-                  minWidth: 18,
-                  height: 18,
+                  minWidth: 20,
+                  height: 20,
                   px: 0.75,
                   borderRadius: 999,
-                  background:
-                    "linear-gradient(135deg, #7c3aed 0%, #ec4899 100%)",
-                  color: "#fff",
+                  bgcolor: "error.main",
+                  color: "error.contrastText",
                   fontSize: 11,
                   fontWeight: 800,
                   display: "inline-flex",
                   alignItems: "center",
                   justifyContent: "center",
+                  flexShrink: 0,
                 }}
               >
-                {conversation.unreadCount}
+                {conversation.unreadCount > 99 ? "99+" : conversation.unreadCount}
               </Box>
             ) : null}
           </Stack>
+          {conversation.listing ? (
+            <Typography variant="caption" component="div" sx={{ mt: 0.25 }}>
+              <Link
+                href={conversation.listing.productPath}
+                onClick={(e) => e.stopPropagation()}
+                onKeyDown={(e) => e.stopPropagation()}
+                style={{ fontWeight: 700, color: "inherit" }}
+              >
+                {conversation.listing.appName}
+              </Link>
+            </Typography>
+          ) : null}
           <Typography
             variant="caption"
             color="text.secondary"
@@ -313,10 +303,9 @@ function MessageBubble({ m }: { m: ChatMessage }) {
             px: 1.75,
             py: 1.25,
             borderRadius: "18px 18px 4px 18px",
-            color: "#fff",
-            background:
-              "linear-gradient(135deg, #7c3aed 0%, #ec4899 100%)",
-            boxShadow: "0 6px 18px rgba(124,58,237,0.25)",
+            color: BRAND_PALETTE.onPrimary,
+            backgroundColor: BRAND_PALETTE.charcoal,
+            boxShadow: "none",
           }}
         >
           <Typography
@@ -348,6 +337,13 @@ function MessageBubble({ m }: { m: ChatMessage }) {
           color: "text.primary",
         }}
       >
+        <Typography
+          variant="caption"
+          color="text.secondary"
+          sx={{ display: "block", mb: 0.25, fontWeight: 600 }}
+        >
+          {m.senderLabel}
+        </Typography>
         <Typography variant="body2" sx={{ lineHeight: 1.25 }}>
           {m.body}
         </Typography>
@@ -363,79 +359,268 @@ function MessageBubble({ m }: { m: ChatMessage }) {
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Page
-// ─────────────────────────────────────────────────────────────────────────────
-
 export default function MessagesPage() {
+  return (
+    <Suspense
+      fallback={
+        <Container maxWidth="lg" sx={{ py: 10, textAlign: "center" }}>
+          <CircularProgress />
+        </Container>
+      }
+    >
+      <MessagesPageContent />
+    </Suspense>
+  );
+}
+
+function MessagesPageContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const chatFromUrl = searchParams.get("chat")?.trim() ?? "";
   const { user, hydrated } = useAuth();
+  const { apiFetch } = useApiFetchOrThrow();
+  const { createChat } = useListings();
+  const queryClient = useQueryClient();
 
-  // Mock state — swap these for React Query + socket data later.
-  const [conversations, setConversations] = useState<Conversation[]>(
-    SAMPLE_CONVERSATIONS,
-  );
-  const [messagesByConversation, setMessagesByConversation] = useState<
-    Record<string, ChatMessage[]>
-  >(SAMPLE_MESSAGES);
-
-  const [selectedId, setSelectedId] = useState<string | null>(
-    SAMPLE_CONVERSATIONS[0]?.id ?? null,
-  );
-  const [page, setPage] = useState(1);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [listPage, setListPage] = useState(1);
   const [draft, setDraft] = useState("");
+  const [composeIntent, setComposeIntent] = useState<ComposeIntent | null>(null);
+  const [composeError, setComposeError] = useState<string | null>(null);
 
-  const pageCount = Math.max(1, Math.ceil(conversations.length / PAGE_SIZE));
-  const paged = useMemo(() => {
-    const start = (page - 1) * PAGE_SIZE;
-    return conversations.slice(start, start + PAGE_SIZE);
-  }, [conversations, page]);
+  const chatsQuery = useQuery({
+    queryKey: ["chats", "mine", listPage, LIST_LIMIT],
+    queryFn: () =>
+      apiFetch<GetChatsResponse>(
+        `/chats/mine?page=${listPage}&limit=${LIST_LIMIT}`,
+        "GET",
+      ),
+    enabled: Boolean(user && hydrated),
+  });
 
-  const selectedConversation =
-    conversations.find((c) => c.id === selectedId) ?? null;
-  const selectedMessages = selectedId
-    ? messagesByConversation[selectedId] ?? []
-    : [];
+  useEffect(() => {
+    if (!hydrated || !user?.id) return;
+    if (typeof window === "undefined") return;
 
-  // Auto-scroll to newest message when the active conversation changes or
-  // a new message arrives.
+    if (chatFromUrl && isMongoObjectId(chatFromUrl)) {
+      setComposeIntent(null);
+      setComposeError(null);
+      setSelectedId(chatFromUrl);
+      return;
+    }
+
+    const sp = new URLSearchParams(window.location.search);
+    const listingId = sp.get("listingId")?.trim() ?? "";
+    const sellerId = sp.get("sellerId")?.trim() ?? "";
+    const listingName =
+      sp.get("subject")?.trim() ||
+      sp.get("listingName")?.trim() ||
+      (listingId ? `Listing ${listingId.slice(0, 8)}…` : "");
+    const prefill = sp.get("prefill")?.trim() ?? "";
+
+    if (!listingId && !sellerId) {
+      setComposeIntent(null);
+      setComposeError(null);
+      return;
+    }
+
+    if (listingId && !isMongoObjectId(listingId)) {
+      setComposeError("Invalid listing id in link.");
+      setComposeIntent(null);
+      return;
+    }
+
+    if (!listingId && sellerId && !isMongoObjectId(sellerId)) {
+      setComposeError("Invalid seller id in link.");
+      setComposeIntent(null);
+      return;
+    }
+
+    if (sellerId && user.id === sellerId) {
+      setComposeError("You cannot message yourself.");
+      setComposeIntent(null);
+      return;
+    }
+
+    if (listingId && isMongoObjectId(listingId)) {
+      if (!sellerId || !isMongoObjectId(sellerId)) {
+        setComposeError(
+          "This link is missing the seller id. Open “Message seller” from the listing page, or add sellerId=… to the URL.",
+        );
+        setComposeIntent(null);
+        return;
+      }
+      if (user.id === sellerId) {
+        setComposeError("You cannot message yourself.");
+        setComposeIntent(null);
+        return;
+      }
+      setComposeIntent({
+        recipientId: sellerId,
+        listingId,
+        listingName: listingName || "Listing",
+      });
+      if (prefill) setDraft(prefill);
+      return;
+    }
+
+    if (sellerId && isMongoObjectId(sellerId)) {
+      setComposeIntent({
+        recipientId: sellerId,
+        listingId: "",
+        listingName: listingName || "Seller",
+      });
+      if (prefill) setDraft(prefill);
+    }
+  }, [hydrated, user?.id, chatFromUrl]);
+
+  const conversations = useMemo(
+    () => (chatsQuery.data?.chats ?? []).map(mapApiChatToConversation),
+    [chatsQuery.data?.chats],
+  );
+
+  useEffect(() => {
+    if (!hydrated || !user?.id) return;
+    if (chatFromUrl && isMongoObjectId(chatFromUrl)) {
+      return;
+    }
+    if (!chatsQuery.data?.chats?.length) return;
+    if (composeIntent && !selectedId) return;
+    setSelectedId((prev) => {
+      if (prev && chatsQuery.data!.chats.some((c) => c._id === prev)) {
+        return prev;
+      }
+      return chatsQuery.data!.chats[0]?._id ?? null;
+    });
+  }, [hydrated, user?.id, chatFromUrl, chatsQuery.data?.chats, composeIntent, selectedId]);
+
+  const messagesQuery = useQuery({
+    queryKey: ["chat", selectedId, "messages"],
+    queryFn: () =>
+      apiFetch<GetMessagesResponse>(
+        `/chats/${encodeURIComponent(selectedId!)}/messages?page=1&limit=100`,
+        "GET",
+      ),
+    enabled: Boolean(user && hydrated && selectedId),
+  });
+
+  // Opening a chat marks its messages as read on the server. Sync the
+  // header badge + dashboard tile right away (no need to wait for refetch).
+  useEffect(() => {
+    if (!selectedId) return;
+    if (!messagesQuery.data) return;
+    queryClient.invalidateQueries({ queryKey: ["chats", "unread-count"] }).catch(
+      () => null,
+    );
+    queryClient.invalidateQueries({ queryKey: ["chats"] }).catch(() => null);
+  }, [selectedId, messagesQuery.data, queryClient]);
+
+  const selectedMessages = useMemo(() => {
+    if (!selectedId || !messagesQuery.data?.chatMessages) return [];
+    return mapApiMessages(messagesQuery.data.chatMessages);
+  }, [selectedId, messagesQuery.data?.chatMessages]);
+
+  const sendMutation = useMutation({
+    mutationFn: async (text: string) => {
+      if (!selectedId) throw new Error("No chat selected.");
+      return apiFetch<{ ok?: boolean }>(
+        `/chats/${encodeURIComponent(selectedId)}/messages`,
+        "POST",
+        { text },
+      );
+    },
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["chat", selectedId, "messages"] }),
+        queryClient.invalidateQueries({ queryKey: ["chats"] }),
+      ]);
+    },
+  });
+
+  const createChatMutation = useMutation({
+    mutationFn: async (payload: { text: string; intent: ComposeIntent }) =>
+      createChat({
+        recipientId: payload.intent.recipientId,
+        message: payload.text,
+        listingId: payload.intent.listingId || undefined,
+      }),
+    onSuccess: async (data) => {
+      await queryClient.invalidateQueries({ queryKey: ["chats"] });
+      const raw = data?.chat as { _id?: unknown } | undefined;
+      const chatId = raw?._id != null ? String(raw._id) : null;
+      setComposeIntent(null);
+      setComposeError(null);
+      setDraft("");
+      if (chatId) {
+        setSelectedId(chatId);
+        router.replace(`/messages?chat=${encodeURIComponent(chatId)}`, { scroll: false });
+      } else {
+        router.replace("/messages", { scroll: false });
+      }
+    },
+  });
+
   const messagesScrollRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     const el = messagesScrollRef.current;
     if (!el) return;
     el.scrollTop = el.scrollHeight;
-  }, [selectedId, selectedMessages.length]);
+  }, [selectedId, selectedMessages.length, messagesQuery.isFetching]);
 
-  const handleCloseChat = () => setSelectedId(null);
+  const handleCloseChat = () => {
+    setSelectedId(null);
+    setComposeIntent(null);
+    setComposeError(null);
+    router.replace("/messages", { scroll: false });
+  };
+
+  const handleSelectConversation = (id: string) => {
+    setComposeIntent(null);
+    setComposeError(null);
+    setSelectedId(id);
+    router.replace(`/messages?chat=${encodeURIComponent(id)}`, { scroll: false });
+  };
 
   const handleSend = (e: React.FormEvent) => {
     e.preventDefault();
     const body = draft.trim();
-    if (!body || !selectedId) return;
+    if (!body) return;
 
-    // TODO(api): POST /api/messages { conversationId, body }
-    //            then update local state on the socket `message` event.
-    const msg: ChatMessage = {
-      id: `local-${Date.now()}`,
-      conversationId: selectedId,
-      body,
-      at: new Date(),
-      fromMe: true,
-    };
-    setMessagesByConversation((prev) => ({
-      ...prev,
-      [selectedId]: [...(prev[selectedId] ?? []), msg],
-    }));
-    setConversations((prev) =>
-      prev.map((c) =>
-        c.id === selectedId
-          ? { ...c, lastMessagePreview: body, lastMessageAt: msg.at, unreadCount: 0 }
-          : c,
-      ),
-    );
-    setDraft("");
+    if (composeIntent && !selectedId) {
+      if (createChatMutation.isPending) return;
+      createChatMutation.mutate(
+        { text: body, intent: composeIntent },
+        {
+          onError: (err) => {
+            setComposeError(err instanceof Error ? err.message : "Could not start chat.");
+          },
+        },
+      );
+      return;
+    }
+
+    if (!selectedId || sendMutation.isPending) return;
+    sendMutation.mutate(body, {
+      onSuccess: () => setDraft(""),
+      onError: () => {
+        /* surfaced below */
+      },
+    });
   };
 
-  // ── Auth guard (same pattern as the dashboard) ─────────────────────────────
+  const selectedConversation = useMemo(() => {
+    if (!selectedId) return null;
+    const fromList = conversations.find((c) => c.id === selectedId) ?? null;
+    if (fromList) return fromList;
+    const preview = messagesQuery.data?.chatPreview;
+    if (preview && preview._id === selectedId) {
+      return mapApiChatToConversation(preview);
+    }
+    return null;
+  }, [selectedId, conversations, messagesQuery.data?.chatPreview]);
+
+  const totalListPages = Math.max(1, chatsQuery.data?.totalPages ?? 1);
+
   if (!hydrated) {
     return (
       <Container maxWidth="lg" sx={{ py: 10, textAlign: "center" }}>
@@ -473,11 +658,33 @@ export default function MessagesPage() {
           <Typography variant="h5" sx={{ fontWeight: 900 }}>
             Messages
           </Typography>
-          <Typography variant="body2" color="text.secondary">
-            You can have up to <b>{MAX_ACTIVE_CHATS}</b> active chats at a time.
-          </Typography>
+          {chatsQuery.data?.totalChats != null ? (
+            <Typography variant="body2" color="text.secondary">
+              {chatsQuery.data.totalChats} conversation
+              {chatsQuery.data.totalChats === 1 ? "" : "s"}
+            </Typography>
+          ) : null}
         </Stack>
       </Stack>
+
+      {(chatsQuery.isError ||
+        messagesQuery.isError ||
+        sendMutation.isError ||
+        createChatMutation.isError) && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {(chatsQuery.error as Error)?.message ||
+            (messagesQuery.error as Error)?.message ||
+            (sendMutation.error as Error)?.message ||
+            (createChatMutation.error as Error)?.message ||
+            "Something went wrong."}
+        </Alert>
+      )}
+
+      {composeError ? (
+        <Alert severity="warning" sx={{ mb: 2 }} onClose={() => setComposeError(null)}>
+          {composeError}
+        </Alert>
+      ) : null}
 
       <Stack
         direction={{ xs: "column", md: "row" }}
@@ -485,7 +692,6 @@ export default function MessagesPage() {
         alignItems="stretch"
         sx={{ minHeight: { md: 620 } }}
       >
-        {/* ── Left: conversations list ────────────────────────────────────── */}
         <Paper
           variant="outlined"
           sx={{
@@ -495,7 +701,7 @@ export default function MessagesPage() {
             borderColor: "#ececec",
             overflow: "hidden",
             display: {
-              xs: selectedId ? "none" : "flex",
+              xs: selectedId || composeIntent ? "none" : "flex",
               md: "flex",
             },
             flexDirection: "column",
@@ -509,34 +715,31 @@ export default function MessagesPage() {
 
           <Stack
             divider={<Box sx={{ borderBottom: "1px solid #f1f1f1" }} />}
-            sx={{ flex: 1, overflowY: "auto" }}
+            sx={{ flex: 1, overflowY: "auto", position: "relative" }}
           >
-            {paged.length === 0 ? (
+            {chatsQuery.isLoading ? (
+              <Box sx={{ p: 4, display: "flex", justifyContent: "center" }}>
+                <CircularProgress size={28} />
+              </Box>
+            ) : conversations.length === 0 ? (
               <Box sx={{ p: 3, textAlign: "center" }}>
                 <Typography variant="body2" color="text.secondary">
                   No conversations yet.
                 </Typography>
               </Box>
             ) : (
-              paged.map((c) => (
+              conversations.map((c) => (
                 <ConversationRow
                   key={c.id}
                   conversation={c}
                   selected={c.id === selectedId}
-                  onSelect={(id) => {
-                    setSelectedId(id);
-                    setConversations((prev) =>
-                      prev.map((x) =>
-                        x.id === id ? { ...x, unreadCount: 0 } : x,
-                      ),
-                    );
-                  }}
+                  onSelect={handleSelectConversation}
                 />
               ))
             )}
           </Stack>
 
-          {pageCount > 1 && (
+          {totalListPages > 1 && (
             <Box
               sx={{
                 px: 2,
@@ -547,9 +750,9 @@ export default function MessagesPage() {
               }}
             >
               <Pagination
-                count={pageCount}
-                page={page}
-                onChange={(_e, p) => setPage(p)}
+                count={totalListPages}
+                page={listPage}
+                onChange={(_e, p) => setListPage(p)}
                 size="small"
                 color="primary"
                 shape="rounded"
@@ -558,7 +761,6 @@ export default function MessagesPage() {
           )}
         </Paper>
 
-        {/* ── Right: active conversation ──────────────────────────────────── */}
         <Paper
           variant="outlined"
           sx={{
@@ -567,16 +769,15 @@ export default function MessagesPage() {
             borderColor: "#ececec",
             overflow: "hidden",
             display: {
-              xs: selectedId ? "flex" : "none",
+              xs: selectedId || composeIntent ? "flex" : "none",
               md: "flex",
             },
             flexDirection: "column",
             minHeight: { xs: 520, md: "auto" },
           }}
         >
-          {selectedConversation ? (
+          {composeIntent && !selectedId ? (
             <>
-              {/* Header */}
               <Stack
                 direction="row"
                 alignItems="center"
@@ -588,16 +789,149 @@ export default function MessagesPage() {
                   bgcolor: "#fff",
                 }}
               >
-                <Stack direction="row" spacing={1.5} alignItems="center">
+                <Typography variant="h6" sx={{ fontWeight: 800 }}>
+                  Message seller
+                </Typography>
+                <Tooltip title="Cancel">
+                  <IconButton
+                    aria-label="Cancel new message"
+                    size="small"
+                    onClick={handleCloseChat}
+                    sx={{ color: "#ef4444" }}
+                  >
+                    <CloseRoundedIcon />
+                  </IconButton>
+                </Tooltip>
+              </Stack>
+
+              <Box sx={{ px: { xs: 2, md: 3 }, py: 2, bgcolor: "#fafafa", borderBottom: "1px solid #ececec" }}>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                  Your first message will go to the seller of this listing (we only show their
+                  name in the thread after they reply, when the chat is tied to a listing).
+                </Typography>
+                <Stack direction="row" flexWrap="wrap" gap={1} alignItems="center">
+                  {composeIntent.listingId ? (
+                    <Chip
+                      size="small"
+                      variant="outlined"
+                      label={`Listing ${composeIntent.listingId}`}
+                      sx={{ fontFamily: "monospace", fontSize: 12 }}
+                    />
+                  ) : null}
+                  <Chip size="small" color="primary" variant="outlined" label={composeIntent.listingName} />
+                  <Chip size="small" label="Seller" />
+                </Stack>
+                <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1.5 }}>
+                  Recipient user id:{" "}
+                  <Box component="span" sx={{ fontFamily: "monospace" }}>
+                    {composeIntent.recipientId}
+                  </Box>
+                </Typography>
+              </Box>
+
+              <Box
+                sx={{
+                  flex: 1,
+                  overflowY: "auto",
+                  px: { xs: 2, md: 3 },
+                  py: 3,
+                  bgcolor: "#fff",
+                }}
+              >
+                <Typography variant="body2" color="text.secondary">
+                  Write your opening message below, then send. We will open the chat and notify the
+                  seller in real time when they are online.
+                </Typography>
+              </Box>
+
+              <Box
+                component="form"
+                onSubmit={handleSend}
+                sx={{
+                  px: 2,
+                  py: 1.5,
+                  borderTop: "1px solid #ececec",
+                  bgcolor: "#fff",
+                }}
+              >
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <Paper
+                    variant="outlined"
+                    sx={{
+                      flex: 1,
+                      borderRadius: 999,
+                      px: 2,
+                      py: 0.5,
+                      borderColor: "#e5e7eb",
+                      "&:focus-within": {
+                        borderColor: BRAND_PALETTE.seafoam,
+                        boxShadow: `0 0 0 3px ${BRAND_PALETTE.mint}`,
+                      },
+                    }}
+                  >
+                    <InputBase
+                      value={draft}
+                      onChange={(e) => setDraft(e.target.value)}
+                      placeholder="Introduce yourself and your question…"
+                      fullWidth
+                      disabled={createChatMutation.isPending}
+                      inputProps={{ "aria-label": "First message to seller" }}
+                    />
+                  </Paper>
+                  <IconButton
+                    type="submit"
+                    disabled={
+                      !draft.trim() || createChatMutation.isPending
+                    }
+                    aria-label="Send and start chat"
+                    sx={{
+                      width: 44,
+                      height: 44,
+                      color: BRAND_PALETTE.onPrimary,
+                      backgroundColor: draft.trim()
+                        ? BRAND_PALETTE.charcoal
+                        : "#e5e7eb",
+                      boxShadow: "none",
+                      "&:hover": {
+                        backgroundColor: draft.trim()
+                          ? BRAND_PALETTE.charcoalHover
+                          : "#e5e7eb",
+                      },
+                      "&.Mui-disabled": {
+                        color: BRAND_PALETTE.onPrimary,
+                        backgroundColor: "#e5e7eb",
+                      },
+                    }}
+                  >
+                    <SendRoundedIcon fontSize="small" />
+                  </IconButton>
+                </Stack>
+              </Box>
+            </>
+          ) : selectedId ? (
+            selectedConversation ? (
+            <>
+              <Stack
+                direction="row"
+                alignItems="center"
+                justifyContent="space-between"
+                sx={{
+                  px: 2.5,
+                  py: 1.75,
+                  borderBottom: "1px solid #ececec",
+                  bgcolor: "#fff",
+                }}
+              >
+                <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap" useFlexGap>
                   <Avatar
                     src={selectedConversation.avatarUrl || undefined}
                     sx={{
                       width: 36,
                       height: 36,
-                      background: selectedConversation.avatarUrl
+                      bgcolor: selectedConversation.avatarUrl
                         ? undefined
-                        : "linear-gradient(135deg, #7c3aed 0%, #ec4899 100%)",
-                      color: "#fff",
+                        : BRAND_PALETTE.seafoam,
+                      color: BRAND_PALETTE.onPrimary,
                       fontWeight: 700,
                     }}
                   >
@@ -606,6 +940,18 @@ export default function MessagesPage() {
                   <Typography variant="h6" sx={{ fontWeight: 800 }}>
                     {selectedConversation.name}
                   </Typography>
+                  {selectedConversation.listing ? (
+                    <Button
+                      component={Link}
+                      href={selectedConversation.listing.productPath}
+                      size="small"
+                      variant="outlined"
+                      endIcon={<OpenInNewRoundedIcon sx={{ fontSize: 18 }} />}
+                      sx={{ textTransform: "none", fontWeight: 700 }}
+                    >
+                      {selectedConversation.listing.appName}
+                    </Button>
+                  ) : null}
                 </Stack>
 
                 <Stack direction="row" spacing={0.5} alignItems="center">
@@ -631,7 +977,6 @@ export default function MessagesPage() {
                 </Stack>
               </Stack>
 
-              {/* Messages */}
               <Box
                 ref={messagesScrollRef}
                 sx={{
@@ -642,50 +987,55 @@ export default function MessagesPage() {
                   bgcolor: "#fff",
                 }}
               >
-                <Stack spacing={1.25}>
-                  {selectedMessages.map((m, idx) => {
-                    const prev = selectedMessages[idx - 1];
-                    const showDivider = !prev || !sameDay(prev.at, m.at);
-                    return (
-                      <Box key={m.id}>
-                        {showDivider && (
-                          <Stack
-                            direction="row"
-                            alignItems="center"
-                            justifyContent="center"
-                            sx={{ my: 1.5 }}
-                          >
-                            <Box
-                              sx={{
-                                px: 1.5,
-                                py: 0.5,
-                                borderRadius: 999,
-                                bgcolor: "#f3f4f6",
-                                color: "text.secondary",
-                                fontSize: 12,
-                                fontWeight: 600,
-                              }}
+                {messagesQuery.isLoading ? (
+                  <Box sx={{ py: 6, display: "flex", justifyContent: "center" }}>
+                    <CircularProgress size={28} />
+                  </Box>
+                ) : (
+                  <Stack spacing={1.25}>
+                    {selectedMessages.map((m, idx) => {
+                      const prev = selectedMessages[idx - 1];
+                      const showDivider = !prev || !sameDay(prev.at, m.at);
+                      return (
+                        <Box key={m.id}>
+                          {showDivider && (
+                            <Stack
+                              direction="row"
+                              alignItems="center"
+                              justifyContent="center"
+                              sx={{ my: 1.5 }}
                             >
-                              {fmtDayDivider(m.at)}
-                            </Box>
-                          </Stack>
-                        )}
-                        <MessageBubble m={m} />
-                      </Box>
-                    );
-                  })}
+                              <Box
+                                sx={{
+                                  px: 1.5,
+                                  py: 0.5,
+                                  borderRadius: 999,
+                                  bgcolor: "#f3f4f6",
+                                  color: "text.secondary",
+                                  fontSize: 12,
+                                  fontWeight: 600,
+                                }}
+                              >
+                                {fmtDayDivider(m.at)}
+                              </Box>
+                            </Stack>
+                          )}
+                          <MessageBubble m={m} />
+                        </Box>
+                      );
+                    })}
 
-                  {selectedMessages.length === 0 && (
-                    <Box sx={{ textAlign: "center", py: 6 }}>
-                      <Typography variant="body2" color="text.secondary">
-                        Say hi — no messages yet.
-                      </Typography>
-                    </Box>
-                  )}
-                </Stack>
+                    {selectedMessages.length === 0 && (
+                      <Box sx={{ textAlign: "center", py: 6 }}>
+                        <Typography variant="body2" color="text.secondary">
+                          Say hi — no messages yet.
+                        </Typography>
+                      </Box>
+                    )}
+                  </Stack>
+                )}
               </Box>
 
-              {/* Composer */}
               <Box
                 component="form"
                 onSubmit={handleSend}
@@ -706,8 +1056,8 @@ export default function MessagesPage() {
                       py: 0.5,
                       borderColor: "#e5e7eb",
                       "&:focus-within": {
-                        borderColor: "#7c3aed",
-                        boxShadow: "0 0 0 3px rgba(124,58,237,0.15)",
+                        borderColor: BRAND_PALETTE.seafoam,
+                        boxShadow: `0 0 0 3px ${BRAND_PALETTE.mint}`,
                       },
                     }}
                   >
@@ -716,31 +1066,30 @@ export default function MessagesPage() {
                       onChange={(e) => setDraft(e.target.value)}
                       placeholder="Type a message..."
                       fullWidth
+                      disabled={sendMutation.isPending}
                       inputProps={{ "aria-label": "Message" }}
                     />
                   </Paper>
                   <IconButton
                     type="submit"
-                    disabled={!draft.trim()}
+                    disabled={!draft.trim() || sendMutation.isPending}
                     aria-label="Send message"
                     sx={{
                       width: 44,
                       height: 44,
-                      color: "#fff",
-                      background: draft.trim()
-                        ? "linear-gradient(135deg, #7c3aed 0%, #ec4899 100%)"
+                      color: BRAND_PALETTE.onPrimary,
+                      backgroundColor: draft.trim()
+                        ? BRAND_PALETTE.charcoal
                         : "#e5e7eb",
-                      boxShadow: draft.trim()
-                        ? "0 6px 16px rgba(124,58,237,0.35)"
-                        : "none",
+                      boxShadow: "none",
                       "&:hover": {
-                        background: draft.trim()
-                          ? "linear-gradient(135deg, #6d28d9 0%, #db2777 100%)"
+                        backgroundColor: draft.trim()
+                          ? BRAND_PALETTE.charcoalHover
                           : "#e5e7eb",
                       },
                       "&.Mui-disabled": {
-                        color: "#fff",
-                        background: "#e5e7eb",
+                        color: BRAND_PALETTE.onPrimary,
+                        backgroundColor: "#e5e7eb",
                       },
                     }}
                   >
@@ -749,6 +1098,29 @@ export default function MessagesPage() {
                 </Stack>
               </Box>
             </>
+          ) : messagesQuery.isError ? (
+            <Stack
+              alignItems="center"
+              justifyContent="center"
+              sx={{ flex: 1, p: 4, bgcolor: "#fff" }}
+            >
+              <Alert severity="error">
+                {(messagesQuery.error as Error)?.message ?? "Could not load this chat."}
+              </Alert>
+            </Stack>
+          ) : (
+            <Stack
+              alignItems="center"
+              justifyContent="center"
+              sx={{ flex: 1, p: 6, bgcolor: "#fff" }}
+              spacing={2}
+            >
+              <CircularProgress size={32} />
+              <Typography variant="body2" color="text.secondary">
+                Loading conversation…
+              </Typography>
+            </Stack>
+          )
           ) : (
             <Stack
               alignItems="center"

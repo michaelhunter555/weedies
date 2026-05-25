@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import {
@@ -11,6 +11,10 @@ import {
   Chip,
   CircularProgress,
   Container,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   Divider,
   IconButton,
   Paper,
@@ -28,6 +32,7 @@ import {
 } from "@mui/material";
 import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
 import AddRoundedIcon from "@mui/icons-material/AddRounded";
+import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
 import CheckCircleRoundedIcon from "@mui/icons-material/CheckCircleRounded";
 import CreditCardRoundedIcon from "@mui/icons-material/CreditCardRounded";
 import EditRoundedIcon from "@mui/icons-material/EditRounded";
@@ -37,17 +42,39 @@ import MailOutlineRoundedIcon from "@mui/icons-material/MailOutlineRounded";
 import MessageRoundedIcon from "@mui/icons-material/MessageRounded";
 import PaidRoundedIcon from "@mui/icons-material/PaidRounded";
 import SupportAgentRoundedIcon from "@mui/icons-material/SupportAgentRounded";
+import TaskAltRoundedIcon from "@mui/icons-material/TaskAltRounded";
 import TrendingUpRoundedIcon from "@mui/icons-material/TrendingUpRounded";
 import VisibilityRoundedIcon from "@mui/icons-material/VisibilityRounded";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import LockRoundedIcon from "@mui/icons-material/LockRounded";
+import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { DeleteListingConfirmModal } from "@/components/Listings/DeleteListingConfirmModal";
+import { PrivateAccessRequestsModal } from "@/components/Listings/PrivateAccessRequestsModal";
+import { MarketplaceOrdersSection } from "@/components/MySettings/MarketplaceOrdersSection";
 import { useAuth } from "@/context/auth-context";
 import { useListings } from "@/hooks/use-listings";
+import { useUnreadMessages } from "@/hooks/use-unread-messages";
+import {
+  BRAND_PALETTE,
+  BRAND_STAT_TINTS,
+  brandContainedButtonSx,
+} from "@/theme/brand-palette";
 import {
   type StripePaymentMethod,
   useStripeWallet,
 } from "@/hooks/use-stripe-wallet";
-import type { Listing, ListingCategory } from "../../../../types";
+import type {
+  AuctionBidStatus,
+  Listing,
+  ListingAuctionBid,
+  ListingCategory,
+} from "../../../../types";
+import {
+  countPendingPrivateAccessRequests,
+  getPendingPrivateAccessRequests,
+  requesterLabel,
+} from "@/utils/private-listing-access";
 
 type ListingStatus = NonNullable<Listing["status"]> | "paused" | "removed";
 
@@ -78,9 +105,29 @@ const FALLBACK_COVER = "/3.jpg";
 export default function DashboardPage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
-  const { user, hydrated, logout } = useAuth();
-  const { getMyListings } = useListings();
-  const { getPaymentMethods, startSellerOnboarding } = useStripeWallet();
+  const { user, hydrated, logout, update, syncUserFromServer } = useAuth();
+  const { unreadCount: unreadMessages } = useUnreadMessages();
+  const queryClient = useQueryClient();
+  const {
+    getMyListings,
+    setAuctionBidStatus,
+    deleteListing,
+    resolvePrivateListingAccess,
+  } = useListings();
+  const {
+    getPaymentMethods,
+    startSellerOnboarding,
+    getConnectBalance,
+  } = useStripeWallet();
+
+  // Seller Connect balance for the headline "Sales" stat. Skipped silently
+  // when the user has not started Stripe onboarding yet.
+  const sellerBalanceQuery = useQuery({
+    queryKey: ["stripe-wallet", "connect-balance", user?.id],
+    queryFn: () => getConnectBalance(),
+    enabled: Boolean(hydrated && user?.id),
+    staleTime: 60_000,
+  });
 
   const [toast, setToast] = useState<{
     open: boolean;
@@ -88,25 +135,41 @@ export default function DashboardPage() {
     severity: "error" | "success" | "info";
   }>({ open: false, message: "", severity: "info" });
 
-  // Route-guard: keep anyone who linked to /my-settings/<other-user> on
-  // their own dashboard. We only do this once we're hydrated so the initial
-  // SSR/CSR render matches.
-  useEffect(() => {
-    if (!hydrated || !user?.id) return;
-    if (params?.id && params.id !== user.id) {
-      router.replace(`/my-settings/${user.id}`);
-    }
-  }, [hydrated, user?.id, params?.id, router]);
+  const [bidReviewListing, setBidReviewListing] = useState<Listing | null>(null);
+  const [bidActionLoading, setBidActionLoading] = useState(false);
+  const [listingToDelete, setListingToDelete] = useState<Listing | null>(null);
+  const [deleteListingLoading, setDeleteListingLoading] = useState(false);
+  const [deleteListingError, setDeleteListingError] = useState<string | null>(null);
+  const [privateAccessLoadingKey, setPrivateAccessLoadingKey] = useState<string | null>(null);
+  const [privateAccessListing, setPrivateAccessListing] = useState<Listing | null>(null);
 
-  const hasConnectAccount = Boolean(user?.stripeConnectAccountId);
+  const hasConnectAccount = Boolean(
+    user?.stripeConnectAccountId || user?.stripeAccountId,
+  );
   const hasStripeCustomer = Boolean(user?.stripeCustomerId);
   const isStripeConnected =
     hasConnectAccount && Boolean(user?.isOnboarded);
 
-    const handleLogout = async () => {
-      await logout();
-      router.push("/");
-    };
+  const hideSellerListingsUi = user?.mode === "customer";
+
+  useEffect(() => {
+    if (!hydrated || !user?.id) return;
+    if (!user.stripeConnectAccountId && !user.stripeAccountId) return;
+    if (user.isOnboarded) return;
+    syncUserFromServer().catch(() => undefined);
+  }, [
+    hydrated,
+    user?.id,
+    user?.stripeConnectAccountId,
+    user?.stripeAccountId,
+    user?.isOnboarded,
+    syncUserFromServer,
+  ]);
+
+  const handleLogout = async () => {
+    await logout();
+    router.push("/");
+  };
 
   // ── Listings ────────────────────────────────────────────────────────────
   const {
@@ -129,6 +192,32 @@ export default function DashboardPage() {
     [listings],
   );
 
+  const soldListings = useMemo(
+    () => (listings ?? []).filter((l) => l.status === "sold"),
+    [listings],
+  );
+
+  const totalPendingPrivateAccess = useMemo(
+    () =>
+      activeListings.reduce(
+        (sum, l) => sum + countPendingPrivateAccessRequests(l),
+        0,
+      ),
+    [activeListings],
+  );
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !listings?.length) return;
+    const reviewId = new URLSearchParams(window.location.search)
+      .get("reviewPrivateAccess")
+      ?.trim();
+    if (!reviewId) return;
+    const target = listings.find((l) => String(l._id) === reviewId);
+    if (target && countPendingPrivateAccessRequests(target) > 0) {
+      setPrivateAccessListing(target);
+    }
+  }, [listings]);
+
   // ── Payment methods (buyer billing) ─────────────────────────────────────
   const {
     data: paymentMethods,
@@ -144,14 +233,24 @@ export default function DashboardPage() {
   const cardList: StripePaymentMethod[] =
     paymentMethods?.paymentMethods?.data ?? [];
 
+  const country = new Intl.DateTimeFormat().resolvedOptions().locale;
+  const countryCode = country.split("-")[1];
+
   // ── Stripe Connect onboarding ───────────────────────────────────────────
   const onboardMutation = useMutation({
     mutationKey: ["stripe-seller-onboard", user?.id],
     mutationFn: () =>
-      startSellerOnboarding({ hasExistingAccount: hasConnectAccount }),
-    onSuccess: (url) => {
-      if (url) {
-        window.location.href = url;
+      startSellerOnboarding({ hasExistingAccount: hasConnectAccount, countryCode: countryCode }),
+    onSuccess: (result) => {
+      if (user && result.stripeConnectAccountId) {
+        update({
+          ...user,
+          stripeConnectAccountId: result.stripeConnectAccountId,
+          stripeAccountId: result.stripeAccountId || result.stripeConnectAccountId,
+        });
+      }
+      if (result.url) {
+        window.location.href = result.url;
         return;
       }
       setToast({
@@ -171,14 +270,148 @@ export default function DashboardPage() {
 
   const handleStripeOnboard = () => onboardMutation.mutate();
 
+  const sortedAuctionBidsForDialog = useMemo((): ListingAuctionBid[] => {
+    if (!bidReviewListing?.auctionBids?.length) return [];
+    const rank: Record<AuctionBidStatus, number> = {
+      pending: 0,
+      accepted: 1,
+      rejected: 2,
+    };
+    return [...bidReviewListing.auctionBids].sort((a, b) => {
+      const dr = rank[a.bidStatus] - rank[b.bidStatus];
+      if (dr !== 0) return dr;
+      return (
+        new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime()
+      );
+    });
+  }, [bidReviewListing]);
+
+  const handleResolveAuctionBid = async (
+    bidId: string,
+    status: "accepted" | "rejected",
+  ) => {
+    if (!bidReviewListing?._id || bidActionLoading) return;
+    setBidActionLoading(true);
+    try {
+      await setAuctionBidStatus(String(bidReviewListing._id), bidId, status);
+      await queryClient.invalidateQueries({ queryKey: ["my-listings", user?.id] });
+      await queryClient.invalidateQueries({ queryKey: ["my-auction-bids"] });
+      setBidReviewListing(null);
+      setToast({
+        open: true,
+        severity: "success",
+        message: status === "accepted" ? "Bid accepted." : "Bid rejected.",
+      });
+    } catch (e) {
+      setToast({
+        open: true,
+        severity: "error",
+        message: e instanceof Error ? e.message : "Could not update bid.",
+      });
+    } finally {
+      setBidActionLoading(false);
+    }
+  };
+
+  const handleConfirmDeleteListing = async () => {
+    if (!listingToDelete?._id || deleteListingLoading) return;
+    setDeleteListingLoading(true);
+    setDeleteListingError(null);
+    try {
+      await deleteListing(String(listingToDelete._id));
+      await queryClient.invalidateQueries({ queryKey: ["my-listings", user?.id] });
+      setListingToDelete(null);
+      setToast({
+        open: true,
+        severity: "success",
+        message: "Listing removed from the marketplace.",
+      });
+    } catch (e) {
+      setDeleteListingError(
+        e instanceof Error ? e.message : "Could not remove listing.",
+      );
+    } finally {
+      setDeleteListingLoading(false);
+    }
+  };
+
+  const handleResolvePrivateAccess = async (
+    listingId: string,
+    requestId: string,
+    decision: "approve" | "deny",
+  ) => {
+    if (!listingId || !requestId || privateAccessLoadingKey) return;
+    setPrivateAccessLoadingKey(`${listingId}:${requestId}`);
+    try {
+      await resolvePrivateListingAccess(listingId, requestId, decision);
+      await queryClient.invalidateQueries({ queryKey: ["my-listings", user?.id] });
+      setToast({
+        open: true,
+        severity: "success",
+        message: decision === "approve" ? "Access approved." : "Access denied.",
+      });
+    } catch (e) {
+      setToast({
+        open: true,
+        severity: "error",
+        message:
+          e instanceof Error ? e.message : "Could not resolve access request.",
+      });
+    } finally {
+      setPrivateAccessLoadingKey(null);
+    }
+  };
+
   // ── Derived stats ───────────────────────────────────────────────────────
+  // `user.totalListings` is a lifetime submit counter on the server (never
+  // decremented on soft-delete). The headline should match what we actually
+  // show in "My listings" — use the same pool as `activeListings` once loaded.
   const totalListingsCount =
-    user?.totalListings ?? (listings?.length ?? 0);
-  const salesCount = user?.totalListingsSold ?? user?.totalSales ?? 0;
-  // Messages aren't persisted yet — keep a stable placeholder count so the
-  // UI doesn't lie about data it doesn't have.
-  const unreadMessages = 0;
-  const totalMessages = 0;
+    listings !== undefined
+      ? activeListings.length
+      : Number(user?.totalListings ?? 0);
+  const salesCount = Number(
+    user?.totalListingsSold ?? user?.totalSales ?? 0,
+  );
+  const balanceData = sellerBalanceQuery.data;
+  const balanceCurrency = balanceData?.currency || "USD";
+  const liveBalance = balanceData
+    ? Number(balanceData.available ?? 0) + Number(balanceData.pending ?? 0)
+    : 0;
+  const formattedBalance = (() => {
+    try {
+      return new Intl.NumberFormat(undefined, {
+        style: "currency",
+        currency: balanceCurrency.toUpperCase(),
+        maximumFractionDigits: 0,
+      }).format(liveBalance);
+    } catch {
+      return `$${liveBalance.toFixed(0)}`;
+    }
+  })();
+  const salesValue =
+    !balanceData || !balanceData.connected
+      ? salesCount > 0
+        ? `${salesCount} sold`
+        : "—"
+      : formattedBalance;
+  const salesDelta = (() => {
+    if (sellerBalanceQuery.isLoading) return "Loading balance…";
+    if (!balanceData || !balanceData.connected) {
+      return salesCount > 0
+        ? "Connect Stripe to track revenue"
+        : "Your first sale is on its way";
+    }
+    const pendingPart =
+      balanceData.pending > 0
+        ? ` · ${new Intl.NumberFormat(undefined, {
+            style: "currency",
+            currency: balanceCurrency.toUpperCase(),
+            maximumFractionDigits: 0,
+          }).format(balanceData.pending)} pending`
+        : "";
+    return `${salesCount} lifetime sale${salesCount === 1 ? "" : "s"}${pendingPart}`;
+  })();
 
   const stats = useMemo(
     () => [
@@ -190,28 +423,32 @@ export default function DashboardPage() {
           ? `${activeListings.length} live or pending`
           : "No active listings yet",
         icon: <AutoAwesomeIcon />,
-        tint: "linear-gradient(135deg, #7c3aed 0%, #ec4899 100%)",
+        tint: BRAND_STAT_TINTS.listings,
       },
       {
         id: "sales" as const,
-        label: "Sales",
-        value: String(salesCount),
-        delta: salesCount
-          ? `Lifetime apps sold`
-          : "Your first sale is on its way",
+        label: "Sales revenue",
+        value: salesValue,
+        delta: salesDelta,
         icon: <TrendingUpRoundedIcon />,
-        tint: "linear-gradient(135deg, #10b981 0%, #22d3ee 100%)",
+        tint: BRAND_STAT_TINTS.sales,
       },
       {
         id: "messages" as const,
-        label: "Messages",
+        label: "Unread messages",
         value: String(unreadMessages),
-        delta: totalMessages ? `${totalMessages} total` : "Inbox coming soon",
+        delta: unreadMessages > 0 ? "Open inbox" : "Inbox is clear",
         icon: <MessageRoundedIcon />,
-        tint: "linear-gradient(135deg, #f59e0b 0%, #ef4444 100%)",
+        tint: BRAND_STAT_TINTS.messages,
       },
     ],
-    [totalListingsCount, salesCount, activeListings.length],
+    [
+      totalListingsCount,
+      activeListings.length,
+      salesValue,
+      salesDelta,
+      unreadMessages,
+    ],
   );
 
   const displayName =
@@ -245,9 +482,30 @@ export default function DashboardPage() {
     );
   }
 
+  const routeUserId = params?.id ? String(params.id).trim() : "";
+  const sessionUserId = String(user.id).trim();
+  if (routeUserId && sessionUserId && routeUserId !== sessionUserId) {
+    return (
+      <Container maxWidth="sm" sx={{ py: 8 }}>
+        <Alert severity="info" sx={{ mb: 2 }}>
+          This dashboard URL belongs to a different account. Use your own link
+          - no automatic redirect.
+        </Alert>
+        <Button
+          component={Link}
+          variant="contained"
+          href={`/my-settings/${encodeURIComponent(sessionUserId)}`}
+          sx={{ textTransform: "none", borderRadius: 999 }}
+        >
+          Open my dashboard
+        </Button>
+      </Container>
+    );
+  }
+
   return (
     <Container maxWidth="lg" sx={{ py: { xs: 3, md: 5 } }}>
-      {/* Top bar — support + Stripe summary */}
+      {/* Top bar - support + Stripe summary */}
       <Button onClick={handleLogout}>Logout</Button>
       <Paper
         variant="outlined"
@@ -267,9 +525,8 @@ export default function DashboardPage() {
           <Stack direction="row" spacing={1.5} alignItems="center">
             <Avatar
               sx={{
-                bgcolor: "transparent",
-                background:
-                  "linear-gradient(135deg, #7c3aed 0%, #ec4899 60%, #f59e0b 100%)",
+                bgcolor: BRAND_PALETTE.seafoam,
+                color: BRAND_PALETTE.onPrimary,
                 width: 44,
                 height: 44,
               }}
@@ -324,9 +581,8 @@ export default function DashboardPage() {
                   textTransform: "none",
                   fontWeight: 700,
                   boxShadow: "none",
-                  background:
-                    "linear-gradient(135deg, #635bff 0%, #0a2540 100%)",
-                  "&:hover": { boxShadow: "0 6px 16px rgba(99,91,255,0.35)" },
+                  backgroundColor: "#635bff",
+                  "&:hover": { backgroundColor: "#5246e8", boxShadow: "none" },
                 }}
               >
                 {onboardMutation.isPending
@@ -356,12 +612,12 @@ export default function DashboardPage() {
             </Button>
           }
         >
-          You can&rsquo;t receive payouts until Stripe onboarding is complete.
+          Your listings cannot be purchased by users until Stripe onboarding is complete.
           Takes about 2 minutes.
         </Alert>
       )}
 
-      {/* Row 1 — stat cards */}
+      {/* Row 1 - stat cards */}
       <Stack
         direction={{ xs: "column", sm: "row" }}
         spacing={2}
@@ -387,7 +643,7 @@ export default function DashboardPage() {
                   width: 44,
                   height: 44,
                   borderRadius: 3,
-                  background: s.tint,
+                  backgroundColor: s.tint,
                   color: "#fff",
                   display: "flex",
                   alignItems: "center",
@@ -413,7 +669,15 @@ export default function DashboardPage() {
         ))}
       </Stack>
 
-      {/* Row 2 — Integrations (Stripe onboarding) + Payment options */}
+      <Box sx={{ mb: 3 }}>
+        <MarketplaceOrdersSection
+          userId={String(user.id)}
+          variant="compact"
+          ordersPageHref={`/my-settings/${encodeURIComponent(String(user.id))}/order-history`}
+        />
+      </Box>
+
+      {/* Row 2 - Integrations (Stripe onboarding) + Payment options */}
       <Stack
         direction={{ xs: "column", md: "row" }}
         spacing={2}
@@ -475,7 +739,7 @@ export default function DashboardPage() {
                   {isStripeConnected
                     ? "Payouts are enabled. Funds clear on rolling 2-day basis."
                     : hasConnectAccount
-                      ? "Onboarding started — finish verification to enable payouts."
+                      ? "Onboarding started - finish verification to enable payouts."
                       : "Connect your bank to start receiving payouts."}
                 </Typography>
               </Box>
@@ -497,11 +761,8 @@ export default function DashboardPage() {
                     textTransform: "none",
                     fontWeight: 700,
                     boxShadow: "none",
-                    background:
-                      "linear-gradient(135deg, #635bff 0%, #0a2540 100%)",
-                    "&:hover": {
-                      boxShadow: "0 6px 16px rgba(99,91,255,0.35)",
-                    },
+                    backgroundColor: "#635bff",
+                    "&:hover": { backgroundColor: "#5246e8", boxShadow: "none" },
                   }}
                 >
                   {onboardMutation.isPending
@@ -657,8 +918,11 @@ export default function DashboardPage() {
         </Paper>
       </Stack>
 
-      {/* Row 3 — Active listings */}
+      {!hideSellerListingsUi ? (
+        <>
+      {/* Row 3 - Active listings */}
       <Stack
+        id="my-listings"
         direction="row"
         alignItems="center"
         justifyContent="space-between"
@@ -682,13 +946,40 @@ export default function DashboardPage() {
             textTransform: "none",
             fontWeight: 700,
             boxShadow: "none",
-            background: "linear-gradient(135deg, #7c3aed 0%, #ec4899 100%)",
-            "&:hover": { boxShadow: "0 6px 16px rgba(124,58,237,0.35)" },
+            ...brandContainedButtonSx,
           }}
         >
           New listing
         </Button>
       </Stack>
+
+      {totalPendingPrivateAccess > 0 ? (
+        <Alert
+          severity="warning"
+          icon={<LockRoundedIcon fontSize="inherit" />}
+          sx={{ mb: 2, borderRadius: 2 }}
+          action={
+            <Button
+              color="inherit"
+              size="small"
+              sx={{ fontWeight: 800, whiteSpace: "nowrap" }}
+              onClick={() => {
+                const first = activeListings.find(
+                  (l) => countPendingPrivateAccessRequests(l) > 0,
+                );
+                if (first) setPrivateAccessListing(first);
+              }}
+            >
+              Review
+            </Button>
+          }
+        >
+          <Typography variant="body2" sx={{ fontWeight: 700 }}>
+            {totalPendingPrivateAccess} private access request
+            {totalPendingPrivateAccess === 1 ? "" : "s"} waiting for your review.
+          </Typography>
+        </Alert>
+      ) : null}
 
       <Box
         sx={{
@@ -743,7 +1034,7 @@ export default function DashboardPage() {
                 You don&rsquo;t have any listings yet
               </Typography>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                Your first listing is on us — create one to start earning.
+                Your first 3 listings are on us — create one to start earning.
               </Typography>
               <Button
                 onClick={() => router.push("/products?list=new")}
@@ -753,11 +1044,10 @@ export default function DashboardPage() {
                   borderRadius: 999,
                   textTransform: "none",
                   fontWeight: 700,
-                  background:
-                    "linear-gradient(135deg, #7c3aed 0%, #ec4899 100%)",
+                  ...brandContainedButtonSx,
                 }}
               >
-                Create first listing
+                List your app
               </Button>
             </Paper>
           )}
@@ -773,7 +1063,19 @@ export default function DashboardPage() {
               "pending_review") as ListingStatus;
             const categoryLabel =
               categoryLabels[l.category] ?? l.category;
+            const listingPath = (() => {
+              const mongoId = l._id ? String(l._id) : "";
+              const slug = l.slug ? String(l.slug).trim() : "";
+              if (slug && mongoId) {
+                return `${encodeURIComponent(mongoId)}/${encodeURIComponent(slug)}`;
+              }
+              if (mongoId) return encodeURIComponent(mongoId);
+              if (slug) return encodeURIComponent(slug);
+              return "";
+            })();
             const listingId = l._id ?? "";
+            const pendingPrivateRequests = getPendingPrivateAccessRequests(l);
+            const pendingPrivateCount = pendingPrivateRequests.length;
 
             return (
               <Paper
@@ -818,6 +1120,7 @@ export default function DashboardPage() {
                       fontWeight: 700,
                       borderRadius: 2,
                       bgcolor: "#fff",
+                      color: "#000",
                     }}
                   />
                   {l.buyItNowPrice ? (
@@ -832,6 +1135,23 @@ export default function DashboardPage() {
                         borderRadius: 2,
                         bgcolor: "rgba(17,17,17,0.75)",
                         color: "#fff",
+                      }}
+                    />
+                  ) : null}
+                  {pendingPrivateCount > 0 ? (
+                    <Chip
+                      size="small"
+                      icon={<LockRoundedIcon sx={{ fontSize: 14, color: "#fff !important" }} />}
+                      label={`${pendingPrivateCount} access request${pendingPrivateCount === 1 ? "" : "s"}`}
+                      color="warning"
+                      onClick={() => setPrivateAccessListing(l)}
+                      sx={{
+                        position: "absolute",
+                        bottom: 10,
+                        right: 10,
+                        fontWeight: 800,
+                        cursor: "pointer",
+                        boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
                       }}
                     />
                   ) : null}
@@ -859,6 +1179,15 @@ export default function DashboardPage() {
                       variant="outlined"
                       sx={{ fontWeight: 600 }}
                     />
+                    {l.isPrivateListing ? (
+                      <Chip
+                        size="small"
+                        label="Private"
+                        color="warning"
+                        variant="outlined"
+                        sx={{ fontWeight: 700 }}
+                      />
+                    ) : null}
                     <Chip
                       icon={<VisibilityRoundedIcon sx={{ fontSize: 14 }} />}
                       size="small"
@@ -867,6 +1196,62 @@ export default function DashboardPage() {
                       sx={{ fontWeight: 600 }}
                     />
                   </Stack>
+
+                  {l.saleType === "auction" && (l.auctionPendingBidCount ?? 0) > 0 ? (
+                    <Chip
+                      size="small"
+                      label={`${l.auctionPendingBidCount} bid(s) pending`}
+                      color="warning"
+                      onClick={() => setBidReviewListing(l)}
+                      sx={{
+                        mb: 1,
+                        fontWeight: 800,
+                        cursor: "pointer",
+                        alignSelf: "flex-start",
+                      }}
+                    />
+                  ) : null}
+
+                  {l.isPrivateListing && pendingPrivateCount > 0 ? (
+                    <Paper
+                      variant="outlined"
+                      sx={{
+                        mb: 1.25,
+                        p: 1.25,
+                        borderRadius: 2,
+                        borderColor: "warning.main",
+                        bgcolor: "rgba(237, 108, 2, 0.06)",
+                      }}
+                    >
+                      <Typography
+                        variant="caption"
+                        color="warning.dark"
+                        sx={{ fontWeight: 800, display: "block", mb: 0.75 }}
+                      >
+                        Private access requests ({pendingPrivateCount})
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
+                        {requesterLabel(pendingPrivateRequests[0])}
+                        {pendingPrivateCount > 1
+                          ? ` and ${pendingPrivateCount - 1} more`
+                          : ""}{" "}
+                        want access to this listing.
+                      </Typography>
+                      <Button
+                        size="small"
+                        variant="contained"
+                        color="warning"
+                        onClick={() => setPrivateAccessListing(l)}
+                        sx={{
+                          textTransform: "none",
+                          fontWeight: 800,
+                          borderRadius: 1.5,
+                        }}
+                      >
+                        Review requests
+                      </Button>
+                    </Paper>
+                  ) : null}
 
                   <Stack
                     direction="row"
@@ -887,37 +1272,74 @@ export default function DashboardPage() {
                         <IconButton
                           size="small"
                           onClick={() =>
-                            listingId &&
-                            router.push(`/products/${listingId}`)
+                            listingPath &&
+                            router.push(`/products/${listingPath}`)
                           }
-                          disabled={!listingId}
+                          disabled={!listingPath}
                         >
                           <VisibilityRoundedIcon fontSize="small" />
                         </IconButton>
                       </Tooltip>
-                      <Tooltip title="Edit">
-                        <IconButton
-                          size="small"
-                          onClick={() =>
-                            listingId &&
-                            router.push(`/products/${listingId}/edit`)
-                          }
-                          disabled={!listingId}
-                        >
-                          <EditRoundedIcon fontSize="small" />
-                        </IconButton>
+                      <Tooltip
+                        title={
+                          l.sellerCanEdit === false
+                            ? "Editing is disabled while there are bids or a purchase on this listing"
+                            : "Edit listing"
+                        }
+                      >
+                        <span>
+                          <IconButton
+                            size="small"
+                            onClick={() => {
+                              if (!listingId || l.sellerCanEdit === false) return;
+                              if (statusKey === "draft") {
+                                router.push(
+                                  `/products?list=new&draft=${encodeURIComponent(String(listingId))}`,
+                                );
+                                return;
+                              }
+                              router.push(
+                                `/products?edit=${encodeURIComponent(String(listingId))}`,
+                              );
+                            }}
+                            disabled={!listingId || l.sellerCanEdit === false}
+                          >
+                            <EditRoundedIcon fontSize="small" />
+                          </IconButton>
+                        </span>
                       </Tooltip>
                       <Tooltip title="Open public page">
                         <IconButton
                           size="small"
                           component="a"
-                          href={listingId ? `/products/${listingId}` : "#"}
+                          href={listingPath ? `/products/${listingPath}` : "#"}
                           target="_blank"
                           rel="noopener"
-                          disabled={!listingId}
+                          disabled={!listingPath}
                         >
                           <LaunchRoundedIcon fontSize="small" />
                         </IconButton>
+                      </Tooltip>
+                      <Tooltip
+                        title={
+                          statusKey === "removed"
+                            ? "Already removed"
+                            : "Remove listing from marketplace"
+                        }
+                      >
+                        <span>
+                          <IconButton
+                            size="small"
+                            color="error"
+                            onClick={() => {
+                              setDeleteListingError(null);
+                              setListingToDelete(l);
+                            }}
+                            disabled={!listingId || statusKey === "removed"}
+                          >
+                            <DeleteOutlineRoundedIcon fontSize="small" />
+                          </IconButton>
+                        </span>
                       </Tooltip>
                     </Stack>
                   </Stack>
@@ -927,83 +1349,277 @@ export default function DashboardPage() {
           })}
       </Box>
 
-      {/* Row 4 — Messages table */}
-      <Stack
-        direction="row"
-        alignItems="center"
-        justifyContent="space-between"
-        sx={{ mb: 1.5 }}
-      >
-        <Box>
-          <Typography variant="h6" sx={{ fontWeight: 900 }}>
-            Messages
-          </Typography>
-          <Typography variant="caption" color="text.secondary">
-            Buyers asking about your listings.
-          </Typography>
-        </Box>
-        <Button
-          component={Link}
-          href="/messages"
-          variant="text"
-          size="small"
-          endIcon={<MailOutlineRoundedIcon />}
-          sx={{ textTransform: "none", fontWeight: 700 }}
-          // disabled
-        >
-          Inbox coming soon
-        </Button>
-      </Stack>
+      {soldListings.length > 0 ? (
+        <>
+          <Stack
+            direction="row"
+            alignItems="center"
+            justifyContent="space-between"
+            sx={{ mb: 1.5, mt: 2 }}
+          >
+            <Box>
+              <Typography variant="h6" sx={{ fontWeight: 900 }}>
+                Sold &amp; handover
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                Open the exchange room to share branding files and close the sale with the buyer.
+                Completed checkouts also appear under{" "}
+                <Link
+                  href={`/my-settings/${encodeURIComponent(String(user.id))}/order-history`}
+                  style={{ fontWeight: 700, color: "inherit" }}
+                >
+                  Orders
+                </Link>{" "}
+                (header or sidebar).
+              </Typography>
+            </Box>
+          </Stack>
 
-      <Paper
-        variant="outlined"
-        sx={{
-          borderRadius: 4,
-          borderColor: "#ececec",
-          overflow: "hidden",
-          mb: 6,
+          <Box
+            sx={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 2,
+              mb: 4,
+              width: "100%",
+            }}
+          >
+            {soldListings.map((l) => {
+              const cover =
+                (l.photos && l.photos[l.coverIndex ?? 0]) ||
+                l.photos?.[0] ||
+                FALLBACK_COVER;
+              const mongoId = l._id ? String(l._id) : "";
+              return (
+                <Paper
+                  key={mongoId || l.appName}
+                  variant="outlined"
+                  sx={{
+                    borderRadius: 4,
+                    borderColor: "#ececec",
+                    overflow: "hidden",
+                    display: "flex",
+                    flexDirection: "column",
+                    minWidth: 0,
+                    width: {
+                      xs: "100%",
+                      sm: "calc((100% - 16px) / 2)",
+                      md: "calc((100% - 32px) / 3)",
+                    },
+                  }}
+                >
+                  <Box
+                    sx={{
+                      height: 120,
+                      backgroundImage: `url(${cover})`,
+                      backgroundSize: "cover",
+                      backgroundPosition: "center",
+                      position: "relative",
+                    }}
+                  >
+                    <Chip
+                      size="small"
+                      label="Sold"
+                      sx={{
+                        position: "absolute",
+                        top: 10,
+                        left: 10,
+                        fontWeight: 700,
+                        borderRadius: 2,
+                        bgcolor: "#fff",
+                        color: "#000",
+                      }}
+                    />
+                  </Box>
+                  <Box sx={{ p: 2, flex: 1, display: "flex", flexDirection: "column", gap: 1.5 }}>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 800 }} noWrap>
+                      {l.appName}
+                    </Typography>
+                    <Button
+                      component={Link}
+                      href={
+                        mongoId
+                          ? `/exchange/${encodeURIComponent(mongoId)}`
+                          : "#"
+                      }
+                      variant="contained"
+                      size="small"
+                      startIcon={<TaskAltRoundedIcon />}
+                      disabled={!mongoId}
+                      sx={{
+                        textTransform: "none",
+                        fontWeight: 700,
+                        borderRadius: 2,
+                        ...brandContainedButtonSx,
+                      }}
+                    >
+                      Success room
+                    </Button>
+                  </Box>
+                </Paper>
+              );
+            })}
+          </Box>
+        </>
+      ) : null}
+
+        </>
+      ) : null}
+
+      <PrivateAccessRequestsModal
+        open={Boolean(privateAccessListing)}
+        listing={
+          privateAccessListing?._id
+            ? listings?.find(
+                (row) => String(row._id) === String(privateAccessListing._id),
+              ) ?? privateAccessListing
+            : null
+        }
+        onClose={() => setPrivateAccessListing(null)}
+        onResolve={(listingId, requestId, decision) => {
+          void handleResolvePrivateAccess(listingId, requestId, decision);
         }}
+        loadingKey={privateAccessLoadingKey}
+      />
+
+      <Dialog
+        open={Boolean(bidReviewListing)}
+        onClose={() => !bidActionLoading && setBidReviewListing(null)}
+        maxWidth="md"
+        fullWidth
       >
-        <TableContainer>
-          <Table size="medium">
-            <TableHead sx={{ bgcolor: "#fafafa" }}>
-              <TableRow>
-                <TableCell sx={{ fontWeight: 800 }}>From</TableCell>
-                <TableCell sx={{ fontWeight: 800 }}>Subject</TableCell>
-                <TableCell
-                  sx={{
-                    fontWeight: 800,
-                    display: { xs: "none", md: "table-cell" },
-                  }}
-                >
-                  Listing
-                </TableCell>
-                <TableCell
-                  sx={{
-                    fontWeight: 800,
-                    display: { xs: "none", sm: "table-cell" },
-                  }}
-                >
-                  Received
-                </TableCell>
-                <TableCell sx={{ fontWeight: 800 }} align="right">
-                  Status
-                </TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              <TableRow>
-                <TableCell colSpan={5} sx={{ py: 6, textAlign: "center" }}>
-                  <Typography variant="body2" color="text.secondary">
-                    No messages yet. Once a buyer reaches out about one of your
-                    listings it will show up here.
-                  </Typography>
-                </TableCell>
-              </TableRow>
-            </TableBody>
-          </Table>
-        </TableContainer>
-      </Paper>
+        <DialogTitle sx={{ pr: 5 }}>
+          Auction bids
+          <IconButton
+            aria-label="Close"
+            onClick={() => !bidActionLoading && setBidReviewListing(null)}
+            disabled={bidActionLoading}
+            sx={{ position: "absolute", right: 8, top: 8 }}
+          >
+            <CloseRoundedIcon />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent dividers>
+          {bidReviewListing ? (
+            <Stack spacing={2}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
+                {bidReviewListing.appName}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Pending bids need your decision. Rejected bids no longer count toward the auction
+                price. Accepted bids do.
+              </Typography>
+              <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2 }}>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell sx={{ fontWeight: 800 }}>Amount</TableCell>
+                      <TableCell sx={{ fontWeight: 800 }}>When</TableCell>
+                      <TableCell sx={{ fontWeight: 800 }}>Status</TableCell>
+                      <TableCell sx={{ fontWeight: 800 }} align="right">
+                        Actions
+                      </TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {sortedAuctionBidsForDialog.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={4} sx={{ py: 3, color: "text.secondary" }}>
+                          No bids on file.
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      sortedAuctionBidsForDialog.map((b) => (
+                        <TableRow key={b._id}>
+                          <TableCell sx={{ fontWeight: 700 }}>
+                            ${Math.round(b.amount).toLocaleString()}
+                          </TableCell>
+                          <TableCell>
+                            {b.createdAt
+                              ? new Date(b.createdAt).toLocaleString()
+                              : "-"}
+                          </TableCell>
+                          <TableCell>
+                            <Chip
+                              size="small"
+                              label={b.bidStatus}
+                              color={
+                                b.bidStatus === "pending"
+                                  ? "warning"
+                                  : b.bidStatus === "accepted"
+                                    ? "success"
+                                    : "default"
+                              }
+                              sx={{ textTransform: "capitalize", fontWeight: 700 }}
+                            />
+                          </TableCell>
+                          <TableCell align="right">
+                            {b.bidStatus === "pending" ? (
+                              <Stack
+                                direction="row"
+                                spacing={1}
+                                justifyContent="flex-end"
+                              >
+                                <Button
+                                  size="small"
+                                  color="success"
+                                  variant="outlined"
+                                  disabled={bidActionLoading}
+                                  onClick={() => void handleResolveAuctionBid(b._id, "accepted")}
+                                  sx={{ textTransform: "none", fontWeight: 700 }}
+                                >
+                                  Accept
+                                </Button>
+                                <Button
+                                  size="small"
+                                  color="error"
+                                  variant="outlined"
+                                  disabled={bidActionLoading}
+                                  onClick={() => void handleResolveAuctionBid(b._id, "rejected")}
+                                  sx={{ textTransform: "none", fontWeight: 700 }}
+                                >
+                                  Reject
+                                </Button>
+                              </Stack>
+                            ) : (
+                              <Typography variant="caption" color="text.secondary">
+                                -
+                              </Typography>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </Stack>
+          ) : null}
+        </DialogContent>
+        <DialogActions sx={{ px: 3, py: 2 }}>
+          <Button
+            onClick={() => setBidReviewListing(null)}
+            disabled={bidActionLoading}
+            sx={{ textTransform: "none" }}
+          >
+            Close
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <DeleteListingConfirmModal
+        open={Boolean(listingToDelete)}
+        listingTitle={listingToDelete?.appName ?? ""}
+        loading={deleteListingLoading}
+        error={deleteListingError}
+        onClose={() => {
+          if (!deleteListingLoading) {
+            setListingToDelete(null);
+            setDeleteListingError(null);
+          }
+        }}
+        onConfirm={() => void handleConfirmDeleteListing()}
+      />
 
       <Snackbar
         open={toast.open}

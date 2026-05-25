@@ -2,8 +2,7 @@ import type { Request, Response } from "express";
 import Listing from "../../models/listing";
 
 /**
- * Seller submits a draft for review. We flip it to `pending_review` (or
- * straight to `live` while moderation is manual/off).
+ * Seller submits a draft for review. We always flip it to `pending_review`.
  *
  * TODO: run through an automated content check before publishing.
  */
@@ -17,7 +16,7 @@ export async function publishListing(req: Request, res: Response) {
 
     const listing = await Listing.findOneAndUpdate(
       { _id: id, sellerId, status: { $in: ["draft", "paused", "rejected"] } },
-      { $set: { status: "live", publishedAt: new Date() } },
+      { $set: { status: "pending_review", rejectionReason: undefined } },
       { new: true },
     );
 

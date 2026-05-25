@@ -28,50 +28,68 @@ interface FadeInProps {
   yAxis?: number;
 }
 
+/** Browsers honoring `prefers-reduced-motion` may not run keyframes; keep content visible. */
+const reducedMotionVisible = {
+  "@media (prefers-reduced-motion: reduce)": {
+    transition: "none",
+    animation: "none",
+    transform: "none",
+    opacity: "var(--fade-in-opacity, 0)",
+  },
+} as const;
+
 export const StyledFadeIn = styled("div", {
   shouldForwardProp: (prop) =>
     prop !== "visible" && prop !== "delay" && prop !== "yAxis",
 })<FadeInProps>(({ visible, delay, yAxis }) => ({
+  "--fade-in-opacity": visible ? 1 : 0,
   opacity: 0,
   transform: `translateY(${yAxis ? `${yAxis}px` : "20px"})`,
   transition: `opacity 0.5s ease-in-out ${delay}s, transform 0.5s ease-in-out ${delay}s`,
   ...(visible && {
     animation: `${fadeIn} 0.5s ${delay}s forwards`,
   }),
+  ...reducedMotionVisible,
 }));
 
 export const StyledTableRowFadeIn = styled(TableRow, {
   shouldForwardProp: (prop) =>
     prop !== "visible" && prop !== "delay" && prop !== "yAxis",
 })<FadeInProps>(({ visible, delay, yAxis }) => ({
+  "--fade-in-opacity": visible ? 1 : 0,
   opacity: 0,
   transform: `translateY(${yAxis ? `${yAxis}px` : "5px"})`,
   transition: `opacity 0.5s ease-in-out ${delay}s, transform 0.5s ease-in-out ${delay}s`,
   ...(visible && {
     animation: `${fadeIn} 0.5s ${delay}s forwards`,
   }),
+  ...reducedMotionVisible,
 }));
 
 export const StyledStack = styled(Stack, {
   shouldForwardProp: (prop) =>
     prop !== "visible" && prop !== "delay" && prop !== "yAxis",
 })<FadeInProps>(({ visible, delay, yAxis }) => ({
+  "--fade-in-opacity": visible ? 1 : 0,
   opacity: 0,
   transform: `translateY(${yAxis ? `${yAxis}px` : "20px"})`,
   transition: `opacity 0.5s ease-in-out ${delay}s, transform 0.5s ease-in-out ${delay}s`,
   ...(visible && {
     animation: `${fadeIn} 0.5s ${delay}s forwards`,
   }),
+  ...reducedMotionVisible,
 }));
 
 export const StyledGrid = styled(Grid, {
   shouldForwardProp: (prop) =>
     prop !== "visible" && prop !== "delay" && prop !== "yAxis",
 })<FadeInProps>(({ visible, delay, yAxis }) => ({
+  "--fade-in-opacity": visible ? 1 : 0,
   opacity: 0,
   transform: `translateY(${yAxis ? `${yAxis}px` : "20px"})`,
   transition: `opacity 0.5s ease-in-out ${delay}s, transform 0.5s ease-in-out ${delay}s`,
   ...(visible && {
     animation: `${fadeIn} 0.5s ${delay}s forwards`,
   }),
+  ...reducedMotionVisible,
 }));

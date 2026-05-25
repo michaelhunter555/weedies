@@ -10,6 +10,8 @@ import { createOrder } from "../controllers/orders/create-order";
 import { refresh } from "../controllers/customers/refresh";
 import { logout } from "../controllers/customers/logout";
 import { authenticate } from "../middleware/auth";
+import { getMe } from "../controllers/customers/get-me";
+import { patchMePreferences } from "../controllers/customers/patch-me-preferences";
 
 const router = express.Router();
 
@@ -21,6 +23,8 @@ router.post("/logout", logout);
 
 // users - protected routes
 router.use(authenticate);
+router.get("/me", getMe);
+router.patch("/me/preferences", patchMePreferences);
 router.get("/customer/:id", getCustomerById);
 router.post("/create-custoemr", createCustomer);
 router.put("/customer/:id", updateCustomer);

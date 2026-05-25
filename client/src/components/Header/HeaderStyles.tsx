@@ -11,11 +11,13 @@ export const StyledContainer = styled(Container, {
   shouldForwardProp: (prop) => prop !== "isMobile",
 })<HeaderProps>(({ theme, isMobile }) => ({
   width: "100%",
+  minWidth: 0,
   ...(isMobile && {
     display: "flex",
     flexDirection: "row",
     gap: 1,
-    alignItems: "start",
+    alignItems: "center",
+    justifyContent: "flex-end",
   }),
 }));
 

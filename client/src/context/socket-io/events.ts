@@ -26,10 +26,18 @@ export const Notifications = {
   PAYOUT_FAILED: "stripe.payout.failed",
   PAYOUT_CANCELED: "stripe.payout.canceled",
 
-  // ── Marketplace (reserved — wire up as backend emitters land) ─────────
+  // ── Marketplace (reserved - wire up as backend emitters land) ─────────
   LISTING_APPROVED: "listing.approved",
   LISTING_REJECTED: "listing.rejected",
   LISTING_SOLD: "listing.sold",
+  /** Seller captured or canceled an authorized payment. */
+  EXCHANGE_UPDATED: "exchange.updated",
+  PRIVATE_LISTING_REQUEST_CREATED: "listing.private.request.created",
+  PRIVATE_LISTING_REQUEST_RESOLVED: "listing.private.request.resolved",
+  /** New bid on your listing (seller) or your bid was recorded (bidder). */
+  AUCTION_BID_PLACED: "auction.bid.placed",
+  /** Seller accepted/rejected a bid — notify bidder (and seller for UI sync). */
+  AUCTION_BID_RESOLVED: "auction.bid.resolved",
   NEW_MESSAGE: "chat.message.new",
   NEW_REVIEW: "review.submitted",
   DISPUTE_OPENED: "dispute.opened",

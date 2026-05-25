@@ -3,6 +3,11 @@ import { getAllCustomers } from "../controllers/customers/get-all-customers";
 import { signIn } from "../controllers/admin/sign-in";
 import { adminLogout } from "../controllers/admin/logout";
 import { adminRefresh } from "../controllers/admin/refresh";
+import {
+  getActiveListings,
+  getPendingListings,
+} from "../controllers/admin/listings/get-admin-listings";
+import { moderateListing } from "../controllers/admin/listings/moderate-listing";
 import { getAllOrders } from "../controllers/orders/get-all-orders";
 import { getAllProducts } from "../controllers/products/get-all-products";
 import { getAllReviews } from "../controllers/reviews/get-all-review";
@@ -22,6 +27,9 @@ router.post("/logout", adminLogout);
 
 // admin - protected routes
 router.use(authenticate, requireRole("admin"));
+router.get("/listings/pending", getPendingListings);
+router.get("/listings/active", getActiveListings);
+router.patch("/listings/:listingId/review", moderateListing);
 router.get("/customers", getAllCustomers);
 router.get("/products", getAllProducts);
 router.get("/orders", getAllOrders);

@@ -13,12 +13,15 @@ import {
   Skeleton,
   Stack,
   Typography,
+  useMediaQuery,
+  useTheme,
 } from "@mui/material";
 import AddRoundedIcon from "@mui/icons-material/AddRounded";
 import AutoAwesomeRoundedIcon from "@mui/icons-material/AutoAwesomeRounded";
 
 import ProductCard from "../Products/ProductCard";
 import { useListings } from "@/hooks/use-listings";
+import { BRAND_PALETTE, brandContainedButtonSx } from "@/theme/brand-palette";
 import type { Listing } from "../../../types";
 
 interface IProductCollection {
@@ -76,6 +79,29 @@ function applySort(items: Listing[], key: SortKey): Listing[] {
   }
 }
 
+/** 90% width + 5% peek of prev/next when snap-centered (mobile carousel). */
+const MOBILE_CARD_SNAP_SX = {
+  flex: "0 0 90%",
+  scrollSnapAlign: "center",
+  minWidth: 0,
+} as const;
+
+const mobileCarouselSx = {
+  display: "flex",
+  gap: 1.5,
+  overflowX: "auto",
+  overflowY: "hidden",
+  scrollSnapType: "x mandatory",
+  scrollPaddingLeft: "5%",
+  scrollPaddingRight: "5%",
+  WebkitOverflowScrolling: "touch",
+  mx: { xs: -2, sm: -3 },
+  px: "5%",
+  pb: 1,
+  scrollbarWidth: "none",
+  "&::-webkit-scrollbar": { display: "none" },
+} as const;
+
 const Collection = ({
   collectionName,
   category,
@@ -85,6 +111,8 @@ const Collection = ({
   showAddCTA = false,
 }: IProductCollection) => {
   const router = useRouter();
+  const theme = useTheme();
+  const isMobileCarousel = useMediaQuery(theme.breakpoints.down("md"));
   const [active, setActive] = useState<SortKey>("trending");
   const { getAllListings } = useListings();
 
@@ -174,65 +202,85 @@ const Collection = ({
         </Alert>
       )}
 
-      {isLoading && (
-        <Grid2 container spacing={2}>
-          {Array.from({ length: Math.min(count, 8) }).map((_, index) => (
-            <Grid2
-              key={`skeleton-${index}`}
-              size={{ xs: 12, sm: 6, md: 4, lg: 3 }}
-            >
-              <Paper
-                variant="outlined"
-                sx={{
-                  borderRadius: 3,
-                  overflow: "hidden",
-                  borderColor: "#ececec",
-                }}
+      {isLoading &&
+        (isMobileCarousel ? (
+          <Box sx={mobileCarouselSx}>
+            {Array.from({ length: Math.min(count, 6) }).map((_, index) => (
+              <Box key={`skeleton-${index}`} sx={MOBILE_CARD_SNAP_SX}>
+                <Paper
+                  variant="outlined"
+                  sx={{
+                    borderRadius: 3,
+                    overflow: "hidden",
+                    borderColor: "#ececec",
+                  }}
+                >
+                  <Skeleton variant="rectangular" height={160} animation="wave" />
+                  <Box sx={{ p: 2 }}>
+                    <Skeleton variant="text" height={18} width="85%" animation="wave" />
+                    <Skeleton variant="text" height={18} width="60%" animation="wave" />
+                  </Box>
+                </Paper>
+              </Box>
+            ))}
+          </Box>
+        ) : (
+          <Grid2 container spacing={2}>
+            {Array.from({ length: Math.min(count, 8) }).map((_, index) => (
+              <Grid2
+                key={`skeleton-${index}`}
+                size={{ xs: 12, sm: 6, md: 4, lg: 3 }}
               >
-                <Skeleton
-                  variant="rectangular"
-                  height={160}
-                  animation="wave"
-                />
-                <Box sx={{ p: 2 }}>
-                  <Skeleton
-                    variant="text"
-                    height={18}
-                    width="85%"
-                    animation="wave"
-                  />
-                  <Skeleton
-                    variant="text"
-                    height={18}
-                    width="60%"
-                    animation="wave"
-                  />
-                  <Skeleton
-                    variant="text"
-                    height={30}
-                    width="40%"
-                    animation="wave"
-                    sx={{ mt: 1 }}
-                  />
-                </Box>
-              </Paper>
-            </Grid2>
-          ))}
-        </Grid2>
-      )}
+                <Paper
+                  variant="outlined"
+                  sx={{
+                    borderRadius: 3,
+                    overflow: "hidden",
+                    borderColor: "#ececec",
+                  }}
+                >
+                  <Skeleton variant="rectangular" height={160} animation="wave" />
+                  <Box sx={{ p: 2 }}>
+                    <Skeleton variant="text" height={18} width="85%" animation="wave" />
+                    <Skeleton variant="text" height={18} width="60%" animation="wave" />
+                    <Skeleton
+                      variant="text"
+                      height={30}
+                      width="40%"
+                      animation="wave"
+                      sx={{ mt: 1 }}
+                    />
+                  </Box>
+                </Paper>
+              </Grid2>
+            ))}
+          </Grid2>
+        ))}
 
-      {!isLoading && !isError && sortedItems.length > 0 && (
-        <Grid2 container spacing={2}>
-          {sortedItems.map((listing) => (
-            <Grid2
-              key={listing._id || `${listing.appName}-${listing.createdAt}`}
-              size={{ xs: 12, sm: 6, md: 4, lg: 3 }}
-            >
-              <ProductCard listing={listing} />
-            </Grid2>
-          ))}
-        </Grid2>
-      )}
+      {!isLoading && !isError && sortedItems.length > 0 &&
+        (isMobileCarousel ? (
+          <Box sx={mobileCarouselSx}>
+            {sortedItems.map((listing) => (
+              <Box
+                key={listing._id || `${listing.appName}-${listing.createdAt}`}
+                sx={MOBILE_CARD_SNAP_SX}
+              >
+                <ProductCard listing={listing} />
+              </Box>
+            ))}
+          </Box>
+        ) : (
+          <Grid2 container spacing={2}>
+            {sortedItems.map((listing) => (
+              <Grid2
+                key={listing._id || `${listing.appName}-${listing.createdAt}`}
+                size={{ xs: 12, sm: 6, md: 4, lg: 3 }}
+              >
+                <ProductCard listing={listing} />
+              </Grid2>
+            ))}
+          </Grid2>
+        ))}
 
       {isEmpty && (
         <Paper
@@ -243,8 +291,7 @@ const Collection = ({
             borderColor: "#e5e7eb",
             p: { xs: 4, md: 6 },
             textAlign: "center",
-            background:
-              "linear-gradient(135deg, rgba(124,58,237,0.04) 0%, rgba(236,72,153,0.04) 100%)",
+            backgroundColor: BRAND_PALETTE.mint,
           }}
         >
           <Stack spacing={2} alignItems="center">
@@ -255,8 +302,8 @@ const Collection = ({
                 borderRadius: "50%",
                 display: "grid",
                 placeItems: "center",
-                bgcolor: "rgba(124,58,237,0.12)",
-                color: "#7c3aed",
+                bgcolor: BRAND_PALETTE.sage,
+                color: BRAND_PALETTE.charcoal,
               }}
             >
               <AutoAwesomeRoundedIcon />
@@ -282,17 +329,7 @@ const Collection = ({
                 variant="contained"
                 startIcon={<AddRoundedIcon />}
                 onClick={() => router.push("/products?list=new")}
-                sx={{
-                  borderRadius: 999,
-                  textTransform: "none",
-                  fontWeight: 700,
-                  background:
-                    "linear-gradient(135deg, #7c3aed 0%, #ec4899 100%)",
-                  "&:hover": {
-                    background:
-                      "linear-gradient(135deg, #6d28d9 0%, #db2777 100%)",
-                  },
-                }}
+                sx={brandContainedButtonSx}
               >
                 Add your first listing
               </Button>

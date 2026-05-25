@@ -31,7 +31,7 @@ type Props = {
  *
  * Nests its own <Elements> with the SetupIntent `clientSecret` (the
  * app-level provider in `layout.tsx` only has the publishable key loaded
- * eagerly — it doesn't carry an intent).
+ * eagerly - it doesn't carry an intent).
  */
 export default function SaveCardForm(props: Props) {
   const { data: stripePromise, isLoading } = useQuery({

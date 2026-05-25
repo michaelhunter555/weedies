@@ -8,10 +8,10 @@ import User from "../../models/user";
  *
  * Contract (matches `useStripeWallet.startSellerOnboarding`):
  *   POST /api/stripe/create-connect-account
- *   ← { url, stripeConnectAccountId, ok: true }
+ *   ← { url, stripeConnectAccountId, stripeAccountId, ok: true }
  *
  * If the seller already has a `stripeConnectAccountId` on file we don't
- * create a duplicate account — we just hand back a fresh onboarding link
+ * create a duplicate account - we just hand back a fresh onboarding link
  * so the client can resume.
  */
 export default async function createConnectAccount(
@@ -20,6 +20,7 @@ export default async function createConnectAccount(
 ) {
   try {
     const sellerId = req.user?.userId;
+    const { countryCode } = req.query;
     if (!sellerId) {
       return void res.status(401).json({ message: "Unauthorized" });
     }
@@ -39,11 +40,11 @@ export default async function createConnectAccount(
     if (!stripeConnectAccountId) {
       const account = await stripe.accounts.create(
         {
-          country: "US",
+          country: countryCode as string || "US",
           email: user.email,
           controller: {
             losses: { payments: "application" },
-            fees: { payer: "account" },
+            fees: { payer: "application" },
             stripe_dashboard: { type: "express" },
             requirement_collection: "stripe",
           },
@@ -55,7 +56,7 @@ export default async function createConnectAccount(
           },
         },
         {
-          idempotencyKey: `${String(user._id)}::stripe:connect:account:create`,
+          idempotencyKey: `${String(user._id)}::stripe::connect:account:create`,
         },
       );
 
@@ -80,6 +81,7 @@ export default async function createConnectAccount(
     return void res.status(201).json({
       url: accountLink.url,
       stripeConnectAccountId,
+      stripeAccountId: stripeConnectAccountId,
       ok: true,
     });
   } catch (err) {

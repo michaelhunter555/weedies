@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import {
@@ -17,10 +17,11 @@ import {
   DialogContentText,
   DialogTitle,
   Divider,
-  IconButton,
   Paper,
   Snackbar,
   Stack,
+  Tab,
+  Tabs,
   Typography,
 } from "@mui/material";
 import AddCircleOutlineRoundedIcon from "@mui/icons-material/AddCircleOutlineRounded";
@@ -29,10 +30,11 @@ import CheckCircleRoundedIcon from "@mui/icons-material/CheckCircleRounded";
 import CreditCardRoundedIcon from "@mui/icons-material/CreditCardRounded";
 import ErrorRoundedIcon from "@mui/icons-material/ErrorRounded";
 import RemoveCircleOutlineRoundedIcon from "@mui/icons-material/RemoveCircleOutlineRounded";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { useAuth } from "@/context/auth-context";
 import SaveCardForm from "@/components/Wallet/SaveCardForm";
+import { WalletBillingTab } from "@/components/Wallet/WalletBillingTab";
 import {
   type StripePaymentMethod,
   useStripeWallet,
@@ -41,11 +43,11 @@ import {
 /**
  * /my-settings/[id]/wallet
  *
- * Buyer-side payment settings — list saved cards, set a default, add a new
+ * Buyer-side payment settings - list saved cards, set a default, add a new
  * one via SetupIntent, and bulk-detach cards.
  *
  * Adapted from the old RN `MyWallet` screen. Expects the following backend
- * endpoints under `/api/stripe/` (TODO: implement):
+ * endpoints under `/api/stripe/`:
  *   GET  /payment-methods?customerId=…
  *   POST /setup-intent              { customerId }
  *   POST /default-payment-method    { customerId, paymentMethodId }
@@ -53,6 +55,7 @@ import {
  */
 export default function WalletPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { user, hydrated, update } = useAuth();
 
   const {
@@ -68,6 +71,7 @@ export default function WalletPage() {
   const [toggleAddCard, setToggleAddCard] = useState(false);
   const [removeIds, setRemoveIds] = useState<string[]>([]);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [tab, setTab] = useState(0);
   const [toast, setToast] = useState<{
     open: boolean;
     message: string;
@@ -88,6 +92,17 @@ export default function WalletPage() {
     enabled: Boolean(stripeCustomerId),
   });
 
+  useEffect(() => {
+    if (isLoadingCards || !paymentMethods) return;
+    const def = paymentMethods.defaultPaymentMethodId ?? null;
+    const list = paymentMethods.paymentMethods?.data ?? [];
+    setSelectedDefaultId((prev) => {
+      if (def) return def;
+      if (list.length === 1) return list[0].id;
+      return prev;
+    });
+  }, [isLoadingCards, paymentMethods]);
+
   const {
     data: clientSecret,
     isLoading: isLoadingSecret,
@@ -99,9 +114,6 @@ export default function WalletPage() {
     enabled: Boolean(stripeCustomerId && toggleAddCard),
     staleTime: 10 * 60 * 1000,
   });
-  console.log("auth", user);
-
-  console.log(" my-settings/[id]/wallet/page.tsx - clientSecret", clientSecret);
 
   const cardList: StripePaymentMethod[] =
     paymentMethods?.paymentMethods?.data ?? [];
@@ -111,11 +123,18 @@ export default function WalletPage() {
     mutationKey: ["stripe-update-default", stripeCustomerId],
     mutationFn: (paymentMethodId: string) =>
       updateDefaultPayment(String(stripeCustomerId), paymentMethodId),
-    onSuccess: () => {
-      if (user && selectedDefaultId) {
-        update({ ...user, stripeDefaultPaymentMethodId: selectedDefaultId });
+    onSuccess: async (_data, paymentMethodId) => {
+      if (user && paymentMethodId) {
+        update({
+          ...user,
+          stripeDefaultPaymentMethodId: paymentMethodId,
+          defaultPaymentIntendId: paymentMethodId,
+        });
       }
-      refetchCards();
+      await queryClient.invalidateQueries({ queryKey: ["stripe-payment-methods"] });
+      await queryClient.invalidateQueries({ queryKey: ["buyer-billing"] });
+      await queryClient.invalidateQueries({ queryKey: ["stripe-billing-history"] });
+      await refetchCards();
       setToast({
         open: true,
         severity: "success",
@@ -134,17 +153,32 @@ export default function WalletPage() {
   const removeMutation = useMutation({
     mutationKey: ["stripe-remove-cards"],
     mutationFn: (ids: string[]) => deletePaymentMethods(ids),
-    onSuccess: () => {
-      if (
+    onSuccess: async () => {
+      const def = paymentMethods?.defaultPaymentMethodId;
+      if (user && def && removeIds.includes(def)) {
+        update({
+          ...user,
+          stripeDefaultPaymentMethodId: null,
+          defaultPaymentIntendId: null,
+        });
+        setSelectedDefaultId(null);
+      } else if (
         user?.stripeDefaultPaymentMethodId &&
         removeIds.includes(user.stripeDefaultPaymentMethodId)
       ) {
-        update({ ...user, stripeDefaultPaymentMethodId: null });
+        update({
+          ...user,
+          stripeDefaultPaymentMethodId: null,
+          defaultPaymentIntendId: null,
+        });
         setSelectedDefaultId(null);
       }
       setRemoveIds([]);
       setConfirmOpen(false);
-      refetchCards();
+      await queryClient.invalidateQueries({ queryKey: ["stripe-payment-methods"] });
+      await queryClient.invalidateQueries({ queryKey: ["buyer-billing"] });
+      await queryClient.invalidateQueries({ queryKey: ["stripe-billing-history"] });
+      await refetchCards();
       setToast({
         open: true,
         severity: "success",
@@ -165,14 +199,18 @@ export default function WalletPage() {
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
     );
 
+  const effectiveDefaultId =
+    paymentMethods?.defaultPaymentMethodId ??
+    user?.stripeDefaultPaymentMethodId ??
+    null;
+
   const hasPendingDefaultChange =
     hasCard &&
-    cardList.length > 1 &&
-    selectedDefaultId &&
-    selectedDefaultId !== user?.stripeDefaultPaymentMethodId;
+    Boolean(selectedDefaultId) &&
+    selectedDefaultId !== effectiveDefaultId;
 
   const showStickyActions =
-    Boolean(hasPendingDefaultChange) || removeIds.length > 0;
+    tab === 0 && (Boolean(hasPendingDefaultChange) || removeIds.length > 0);
 
   if (!hydrated) {
     return (
@@ -203,14 +241,25 @@ export default function WalletPage() {
         </Button>
 
         <Typography variant="h4" fontWeight={700} gutterBottom>
-          Payment Settings
+          Wallet &amp; billing
         </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-          Securely store your card with Stripe.
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          Manage saved cards and view charges on your account.
         </Typography>
 
-        <Divider sx={{ mb: 3 }} />
+        <Tabs
+          value={tab}
+          onChange={(_, v) => setTab(v)}
+          sx={{ mb: 3, borderBottom: 1, borderColor: "divider" }}
+        >
+          <Tab label="Wallet" sx={{ textTransform: "none", fontWeight: 700 }} />
+          <Tab label="Billing" sx={{ textTransform: "none", fontWeight: 700 }} />
+        </Tabs>
 
+        {tab === 1 ? (
+          <WalletBillingTab />
+        ) : (
+          <>
         <Stack
           direction="row"
           alignItems="center"
@@ -223,18 +272,18 @@ export default function WalletPage() {
           <Chip
             size="small"
             icon={
-              user.stripeDefaultPaymentMethodId ? (
+              effectiveDefaultId ? (
                 <CheckCircleRoundedIcon fontSize="small" />
               ) : (
                 <ErrorRoundedIcon fontSize="small" />
               )
             }
             label={
-              user.stripeDefaultPaymentMethodId
+              effectiveDefaultId
                 ? "Eligible to purchase"
-                : "Default card not set"
+                : "Default card not set in Stripe"
             }
-            color={user.stripeDefaultPaymentMethodId ? "success" : "warning"}
+            color={effectiveDefaultId ? "success" : "warning"}
             variant="outlined"
           />
         </Stack>
@@ -246,7 +295,7 @@ export default function WalletPage() {
         </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, mb: 3 }}>
           Tap a card to mark it as your default, then save. Card details are
-          encrypted and stored with Stripe — we never see them.
+          encrypted and stored with Stripe - we never see them.
         </Typography>
 
         {cardsError && (
@@ -276,8 +325,7 @@ export default function WalletPage() {
               const { card } = pm;
               const isMarkedForRemoval = removeIds.includes(pm.id);
               const isSelectedDefault = selectedDefaultId === pm.id;
-              const isPersistedDefault =
-                user.stripeDefaultPaymentMethodId === pm.id;
+              const isPersistedDefault = effectiveDefaultId === pm.id;
 
               return (
                 <Paper
@@ -374,7 +422,10 @@ export default function WalletPage() {
             clientSecret={clientSecret}
             onSaved={() => {
               setToggleAddCard(false);
-              refetchCards();
+              void queryClient.invalidateQueries({ queryKey: ["stripe-payment-methods"] });
+              void queryClient.invalidateQueries({ queryKey: ["buyer-billing"] });
+              void queryClient.invalidateQueries({ queryKey: ["stripe-billing-history"] });
+              void refetchCards();
               setToast({
                 open: true,
                 severity: "success",
@@ -383,6 +434,8 @@ export default function WalletPage() {
             }}
             onCancel={() => setToggleAddCard(false)}
           />
+        )}
+          </>
         )}
       </Container>
 
@@ -422,7 +475,7 @@ export default function WalletPage() {
                 >
                   {setDefaultMutation.isPending
                     ? "Saving…"
-                    : "Save payment method"}
+                    : "Set as default card"}
                 </Button>
               )}
               {removeIds.length > 0 && (

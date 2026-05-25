@@ -11,11 +11,11 @@ import { uploadToCloudinary } from "../../lib/cloudinary";
  * `multer.array("photos", 6)`.
  *
  * Request (multipart/form-data):
- *   field "photos" — 1..6 image files (jpg/png/webp)
+ *   field "photos" - 1..6 image files (jpg/png/webp)
  *
  * Response:
  *   201 { urls: string[] }
- *   400 { message }  — no files / unsupported type
+ *   400 { message }  - no files / unsupported type
  *   500 { message }
  */
 export async function uploadListingPhotos(req: Request, res: Response) {

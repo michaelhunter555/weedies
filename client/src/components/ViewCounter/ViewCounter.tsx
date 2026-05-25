@@ -28,7 +28,7 @@ const ViewCounter = () => {
 
   return (
     <Typography color="text.secondary" variant="subtitle2">
-      {mounted ? viewers : "—"} {mounted && viewers > 1 ? "people are" : "person is"} viewing this item.
+      {mounted ? viewers : "-"} {mounted && viewers > 1 ? "people are" : "person is"} viewing this item.
     </Typography>
   );
 };

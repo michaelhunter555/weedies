@@ -1,37 +1,43 @@
 "use client";
 
-import React, { useContext, useEffect, useState } from "react";
-
+import { useContext, useEffect, useState } from "react";
+import Image from "next/image";
 import { AuthContext } from "@/context/auth-context";
-import { CartContext } from "@/context/cart/cart-context";
-import ShoppingBagOutlinedIcon from "@mui/icons-material/ShoppingBagOutlined";
 import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
 import AddBoxRoundedIcon from "@mui/icons-material/AddBoxRounded";
+import MailRoundedIcon from "@mui/icons-material/MailRounded";
 import {
   Badge,
   Box,
   Button,
   Container,
   IconButton,
+  Tooltip,
   Typography,
   useMediaQuery,
   useTheme,
 } from "@mui/material";
 import Stack from "@mui/material/Stack";
 
-import CartModal from "../Cart/CartModal";
+import { useUnreadMessages } from "@/hooks/use-unread-messages";
+import { APP_TAGLINE } from "@/brand";
+
 import Header from "./Header";
+import {
+  BRAND_PALETTE,
+  brandContainedButtonSx,
+  brandLogoMarkSx,
+} from "@/theme/brand-palette";
 import { useRouter } from "next/navigation";
 
 const MainNavigation = () => {
   const router = useRouter();
   const auth = useContext(AuthContext);
-  const cart = useContext(CartContext);
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const isTablet = useMediaQuery(theme.breakpoints.down("md"));
-  const [openCartModal, setOpenCartModal] = useState<boolean>(false);
   const [mounted, setMounted] = useState(false);
+  const { unreadCount } = useUnreadMessages();
 
   useEffect(() => {
     setMounted(true);
@@ -43,7 +49,7 @@ const MainNavigation = () => {
   return (
     <Box
       sx={{
-        borderBottom: "1px solid #ececec",
+        borderBottom: `1px solid ${BRAND_PALETTE.borderSubtle}`,
         backgroundColor: "#ffffff",
         position: "sticky",
         top: 0,
@@ -51,89 +57,137 @@ const MainNavigation = () => {
         backdropFilter: "saturate(180%) blur(8px)",
       }}
     >
-      <CartModal open={openCartModal} onClose={() => setOpenCartModal(false)} />
-      <Container maxWidth="lg" sx={{ py: 1 }}>
+      <Container maxWidth="lg" sx={{ py: 1, overflow: "hidden" }}>
         <Stack
           direction="row"
           alignItems="center"
           justifyContent="space-between"
-          spacing={2}
+          spacing={1}
+          sx={{ minWidth: 0 }}
         >
-          <Stack
-            direction="row"
-            alignItems="center"
-            spacing={1}
-            onClick={() => router.push("/")}
-            style={{ cursor: "pointer" }}
-          >
-            <Box
-              sx={{
-                width: 32,
-                height: 32,
-                borderRadius: 2,
-                background:
-                  "linear-gradient(135deg, #7c3aed 0%, #ec4899 60%, #f59e0b 100%)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                color: "#fff",
-              }}
+          <Stack sx={{ minWidth: 0, flexShrink: 1 }}>
+            <Stack
+              direction="row"
+              alignItems="center"
+              spacing={1}
+              onClick={() => router.push("/")}
+              sx={{ cursor: "pointer", borderRadius: 20, minWidth: 0 }}
             >
-              <AutoAwesomeIcon sx={{ fontSize: 18 }} />
-            </Box>
-            <Stack direction="column" spacing={0} sx={{ lineHeight: 1 }}>
-              <Typography variant="h6" sx={{ fontWeight: 800, lineHeight: 1 }}>
-                VibeStack
-              </Typography>
-              {!effectiveIsTablet && (
+              <Box
+                sx={{
+                  borderRadius: 2,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                }}
+              >
+                <Image
+                  src="/fist_bump.svg"
+                  alt="Dap & Flip"
+                  width={effectiveIsMobile ? 44 : 75}
+                  height={effectiveIsMobile ? 44 : 75}
+                />
+              </Box>
+              <Stack direction="column" spacing={0} sx={{ lineHeight: 1, minWidth: 0 }}>
                 <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  sx={{ lineHeight: 1 }}
+                  variant="h6"
+                  noWrap
+                  sx={{ fontWeight: 800, lineHeight: 1, color: BRAND_PALETTE.charcoal }}
                 >
-                  marketplace for vibecoded apps
+                  <Box
+                    component="span"
+                    sx={{ fontSize: { xs: 15, sm: 18 }, letterSpacing: "-0.5px" }}
+                  >
+                    Dap & Flip.
+                  </Box>
                 </Typography>
-              )}
+              </Stack>
             </Stack>
+            {!effectiveIsTablet && !effectiveIsMobile ? (
+              <Typography variant="subtitle2" color="text.secondary">
+                {APP_TAGLINE}
+              </Typography>
+            ) : null}
           </Stack>
 
-          <Stack sx={{ flex: 1, display: "flex", justifyContent: "center" }}>
+          <Stack
+            sx={{
+              flex: { xs: 0, sm: 1 },
+              display: "flex",
+              justifyContent: "center",
+              minWidth: 0,
+            }}
+          >
             <Header />
           </Stack>
 
           {/* Right-side actions */}
-          <Stack direction="row" alignItems="center" spacing={1}>
+          <Stack
+            direction="row"
+            alignItems="center"
+            spacing={0.5}
+            sx={{ flexShrink: 0 }}
+          >
+            {effectiveIsMobile && mounted ? (
+              <Button
+                variant="text"
+                size="small"
+                onClick={() => {
+                  if (auth.isLoggedIn && auth.user?.id) {
+                    router.push(`/my-settings/${encodeURIComponent(String(auth.user.id))}`);
+                  } else {
+                    router.push("/signup");
+                  }
+                }}
+                sx={{
+                  textTransform: "none",
+                  fontWeight: 700,
+                  fontSize: "0.8rem",
+                  minWidth: 0,
+                  px: 0.75,
+                  color: BRAND_PALETTE.charcoal,
+                }}
+              >
+                {auth.isLoggedIn ? "Account" : "Sign in"}
+              </Button>
+            ) : null}
             {!effectiveIsMobile && (
               <Button
                 variant="contained"
                 size="small"
                 startIcon={<AddBoxRoundedIcon />}
                 onClick={() => router.push("/products?list=new")}
-                sx={{
-                  borderRadius: 999,
-                  textTransform: "none",
-                  background:
-                    "linear-gradient(135deg, #7c3aed 0%, #ec4899 100%)",
-                  boxShadow: "none",
-                  px: 2,
-                  "&:hover": {
-                    boxShadow: "0 4px 14px rgba(124,58,237,0.35)",
-                  },
-                }}
+                sx={{ ...brandContainedButtonSx, px: 2 }}
               >
                 List your app
               </Button>
             )}
 
-            <IconButton
-              aria-label="Open library"
-              onClick={() => setOpenCartModal(true)}
-              color="inherit"
-            >
-              <Badge badgeContent={cart.quantity} color="secondary">
-                <ShoppingBagOutlinedIcon />
-              </Badge>
-            </IconButton>
+            {mounted && auth.isLoggedIn ? (
+              <Tooltip title="Messages">
+                <IconButton
+                  size="small"
+                  onClick={() => router.push("/messages")}
+                  aria-label={
+                    unreadCount > 0
+                      ? `Open inbox (${unreadCount} unread)`
+                      : "Open inbox"
+                  }
+                  sx={{ color: BRAND_PALETTE.charcoal }}
+                >
+                  <Badge
+                    color="error"
+                    max={99}
+                    badgeContent={unreadCount}
+                    invisible={unreadCount === 0}
+                    overlap="circular"
+                  >
+                    <MailRoundedIcon fontSize="small" />
+                  </Badge>
+                </IconButton>
+              </Tooltip>
+            ) : null}
 
             {!effectiveIsMobile && mounted && (
               <Button

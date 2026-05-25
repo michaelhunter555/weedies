@@ -9,7 +9,7 @@ import {
 } from "../types";
 
 /**
- * Marketplace listing — a single vibecoded app a seller is offering.
+ * Marketplace listing - a single vibecoded app a seller is offering.
  *
  * Mirrors the submission form at /products?list=new (see
  * `client/src/app/products/page.tsx`) plus moderation, engagement and
@@ -49,7 +49,7 @@ export interface Listing {
   tags: string[];
   techStack: string[];
 
-  // Seller-reported traction — verified via analytics integrations
+  // Seller-reported traction - verified via analytics integrations
   monthlyRevenue?: number;
   monthlyActiveUsers?: number;
 
@@ -60,8 +60,17 @@ export interface Listing {
   isListingVerified: boolean;
   isAnalyticsVerified: boolean;
 
+  /** GA4 property linked for verified metrics (set after OAuth + picker). */
+  googleAnalyticsPropertyResourceName?: string;
+  googleAnalyticsPropertyDisplayName?: string;
+  /** RevenueCat project metadata (future API / OAuth). */
+  revenueCatProjectId?: string;
+  revenueCatProjectDisplayName?: string;
+
   // Moderation / lifecycle
   status: ListingStatus;
+  /** When the seller’s listing slot / fee was applied (prevents double-charge on resubmit). */
+  sellerCommittedAt?: Date;
   rejectionReason?: string;
   agreedToTermsAt?: Date;
   publishedAt?: Date;
@@ -72,6 +81,34 @@ export interface Listing {
   favoritesCount: number;
   totalReviews: number;
   averageRating: number;
+  /**
+   * Reserved for auction bid recording - when > 0, seller cannot edit listing fields.
+   * Increment from bid-placement APIs when implemented.
+   */
+  openBidCount?: number;
+  /**
+   * Placed bids. Subdocuments include `_id` (Mongo) for PATCH `/bids/:bidId`.
+   * Serialized on seller mine / bid PATCH; omitted on public GET (use auction summary fields).
+   */
+  auctionBids?: {
+    _id?: mongoose.Types.ObjectId;
+    bidderId: mongoose.Types.ObjectId;
+    amount: number;
+    createdAt: Date;
+    bidStatus: "pending" | "accepted" | "rejected";
+  }[];
+
+  isPrivateListing?: boolean;
+  approvedUsersList?: string[] | null;
+  pendingPrivateListingRequests?: {
+    _id?: mongoose.Types.ObjectId;
+    requesterId: mongoose.Types.ObjectId;
+    status: "pending" | "approved" | "denied";
+    /** Optional note from the requester when asking for access. */
+    message?: string;
+    createdAt: Date;
+    resolvedAt?: Date;
+  }[];
 }
 
 const ListingSchema = new mongoose.Schema<Listing>(
@@ -83,6 +120,9 @@ const ListingSchema = new mongoose.Schema<Listing>(
       index: true,
     },
     slug: { type: String, required: true, unique: true, index: true },
+
+    /** Listing-fee Stripe PaymentIntent (manual capture). Used by admin to capture or cancel after review. */
+    paymentIntentId: { type: String, required: false, default: null, index: true },
 
     appName: { type: String, required: true, trim: true, maxlength: 80 },
     tagline: { type: String, required: true, trim: true, maxlength: 140 },
@@ -155,6 +195,23 @@ const ListingSchema = new mongoose.Schema<Listing>(
     isListingVerified: { type: Boolean, required: true, default: false },
     isAnalyticsVerified: { type: Boolean, required: true, default: false },
 
+    googleAnalyticsPropertyResourceName: {
+      type: String,
+      required: false,
+      default: null,
+    },
+    googleAnalyticsPropertyDisplayName: {
+      type: String,
+      required: false,
+      default: null,
+    },
+    revenueCatProjectId: { type: String, required: false, default: null },
+    revenueCatProjectDisplayName: {
+      type: String,
+      required: false,
+      default: null,
+    },
+
     status: {
       type: String,
       required: true,
@@ -170,6 +227,7 @@ const ListingSchema = new mongoose.Schema<Listing>(
       default: "pending_review",
       index: true,
     },
+    sellerCommittedAt: { type: Date, required: false, default: null },
     rejectionReason: { type: String, required: false },
     agreedToTermsAt: { type: Date, required: false },
     publishedAt: { type: Date, required: false },
@@ -182,6 +240,28 @@ const ListingSchema = new mongoose.Schema<Listing>(
 
     views: { type: Number, required: true, default: 0, min: 0 },
     favoritesCount: { type: Number, required: true, default: 0, min: 0 },
+    /** Increment when bids are persisted - blocks seller edits while > 0. */
+    openBidCount: { type: Number, required: true, default: 0, min: 0 },
+    auctionBids: {
+      type: [
+        {
+          bidderId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User",
+            required: true,
+          },
+          amount: { type: Number, required: true, min: 0 },
+          createdAt: { type: Date, default: Date.now },
+          bidStatus: {
+            type: String,
+            required: true,
+            enum: ["pending", "accepted", "rejected"],
+            default: "pending",
+          },
+        },
+      ],
+      default: [],
+    },
     totalReviews: { type: Number, required: true, default: 0, min: 0 },
     averageRating: {
       type: Number,
@@ -189,6 +269,30 @@ const ListingSchema = new mongoose.Schema<Listing>(
       default: 0,
       min: 0,
       max: 5,
+    },
+    isPrivateListing: { type: Boolean, required: false, default: false },
+    approvedUsersList: { type: [String], required: false, default: null },
+    pendingPrivateListingRequests: {
+      type: [
+        {
+          requesterId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User",
+            required: true,
+          },
+          status: {
+            type: String,
+            required: true,
+            enum: ["pending", "approved", "denied"],
+            default: "pending",
+          },
+          message: { type: String, required: false, default: null, maxlength: 500 },
+          createdAt: { type: Date, required: true, default: Date.now },
+          resolvedAt: { type: Date, required: false, default: null },
+        },
+      ],
+      required: false,
+      default: [],
     },
   },
   { timestamps: true }

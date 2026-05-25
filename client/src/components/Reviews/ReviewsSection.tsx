@@ -46,7 +46,7 @@ const dummyReviews: ReviewItem[] = [
     tier: "Free",
     title: "My best focus app in years",
     body:
-      "Ambient rooms are super clean. I'd pay for a Pro tier the moment there's team rooms — take my money.",
+      "Ambient rooms are super clean. I'd pay for a Pro tier the moment there's team rooms - take my money.",
   },
   {
     id: "r3",
@@ -59,7 +59,7 @@ const dummyReviews: ReviewItem[] = [
     tier: "Lifetime",
     title: "Paid for itself in a weekend",
     body:
-      "Saved me probably 30 hours of plumbing. Auth, billing, DB — all wired up. Now I just build the fun part.",
+      "Saved me probably 30 hours of plumbing. Auth, billing, DB - all wired up. Now I just build the fun part.",
   },
 ];
 

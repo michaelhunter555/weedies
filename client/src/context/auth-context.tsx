@@ -1,6 +1,6 @@
 "use client";
 //
-// AuthProvider — the single source of truth for "am I logged in?".
+// AuthProvider - the single source of truth for "am I logged in?".
 //
 // Design rules:
 // 1. Hydrate from localStorage synchronously in useReducer's lazy init so
@@ -24,6 +24,7 @@ import {
 } from "react";
 
 import { type UserObject } from "../../types";
+import { readBrowserLocalePreferences } from "@/utils/user-locale";
 
 type AuthProviderType = "firebase" | "google";
 
@@ -136,8 +137,13 @@ export function readStoredRefreshToken(): string | null {
 /** Build the API base URL ({NEXT_PUBLIC_API_KEY} + /api). Exported so the
  *  api-fetch hook reuses the same logic. */
 export function buildApiBase() {
-  const raw = process.env.NEXT_PUBLIC_API_KEY || "";
-  if (!raw) return "";
+  const raw = process.env.NEXT_PUBLIC_API_KEY?.trim() || "";
+  if (!raw) {
+    if (process.env.NODE_ENV === "development") {
+      return "http://localhost:5001/api";
+    }
+    return "";
+  }
   if (raw.endsWith("/api")) return raw;
   if (raw.endsWith("/api/")) return raw.slice(0, -1);
   return `${raw}/api`;
@@ -161,13 +167,24 @@ function normalizeUser(backendUser: any): UserObject {
     totalSales: backendUser?.totalSales,
     totalReviews: backendUser?.totalReviews,
     rewardPoints: backendUser?.rewardPoints,
-    stripeCustomerId: backendUser?.stripeCustomerId ?? undefined,
-    stripeConnectAccountId: backendUser?.stripeConnectAccountId ?? undefined,
-    outstandingBalance: backendUser?.outstandingBalance,
+  stripeCustomerId: backendUser?.stripeCustomerId ?? undefined,
+  stripeConnectAccountId:
+    backendUser?.stripeConnectAccountId ?? backendUser?.stripeAccountId ?? undefined,
+  /** Stripe Connect Express account id (same as `stripeConnectAccountId`). */
+  stripeAccountId:
+    backendUser?.stripeAccountId ?? backendUser?.stripeConnectAccountId ?? undefined,
+  outstandingBalance: backendUser?.outstandingBalance,
+    defaultPaymentIntendId: backendUser?.defaultPaymentIntendId ?? undefined,
+    stripeDefaultPaymentMethodId:
+      backendUser?.stripeDefaultPaymentMethodId ??
+      backendUser?.defaultPaymentIntendId ??
+      undefined,
     isVerifiedCreator: backendUser?.isVerifiedCreator,
     hasVerifiedAnalytics: backendUser?.hasVerifiedAnalytics,
     isOnboarded: backendUser?.isOnboarded ?? backendUser?.isOboarded ?? false,
     lastLoginDate: backendUser?.lastLoginDate ?? null,
+    timezone: backendUser?.timezone ?? null,
+    locale: backendUser?.locale ?? null,
     createdAt: backendUser?.createdAt,
     updatedAt: backendUser?.updatedAt,
   };
@@ -187,6 +204,8 @@ export type AuthContextProps = {
     idToken: string
   ) => Promise<{ isNewUser: boolean }>;
   refreshSession: () => Promise<void>;
+  /** Reload profile from `/user/me` (syncs Stripe Connect onboarding flags). */
+  syncUserFromServer: () => Promise<UserObject | null>;
   logout: () => Promise<void>;
   update: (user: UserObject) => void;
 };
@@ -199,6 +218,7 @@ export const AuthContext = createContext<AuthContextProps>({
   loginWithProviderToken: async () => {},
   signupWithProviderToken: async () => ({ isNewUser: false }),
   refreshSession: async () => {},
+  syncUserFromServer: async () => null,
   logout: async () => {},
   update: () => {},
 });
@@ -220,11 +240,16 @@ const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     ): Promise<{ isNewUser: boolean }> => {
       if (!apiBase) throw new Error("Missing NEXT_PUBLIC_SERVER");
 
+      const localePrefs = readBrowserLocalePreferences();
       const resp = await fetch(`${apiBase}/user/${path}`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ provider, idToken }),
+        body: JSON.stringify({
+          provider,
+          idToken,
+          ...(localePrefs ?? {}),
+        }),
       });
 
       const data = await resp.json().catch(() => ({}));
@@ -282,6 +307,37 @@ const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   }, [apiBase]);
 
+  const syncUserFromServer = useCallback(async (): Promise<UserObject | null> => {
+    if (!apiBase) return null;
+    let token: string | null = null;
+    try {
+      token = localStorage.getItem(LS_ACCESS_KEY);
+    } catch {
+      return null;
+    }
+    if (!token) return null;
+    const resp = await fetch(`${apiBase}/user/me`, {
+      method: "GET",
+      credentials: "include",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "content-type": "application/json",
+      },
+    });
+    if (!resp.ok) return null;
+    const data = await resp.json().catch(() => ({}));
+    const next = normalizeUser(data?.user);
+    if (!next?.id) return null;
+    dispatch({ type: "SET_USER", user: next });
+    try {
+      const at = localStorage.getItem(LS_ACCESS_KEY);
+      if (at) writeToStorage(next, at);
+    } catch {
+      // ignore
+    }
+    return next;
+  }, [apiBase]);
+
   const logout = useCallback(async () => {
     try {
       if (apiBase) {
@@ -324,6 +380,7 @@ const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       loginWithProviderToken,
       signupWithProviderToken,
       refreshSession,
+      syncUserFromServer,
       logout,
       update,
     }),
@@ -335,6 +392,7 @@ const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       loginWithProviderToken,
       signupWithProviderToken,
       refreshSession,
+      syncUserFromServer,
       logout,
       update,
     ]

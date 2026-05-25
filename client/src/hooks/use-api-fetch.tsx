@@ -42,7 +42,7 @@ const readAccessToken = (): string | null => {
 /**
  * Single-flight refresh.
  * If 10 fetches all 401 at once, only one of them actually hits
- * /user/refresh — the rest await the same promise and then retry.
+ * /user/refresh - the rest await the same promise and then retry.
  *
  * Lives at module scope on purpose: the dedup needs to span every
  * caller of `useApiFetch`, not just calls from a single component.
@@ -69,7 +69,7 @@ function singleFlightRefresh(refresh: () => Promise<void>): Promise<boolean> {
 }
 
 /**
- * `apiFetch(path, method?, body?, options?)` — the web counterpart of the
+ * `apiFetch(path, method?, body?, options?)` - the web counterpart of the
  * React Native `useApiFetch`. Adds bearer auth, transparently refreshes the
  * access token on `EXPIRED_TOKEN` / 401, retries the original request once,
  * and signs the user out if refresh ultimately fails.
@@ -93,7 +93,7 @@ export const useApiFetch = () => {
       const buildHeaders = (token: string | null): HeadersInit => {
         // Only set JSON content-type for real JSON payloads. FormData needs
         // the browser to inject its own multipart boundary, and raw strings
-        // may be form-urlencoded or text/plain — let the caller decide via
+        // may be form-urlencoded or text/plain - let the caller decide via
         // `options.headers`.
         const isFormData =
           typeof FormData !== "undefined" && body instanceof FormData;
@@ -150,7 +150,7 @@ export const useApiFetch = () => {
         return { ok: res.ok, status: res.status, data };
       }
 
-      // Try refresh — single-flight across the whole app.
+      // Try refresh - single-flight across the whole app.
       const didRefresh = await singleFlightRefresh(refreshSession);
       if (!didRefresh) {
         if (!options.suppressAuthError) {
@@ -203,7 +203,16 @@ export const useApiFetchOrThrow = () => {
         const message =
           (data as { message?: string })?.message ||
           `Request failed (${status})`;
-        throw new Error(message);
+        const code = (data as { code?: string })?.code;
+        const err = new Error(message) as Error & {
+          status?: number;
+          code?: string;
+          payload?: unknown;
+        };
+        err.status = status;
+        if (code) err.code = code;
+        err.payload = data;
+        throw err;
       }
       return data;
     },

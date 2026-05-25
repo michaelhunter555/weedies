@@ -37,7 +37,7 @@ const CartModal = ({ open, onClose }: CartModalProps) => {
             <Divider sx={{ marginBottom: "2rem" }} />
             {cart.quantity === 0 ? (
               <StyledText variant="h6">
-                No apps queued — explore the marketplace to add one.
+                No apps queued - explore the marketplace to add one.
               </StyledText>
             ) : (
               <StyledStack

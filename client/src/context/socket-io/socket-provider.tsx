@@ -15,7 +15,7 @@ import { useAuth } from "../auth-context";
  * Resolve the socket.io endpoint.
  *
  * Prefer an explicit `NEXT_PUBLIC_SOCKET_IO_ENDPOINT` when set, otherwise
- * fall back to `NEXT_PUBLIC_API_KEY` with the `/api` suffix stripped — the
+ * fall back to `NEXT_PUBLIC_API_KEY` with the `/api` suffix stripped - the
  * socket.io server lives at the HTTP server root, not under `/api`.
  */
 function resolveSocketEndpoint(): string {

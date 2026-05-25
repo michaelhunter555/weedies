@@ -5,6 +5,8 @@ import { signAccessToken, signRefreshToken } from "../../lib/jwt";
 import { verifyFirebaseIdToken } from "../../lib/verifyFirebaseIdToken";
 import { verifyGoogleIdToken } from "../../lib/verifyGoogleIdToken";
 import stripe from "../../utils/stripe";
+import { toAppUserJson } from "../../lib/serialize-app-user";
+import { applyUserLocaleFields } from "../../lib/user-locale";
 
 function fallbackName(email?: string) {
   if (!email) return "User";
@@ -55,6 +57,7 @@ export async function signup(req: Request, res: Response) {
     if (firebaseUid) user.firebaseUid = firebaseUid;
     if (googleSub) user.googleSub = googleSub;
     user.lastLoginDate = new Date();
+    applyUserLocaleFields(user, req.body ?? {});
 
     await user.save();
 
@@ -83,35 +86,7 @@ export async function signup(req: Request, res: Response) {
 
     return res.status(200).json({
       isNewUser,
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        authProvider: user.authProvider,
-        firebaseUid: user.firebaseUid ?? null,
-        googleSub: user.googleSub ?? null,
-
-        // Marketplace-creator stats
-        totalListings: user.totalListings ?? 0,
-        totalSales: user.totalSales ?? 0,
-        totalReviews: user.totalReviews ?? 0,
-        rewardPoints: user.rewardPoints ?? 0,
-
-        // Payouts / billing
-        stripeCustomerId: user.stripeCustomerId ?? null,
-        stripeConnectAccountId: user.stripeConnectAccountId ?? null,
-        outstandingBalance: user.outstandingBalance ?? 0,
-
-        // Verification badges
-        isVerifiedCreator: user.isVerifiedCreator ?? false,
-        hasVerifiedAnalytics: user.hasVerifiedAnalytics ?? false,
-
-        // Timestamps
-        lastLoginDate: user.lastLoginDate ?? null,
-        createdAt: (user as any).createdAt,
-        updatedAt: (user as any).updatedAt,
-      },
+      user: toAppUserJson(user),
       accessToken,
       refreshToken,
     });

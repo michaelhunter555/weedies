@@ -28,7 +28,12 @@ export default async function refreshedOnboardingLink(req: Request, res: Respons
       type: "account_onboarding",
     });
 
-    return void res.status(200).json({ url: accountLink.url, ok: true });
+    return void res.status(200).json({
+      url: accountLink.url,
+      stripeConnectAccountId: seller.stripeConnectAccountId,
+      stripeAccountId: seller.stripeConnectAccountId,
+      ok: true,
+    });
   } catch (err) {
     console.log("refreshedOnboardingLink error:", err);
     return void res.status(500).json({ message: "Failed to refresh onboarding link" });

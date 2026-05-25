@@ -4,7 +4,7 @@ export interface Review {
   listingId: mongoose.Schema.Types.ObjectId;
   userId: mongoose.Schema.Types.ObjectId;
   sellerId: mongoose.Schema.Types.ObjectId;
-  rating: number;
+  rating?: number;
   datePosted: Date;
   purchaseDate: Date;
   title?: string;
@@ -16,12 +16,15 @@ const ReviewSchema = new mongoose.Schema<Review>({
  listingId: { type: mongoose.Schema.Types.ObjectId, required: true },
   userId: { type: mongoose.Schema.Types.ObjectId, required: true },
   sellerId: { type: mongoose.Schema.Types.ObjectId, required: true },
-  rating: { type: Number, required: true, default: 5 },
+  /** 0–5 when set; may be omitted for text-only feedback. */
+  rating: { type: Number, required: false, min: 0, max: 5 },
   datePosted: { type: Date, required: true, default: Date.now },
   purchaseDate: { type: Date, required: true },
   title: { type: String, required: false, default: "" },
   comment: { type: String, required: false, default: "" },
 }, { timestamps: true });
+
+ReviewSchema.index({ listingId: 1, userId: 1 }, { unique: true });
 
 export default mongoose.models?.Review ||
   mongoose.model<Review>("Review", ReviewSchema);

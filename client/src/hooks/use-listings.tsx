@@ -3,7 +3,16 @@
 import { useCallback } from "react";
 
 import { useApiFetchOrThrow } from "@/hooks/use-api-fetch";
-import type { Listing, ListingCategory } from "../../types";
+import type {
+  GaListingMetricsSnapshot,
+  Listing,
+  ListingCategory,
+  ListingExchangeBuyerReview,
+  ListingExchangePayload,
+  MyAuctionBidRow,
+  MyMarketplaceOrdersPayload,
+  SellerListingEditMeta,
+} from "../../types";
 
 export type ListingFeedParams = {
   category?: ListingCategory | string;
@@ -31,8 +40,23 @@ export const useListings = () => {
     return data ?? [];
   }, [apiFetch]);
 
+  /** Buy-it-now purchases (as buyer) and sales (as seller) with listing metadata. */
+  const getMyMarketplaceOrders = useCallback(async (): Promise<MyMarketplaceOrdersPayload> => {
+    const data = await apiFetch<MyMarketplaceOrdersPayload>(
+      "/listings/me/marketplace-orders",
+      "GET",
+    );
+    return data ?? { purchases: [], sales: [] };
+  }, [apiFetch]);
+
+  /** Auction listings the current user has placed at least one bid on. */
+  const getMyAuctionBids = useCallback(async (): Promise<MyAuctionBidRow[]> => {
+    const data = await apiFetch<MyAuctionBidRow[]>("/listings/me/auction-bids", "GET");
+    return data ?? [];
+  }, [apiFetch]);
+
   /**
-   * Public marketplace feed. Unauthenticated — returns only `live` listings.
+   * Public marketplace feed. Unauthenticated - returns only `live` listings.
    * Supports category / text search / pagination via query params.
    */
   const getAllListings = useCallback(
@@ -83,11 +107,218 @@ export const useListings = () => {
 
   /** Create a new listing owned by the authenticated seller. */
   const createListing = useCallback(
-    async (payload: Partial<Listing>): Promise<Listing> =>
-      apiFetch<Listing>("/listings", "POST", payload),
+    async (
+      payload: Partial<Listing> & { existingDraftId?: string },
+    ): Promise<Listing> => apiFetch<Listing>("/listings", "POST", payload),
     [apiFetch],
   );
 
+  /** Save or update a draft without listing fees (see POST /listings/draft). */
+  const saveDraft = useCallback(
+    async (
+      payload: Partial<Listing> & {
+        draftListingId?: string;
+        isBuyItNow?: boolean;
+      },
+    ): Promise<Listing> => apiFetch<Listing>("/listings/draft", "POST", payload),
+    [apiFetch],
+  );
 
-  return { getMyListings, getAllListings, uploadPhotos, createListing };
+  /** Seller PATCH for an existing listing (subject to edit-eligibility on the server). */
+  const updateListing = useCallback(
+    async (id: string, payload: Partial<Listing>): Promise<Listing> =>
+      apiFetch<Listing>(
+        `/listings/${encodeURIComponent(id)}`,
+        "PATCH",
+        payload,
+      ),
+    [apiFetch],
+  );
+
+  /** Seller soft-delete: sets listing `status` to `removed`. */
+  const deleteListing = useCallback(
+    async (id: string): Promise<{ success?: boolean; id?: string }> =>
+      apiFetch<{ success?: boolean; id?: string }>(
+        `/listings/${encodeURIComponent(id)}`,
+        "DELETE",
+      ),
+    [apiFetch],
+  );
+
+  /** Whether the authenticated seller may edit listing fields for this id. */
+  const getSellerListingEditMeta = useCallback(
+    async (listingId: string): Promise<SellerListingEditMeta> =>
+      apiFetch<SellerListingEditMeta>(
+        `/listings/me/edit-meta?listingId=${encodeURIComponent(listingId)}`,
+        "GET",
+      ),
+    [apiFetch],
+  );
+
+  /** Public single listing by Mongo `_id` or `slug`. */
+  const getListing = useCallback(
+    async (idOrSlug: string): Promise<Listing> =>
+      apiFetch<Listing>(`/listings/${encodeURIComponent(idOrSlug)}`, "GET"),
+    [apiFetch],
+  );
+
+  /** Request seller approval for a private listing. */
+  const requestPrivateListingAccess = useCallback(
+    async (
+      listingId: string,
+      body?: { message?: string },
+    ): Promise<{ status: "pending" | "approved"; requestId?: string; message?: string }> =>
+      apiFetch(
+        `/listings/${encodeURIComponent(listingId)}/private-access/request`,
+        "POST",
+        body ?? {},
+      ),
+    [apiFetch],
+  );
+
+  /** Seller: approve or deny a pending private listing access request. */
+  const resolvePrivateListingAccess = useCallback(
+    async (
+      listingId: string,
+      requestId: string,
+      decision: "approve" | "deny",
+    ): Promise<{
+      success?: boolean;
+      requestId?: string;
+      status?: "approved" | "denied";
+      requesterId?: string;
+    }> =>
+      apiFetch(
+        `/listings/${encodeURIComponent(listingId)}/private-access/${encodeURIComponent(requestId)}`,
+        "PATCH",
+        { decision },
+      ),
+    [apiFetch],
+  );
+
+  /**
+   * GA4 snapshot (last 30 days) for a listing with a linked property.
+   * Works for live listings anonymously; for draft/pending, the seller must be
+   * signed in (owner check on the server).
+   */
+  const getListingGoogleAnalyticsMetrics = useCallback(
+    async (listingId: string): Promise<GaListingMetricsSnapshot> =>
+      apiFetch<GaListingMetricsSnapshot>(
+        `/listings/${encodeURIComponent(listingId)}/google-analytics/metrics`,
+        "GET",
+      ),
+    [apiFetch],
+  );
+
+  /** Start a 1:1 thread with optional listing context (seller privacy masking). */
+  const createChat = useCallback(
+    async (body: {
+      recipientId: string;
+      message: string;
+      listingId?: string;
+    }): Promise<{ chat?: { _id?: string } }> =>
+      apiFetch<{ chat?: { _id?: string } }>("/chats", "POST", body),
+    [apiFetch],
+  );
+
+  /** Record an auction bid (no charge). Requires auth. */
+  const placeAuctionBid = useCallback(
+    async (listingId: string, amountDollars: number): Promise<Listing> =>
+      apiFetch<Listing>(
+        `/listings/${encodeURIComponent(listingId)}/bids`,
+        "POST",
+        { amount: amountDollars },
+      ),
+    [apiFetch],
+  );
+
+  /** Seller: accept or reject a pending auction bid. */
+  const setAuctionBidStatus = useCallback(
+    async (
+      listingId: string,
+      bidId: string,
+      status: "accepted" | "rejected",
+    ): Promise<Listing> =>
+      apiFetch<Listing>(
+        `/listings/${encodeURIComponent(listingId)}/bids/${encodeURIComponent(bidId)}`,
+        "PATCH",
+        { status },
+      ),
+    [apiFetch],
+  );
+
+  /** Buyer or seller: post-sale exchange state for a sold listing. */
+  const getListingExchange = useCallback(
+    async (listingId: string): Promise<ListingExchangePayload> =>
+      apiFetch<ListingExchangePayload>(
+        `/listings/exchange/${encodeURIComponent(listingId)}`,
+        "GET",
+      ),
+    [apiFetch],
+  );
+
+  /** Seller: upload branding / NDA–style files (multipart `files`). */
+  const uploadExchangeDeliverables = useCallback(
+    async (
+      listingId: string,
+      files: File[],
+    ): Promise<{ deliverables: ListingExchangePayload["exchange"]["deliverables"] }> => {
+      const form = new FormData();
+      files.forEach((f) => form.append("files", f));
+      return apiFetch(
+        `/listings/exchange/${encodeURIComponent(listingId)}/deliverables`,
+        "POST",
+        form,
+      );
+    },
+    [apiFetch],
+  );
+
+  /** Buyer: confirm receipt after deliverables are attached. */
+  const confirmListingExchange = useCallback(
+    async (listingId: string): Promise<{ buyerConfirmedAt: string }> =>
+      apiFetch<{ buyerConfirmedAt: string }>(
+        `/listings/exchange/${encodeURIComponent(listingId)}/confirm`,
+        "POST",
+      ),
+    [apiFetch],
+  );
+
+  /** Buyer: optional post-handover review (stars and/or note), once per sale. */
+  const submitExchangeReview = useCallback(
+    async (
+      listingId: string,
+      body: { rating?: number | null; comment?: string },
+    ): Promise<{ buyerReview: ListingExchangeBuyerReview }> =>
+      apiFetch<{ buyerReview: ListingExchangeBuyerReview }>(
+        `/listings/exchange/${encodeURIComponent(listingId)}/review`,
+        "POST",
+        body,
+      ),
+    [apiFetch],
+  );
+
+  return {
+    getMyListings,
+    getMyMarketplaceOrders,
+    getMyAuctionBids,
+    getAllListings,
+    uploadPhotos,
+    createListing,
+    saveDraft,
+    updateListing,
+    deleteListing,
+    createChat,
+    getSellerListingEditMeta,
+    getListing,
+    requestPrivateListingAccess,
+    resolvePrivateListingAccess,
+    getListingGoogleAnalyticsMetrics,
+    placeAuctionBid,
+    setAuctionBidStatus,
+    getListingExchange,
+    uploadExchangeDeliverables,
+    confirmListingExchange,
+    submitExchangeReview,
+  };
 };

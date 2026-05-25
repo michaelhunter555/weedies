@@ -23,3 +23,20 @@ export const uploadToCloudinary = async (fileBuffer: Buffer) => {
       resource_type: "image",
     });
   };
+
+/** Upload listing screenshots or exchange files (images use `image`, else `raw`). */
+export async function uploadBufferToCloudinary(
+  fileBuffer: Buffer,
+  mimetype: string,
+  folder = "exchange-deliverables",
+) {
+  const isImage = /^image\/(png|jpe?g|webp|gif)$/i.test(mimetype);
+  const resource_type = isImage ? "image" : "raw";
+  const dataUri = `data:${mimetype};base64,${fileBuffer.toString("base64")}`;
+  return cloudinary.uploader.upload(dataUri, {
+    resource_type,
+    folder,
+    use_filename: true,
+    unique_filename: true,
+  });
+}

@@ -18,8 +18,8 @@ const Events = {
 /**
  * Seller-side Stripe webhook (Connect).
  *
- * Handles events on the seller's connected account — payouts, account
- * updates, etc. — and emits socket notifications to the seller.
+ * Handles events on the seller's connected account - payouts, account
+ * updates, etc. - and emits socket notifications to the seller.
  *
  * Buyer-side events (purchases, refunds, disputes) are in `./app-webhook.ts`.
  *
@@ -85,7 +85,7 @@ export default async function v2Webhook(req: Request, res: Response) {
         if (checkRoom(io, String(sellerId))) {
           io.to(String(sellerId)).emit(Events.PAYOUT_FAILED, {
             message: "Payout failed",
-            text: "Your bank rejected the payout — please verify your payout method.",
+            text: "Your bank rejected the payout - please verify your payout method.",
             amount: (payout.amount / 100).toFixed(2),
             currency: payout.currency,
           });
@@ -136,7 +136,7 @@ export default async function v2Webhook(req: Request, res: Response) {
         break;
       }
 
-      // account.updated — grow into KYC / onboarding status changes
+      // account.updated - grow into KYC / onboarding status changes
       case "account.updated":
       default:
         break;

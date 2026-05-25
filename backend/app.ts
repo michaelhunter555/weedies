@@ -7,6 +7,9 @@ import userRoutes from "./routes/userRoutes";
 import listingsRoutes from "./routes/listingRoutes";
 import stripeRoutes from "./routes/stripeRoutes";
 import adminRoutes from "./routes/adminRoutes";
+import integrationRoutes from "./routes/integrationRoutes";
+import chatRoutes from "./routes/chatRoutes";
+import supportRoutes from "./routes/supportRoutes";
 import { createServer } from "http";
 import { Server, type Socket } from "socket.io";
 import { verifyAccessToken } from "./lib/jwt";
@@ -30,7 +33,7 @@ export const io = new Server(server, {
  * that token here and attach the user's id to the socket so downstream
  * emitters (`io.to(userId).emit(...)`) actually reach the right client.
  *
- * Unauthenticated sockets are rejected — every event we emit is targeted to
+ * Unauthenticated sockets are rejected - every event we emit is targeted to
  * a specific user, so anonymous connections have nothing to listen to.
  */
 io.use((socket, next) => {
@@ -78,27 +81,51 @@ io.engine.on("connection_error", (err) => {
 
 app.use("/socket.io", (_req, _res, next) => next());
 
-const clientOrigin = process.env.CLIENT_ORIGIN || "http://localhost:3000";
+/** Comma-separated in .env, e.g. `http://localhost:3000,http://localhost:3001` */
+function allowedCorsOrigins(): string | string[] {
+  if(process.env.NODE_ENV === "production") {
+    return ["https://dapandflip.com", "https://www.dapandflip.com"]
+  }
+  return ["http://localhost:3000", "http://localhost:3001", "http://localhost:3002"];
+}
+
 app.use(
   cors({
-    origin: clientOrigin,
+    origin: allowedCorsOrigins(),
     credentials: true,
   })
 );
+/**
+ * Stripe needs the **raw** JSON body for `stripe-signature` verification.
+ * - Skip `express.json()` for our webhook paths (query strings / trailing
+ *   slashes must still match — Stripe or proxies sometimes vary the URL).
+ * - Do **not** register a second global `express.json()` after this; it would
+ *   parse the body before `express.raw()` in the Stripe router runs.
+ */
+/** Paths must match Stripe Dashboard + skip global `express.json()` so `express.raw()` can verify signatures. */
+const STRIPE_WEBHOOK_FULL_PATHS = new Set([
+  "/api/stripe/app-webhook",
+  "/api/stripe/app-webhooks",
+  "/api/stripe/v2-webhook",
+]);
+
+function isStripeWebhookRequest(req: express.Request): boolean {
+  const path = (req.originalUrl || req.url || "").split("?")[0].replace(/\/+$/, "") || "/";
+  return STRIPE_WEBHOOK_FULL_PATHS.has(path);
+}
+
 app.use((req, res, next) => {
-  if (
-    req.originalUrl === "/api/stripe/app-webhook" ||
-    req.originalUrl === "/api/stripe/v2-webhook"
-  ) {
-    next();
-  } else {
-    express.json()(req, res, next);
+  if (isStripeWebhookRequest(req)) {
+    return next();
   }
+  return express.json()(req, res, next);
 });
-app.use(express.json());
 
 app.use("/api/user", userRoutes);
 app.use("/api/listings", listingsRoutes);
+app.use("/api/chats", chatRoutes);
+app.use("/api/support", supportRoutes);
+app.use("/api/integrations", integrationRoutes);
 app.use("/api/stripe", stripeRoutes);
 app.use("/api/admin", adminRoutes);
 

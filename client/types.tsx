@@ -1,7 +1,7 @@
 //
 // Client-side shared types.
 //
-// NOTE: Keep this file free of React/MUI/JSX imports — it's consumed by both
+// NOTE: Keep this file free of React/MUI/JSX imports - it's consumed by both
 // UI components and context/reducers.
 //
 
@@ -92,6 +92,8 @@ export interface UserObject {
   userName?: string;
   role?: UserRole;
   authProvider?: AuthProvider;
+  sellerRating?: number;
+  totalSellerReviews?: number;
 
   // Provider identifiers (only one is set depending on authProvider)
   firebaseUid?: string | null;
@@ -108,6 +110,8 @@ export interface UserObject {
   // Payouts / billing
   stripeCustomerId?: string;
   stripeConnectAccountId?: string;
+  /** Stripe Connect Express account id (mirrors `stripeConnectAccountId`). */
+  stripeAccountId?: string;
   stripeDefaultPaymentMethodId?: string | null;
   outstandingBalance?: number;
   /** Whether the seller has completed Stripe Connect onboarding. */
@@ -117,7 +121,7 @@ export interface UserObject {
    * older call sites don't break while they migrate.
    */
   isOboarded?: boolean;
-  defaultPaymentIntendId?: string;
+  defaultPaymentIntendId?: string | null;
 
   // Verification badges
   isVerifiedCreator?: boolean;
@@ -125,6 +129,10 @@ export interface UserObject {
 
   // Timestamps
   lastLoginDate?: string | Date | null;
+  /** IANA timezone, e.g. `America/New_York`. */
+  timezone?: string | null;
+  /** BCP 47 locale, e.g. `en-US`. */
+  locale?: string | null;
   createdAt?: string | Date;
   updatedAt?: string | Date;
 }
@@ -191,6 +199,61 @@ export type AnalyticsProvider =
 
 export type ListingSaleType = "fixed" | "auction";
 
+export type AuctionBidStatus = "pending" | "accepted" | "rejected";
+
+/** Response from `GET /listings/:id/google-analytics/metrics` */
+export type GaListingMetricsSnapshot = {
+  dailySessions: { date: string; sessions: number }[];
+  bounceRate: number;
+  averageSessionDurationSeconds: number;
+  totalSessions: number;
+};
+
+/**
+ * One `auctionBids` subdocument (same field as Mongo). `bidderId` is a string in JSON.
+ * Omitted on public listing GETs (use `auctionCurrentPrice` / `auctionMinimumNextBid` / counts);
+ * included on `GET /listings/me/mine` and seller bid PATCH responses for auction listings.
+ */
+export type ListingAuctionBid = {
+  _id: string;
+  bidderId: string;
+  amount: number;
+  createdAt?: string | Date;
+  bidStatus: AuctionBidStatus;
+};
+
+/** `GET /listings/me/auction-bids` — listing summary + only the signed-in user's bid rows. */
+export type MyAuctionBidListingSummary = {
+  _id: string;
+  slug: string;
+  appName: string;
+  status: string;
+  photos: string[];
+  coverIndex: number;
+  auctionEndDate: string | Date | null;
+  startingPrice: number;
+  auctionCurrentPrice: number;
+  auctionMinimumNextBid: number;
+  auctionHighBidAmount: number | null;
+};
+
+export type MyAuctionBidRow = {
+  listing: MyAuctionBidListingSummary;
+  myBids: Array<{
+    _id: string;
+    amount: number;
+    createdAt?: string | Date;
+    bidStatus: AuctionBidStatus;
+  }>;
+};
+
+/** Public listing payload: accepted bids only (no bidder ids). Oldest first. */
+export type AuctionAcceptedBidPublic = {
+  _id: string;
+  amount: number;
+  createdAt?: string | Date;
+};
+
 export type ListingStatus =
   | "draft"
   | "pending_review"
@@ -241,6 +304,13 @@ export type Listing = {
   isListingVerified?: boolean;
   isAnalyticsVerified?: boolean;
 
+  /** Linked GA4 property (after OAuth + property picker). */
+  googleAnalyticsPropertyResourceName?: string;
+  googleAnalyticsPropertyDisplayName?: string;
+  /** Linked RevenueCat project (manual / future API). */
+  revenueCatProjectId?: string;
+  revenueCatProjectDisplayName?: string;
+
   status?: ListingStatus;
   rejectionReason?: string;
   agreedToTermsAt?: string | Date;
@@ -253,9 +323,152 @@ export type Listing = {
   totalReviews?: number;
   averageRating?: number;
   paymentIntentId?: string | null;
+  /** Server-only: fee / listing slot applied (duplicate submit guard). */
+  sellerCommittedAt?: string | Date;
+  /** When > 0, seller cannot edit listing fields (reserved for bid APIs). */
+  openBidCount?: number;
+  /** Public auction summary on listing GETs (no per-bid rows). */
+  auctionCurrentPrice?: number;
+  auctionMinimumNextBid?: number;
+  auctionBidCount?: number;
+  auctionHighBidAmount?: number | null;
+  /**
+   * Public auction listings: accepted bid timeline (amount + time). Populated from
+   * `auctionBids` on the server; raw `auctionBids` stay off public GETs for privacy.
+   */
+  auctionAcceptedBidHistory?: AuctionAcceptedBidPublic[];
+  /** Seller dashboard: bids awaiting accept/reject (from `GET /listings/me/mine`). */
+  auctionPendingBidCount?: number;
+  /** Full bid rows - same field name as Mongo `auctionBids`; only on seller mine / bid PATCH. */
+  auctionBids?: ListingAuctionBid[];
+  /** Present on `GET /listings/me/mine` - whether listing copy can still be edited. */
+  sellerCanEdit?: boolean;
 
   createdAt?: string | Date;
   updatedAt?: string | Date;
+
+  // Private listing - only visible to approved users
+  isPrivateListing?: boolean;
+  /** List of user IDs that are approved to view the private listing. */
+  approvedUsersList?: string[] | null;
+  pendingPrivateListingRequests?: {
+    _id?: string;
+    requesterId: string;
+    message?: string;
+    status: "pending" | "approved" | "denied";
+    createdAt?: string | Date;
+    resolvedAt?: string | Date | null;
+    requester?: {
+      id: string;
+      name: string;
+      locale?: string | null;
+      timezone?: string | null;
+      regionLabel: string;
+    };
+  }[];
+  privateAccess?: {
+    canView: boolean;
+    status: "none" | "pending" | "approved" | "denied";
+    requestId?: string | null;
+  };
+};
+
+export type SellerListingEditMeta = {
+  canEdit: boolean;
+  reason?: string;
+  status?: string;
+  openBidCount?: number;
+};
+
+/** Post-sale handover room (`GET /listings/exchange/:listingId`). */
+export type ListingExchangePhase = "payment" | "handover" | "completed";
+
+export type ListingExchangeRoomRole = "buyer" | "seller";
+
+export type ListingExchangeDeliverable = {
+  url: string;
+  originalName?: string;
+  uploadedAt: string;
+};
+
+export type ListingExchangeSnapshot = {
+  _id: string;
+  listingId: string;
+  sellerId: string;
+  buyerId: string;
+  paymentReceivedAt: string | null;
+  deliverables: ListingExchangeDeliverable[];
+  buyerConfirmedAt: string | null;
+  updatedAt?: string | null;
+  sellerCapturedPayment?: boolean;
+  paymentCaptureExpiration?: string | Date | null;
+  paymentStatus?: 'succeeded' | 'failed' | 'canceled' | 'pending';
+};
+
+/** Buyer-only snapshot from `GET /listings/exchange/:id` (null for seller). */
+export type ListingExchangeBuyerReview = {
+  _id: string;
+  rating: number | null;
+  comment: string;
+  datePosted: string;
+};
+
+export type ListingExchangePayload = {
+  role: ListingExchangeRoomRole;
+  phase: ListingExchangePhase;
+  /** Present when `role === "buyer"`; omitted or null for seller. */
+  buyerReview?: ListingExchangeBuyerReview | null;
+  exchange: ListingExchangeSnapshot;
+  listing: {
+    _id: string;
+    appName: string;
+    slug?: string;
+    photos: string[];
+    coverIndex: number;
+    saleType?: ListingSaleType;
+    currency: string;
+    buyItNowPrice?: number;
+    startingPrice?: number;
+  };
+};
+
+/** Row from `GET /listings/me/marketplace-orders` (buy-it-now checkout). */
+export type MarketplaceOrderRow = {
+  transactionId: string;
+  role: "buyer" | "seller";
+  listingId: string;
+  slug: string;
+  appName: string;
+  coverUrl: string | null;
+  amountCents: number;
+  currency: string;
+  paymentStatus?: "succeeded" | "failed" | "canceled" | "pending";
+  listingStatus?: string;
+  purchasedAt: string;
+};
+
+export type MyMarketplaceOrdersPayload = {
+  purchases: MarketplaceOrderRow[];
+  sales: MarketplaceOrderRow[];
+};
+
+/** Row from `GET /stripe/billing-history` (wallet Billing tab). */
+export type BillingHistoryRow = {
+  transactionId: string;
+  listingId: string;
+  slug: string;
+  appName: string;
+  coverUrl: string | null;
+  billingReason: string;
+  amountCents: number;
+  currency: string;
+  paymentStatus?: "succeeded" | "failed" | "canceled" | "pending";
+  purchasedAt: string;
+};
+
+export type BillingHistoryPayload = {
+  ok?: boolean;
+  items: BillingHistoryRow[];
 };
 
 // =========================
@@ -287,7 +500,7 @@ export type Review = {
   listingId: string;
   /** Reviewer (buyer). */
   userId: string;
-  /** Seller of the listing — denormalised for fast aggregates. */
+  /** Seller of the listing - denormalised for fast aggregates. */
   sellerId: string;
   /** Legacy e-commerce fields. Kept optional so pre-migration records still type-check. */
   productId?: string;
@@ -344,7 +557,7 @@ export type Issue = {
 // =========================
 
 /**
- * A single message inside a conversation — mirrors `backend/models/messages.ts`.
+ * A single message inside a conversation - mirrors `backend/models/messages.ts`.
  */
 export type Message = {
   _id?: string;
@@ -382,7 +595,7 @@ export type Chat = {
   participantInfo: ChatParticipant[];
   lastMessage?: string;
   lastMessageTime?: string | Date;
-  /** @deprecated — mirrors the legacy `bookingId` field. Use `listingId`. */
+  /** @deprecated - mirrors the legacy `bookingId` field. Use `listingId`. */
   bookingId?: string;
   /** Marketplace linkage to the listing the chat is about. */
   listingId?: string;
@@ -391,11 +604,11 @@ export type Chat = {
   updatedAt?: string | Date;
 };
 
-// Convenience alias — most of the app thinks in "conversations".
+// Convenience alias - most of the app thinks in "conversations".
 export type Conversation = Chat;
 
 // =========================
-// Payments — transactions, disputes, payouts
+// Payments - transactions, disputes, payouts
 // =========================
 
 export type PaymentStatus = "succeeded" | "failed" | "canceled" | "pending";
@@ -403,7 +616,7 @@ export type PaymentStatus = "succeeded" | "failed" | "canceled" | "pending";
 /**
  * Ledger entry for every successful buyer checkout.
  * Mirrors `backend/models/transactions.ts` (note the capitalised `ListingId`
- * matches the Mongoose schema key — don't rename it without migrating the
+ * matches the Mongoose schema key - don't rename it without migrating the
  * data).
  */
 export type Transaction = {

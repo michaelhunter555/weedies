@@ -6,7 +6,7 @@ import stripe from "../../utils/stripe";
  * Create a SetupIntent so the buyer can attach a card to their Stripe
  * customer record. The client sends the customer id either in the JSON
  * body (preferred, matches the other POST endpoints) or as a query
- * param — we accept both to avoid silent `undefined` failures.
+ * param - we accept both to avoid silent `undefined` failures.
  */
 export default async function setupIntent(req: Request, res: Response) {
     const customerId =
@@ -16,7 +16,7 @@ export default async function setupIntent(req: Request, res: Response) {
     if (!customerId) {
         return void res.status(400).json({
             error:
-                "customerId is required — send it in the JSON body as { customerId }.",
+                "customerId is required - send it in the JSON body as { customerId }.",
             ok: false,
         });
     }

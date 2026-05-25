@@ -13,6 +13,12 @@ import {
 import { AuthContext } from "@/context/auth-context";
 import { useForm } from "@/hooks/useForm";
 import { auth as firebaseAuth } from "@/lib/firebase";
+import { APP_NAME } from "@/brand";
+import {
+  BRAND_PALETTE,
+  brandContainedButtonSx,
+  brandLogoMarkSx,
+} from "@/theme/brand-palette";
 
 import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
 import BoltRoundedIcon from "@mui/icons-material/BoltRounded";
@@ -140,7 +146,7 @@ const LoginForm = () => {
           try {
             await updateProfile(cred.user, { displayName: user.userName });
           } catch {
-            // non-fatal — backend will fall back to the email local part
+            // non-fatal - backend will fall back to the email local part
           }
         }
         // Force refresh so the new displayName is included in the ID token claims
@@ -150,7 +156,7 @@ const LoginForm = () => {
           idToken
         );
         if (isNewUser) {
-          setInfo("Welcome to VibeStack — your account is ready.");
+          setInfo(`Welcome to ${APP_NAME} — your account is ready.`);
         }
         setFormData(loginFields, false);
       }
@@ -166,7 +172,7 @@ const LoginForm = () => {
   const handleAuthOptions = () => {
     setError(null);
     setInfo(null);
-    // Compute next state outside of setIsLogin's updater — updater fns must
+    // Compute next state outside of setIsLogin's updater - updater fns must
     // be pure; calling setFormData inside one can fire multiple times under
     // React concurrent/strict rendering.
     const nextIsLogin = !isLogin;
@@ -175,7 +181,7 @@ const LoginForm = () => {
     const currentName = String(formState?.inputs?.userName?.value || "");
 
     if (!nextIsLogin) {
-      // Switching to Sign up — track the userName input so the form can't
+      // Switching to Sign up - track the userName input so the form can't
       // be valid until the user provides a display name.
       setFormData(
         {
@@ -191,7 +197,7 @@ const LoginForm = () => {
           currentPw.length >= 8
       );
     } else {
-      // Switching back to Sign in — drop userName from the form state.
+      // Switching back to Sign in - drop userName from the form state.
       setFormData(
         {
           email: { value: currentEmail, isValid: validateEmail(currentEmail) },
@@ -241,7 +247,7 @@ const LoginForm = () => {
           "firebase",
           idToken
         );
-        if (isNewUser) setInfo("Welcome to VibeStack!");
+        if (isNewUser) setInfo(`Welcome to ${APP_NAME}!`);
       }
       router.replace("/");
     } catch (e: any) {
@@ -268,7 +274,7 @@ const LoginForm = () => {
       }}
     >
       <Grid container spacing={{ xs: 0, md: 4 }} alignItems="stretch">
-        {/* Marketing side panel — desktop only */}
+        {/* Marketing side panel - desktop only */}
         <Grid
           size={{ xs: 12, md: 6 }}
           sx={{ display: { xs: "none", md: "block" } }}
@@ -279,13 +285,11 @@ const LoginForm = () => {
               height: "100%",
               borderRadius: 5,
               p: { xs: 4, md: 5 },
-              color: "#fff",
+              color: BRAND_PALETTE.charcoal,
               position: "relative",
               overflow: "hidden",
-              background:
-                "radial-gradient(900px 400px at 20% 0%, rgba(236,72,153,0.35), transparent 60%)," +
-                "radial-gradient(800px 400px at 100% 100%, rgba(245,158,11,0.35), transparent 60%)," +
-                "linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #4c1d95 100%)",
+              backgroundColor: BRAND_PALETTE.mint,
+              border: `1px solid ${BRAND_PALETTE.sage}`,
             }}
           >
             <Stack spacing={2} sx={{ height: "100%" }}>
@@ -295,17 +299,19 @@ const LoginForm = () => {
                     width: 36,
                     height: 36,
                     borderRadius: 2,
-                    background:
-                      "linear-gradient(135deg, #7c3aed 0%, #ec4899 60%, #f59e0b 100%)",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
+                    ...brandLogoMarkSx,
                   }}
                 >
                   <AutoAwesomeIcon sx={{ fontSize: 20 }} />
                 </Box>
-                <Typography variant="h6" sx={{ fontWeight: 800 }}>
-                  VibeStack
+                <Typography variant="h6" sx={{ fontWeight: 800, color: BRAND_PALETTE.charcoal }}>
+                  <Box component="span" sx={{ color: BRAND_PALETTE.seafoam }}>
+                    Dap
+                  </Box>
+                  {" & Flip"}
                 </Typography>
               </Stack>
 
@@ -316,15 +322,7 @@ const LoginForm = () => {
                 {isLogin ? (
                   <>
                     Welcome back,{" "}
-                    <Box
-                      component="span"
-                      sx={{
-                        background:
-                          "linear-gradient(90deg, #fda4af 0%, #fcd34d 100%)",
-                        WebkitBackgroundClip: "text",
-                        WebkitTextFillColor: "transparent",
-                      }}
-                    >
+                    <Box component="span" sx={{ color: BRAND_PALETTE.seafoam }}>
                       builder
                     </Box>
                     .
@@ -332,26 +330,18 @@ const LoginForm = () => {
                 ) : (
                   <>
                     Start selling your{" "}
-                    <Box
-                      component="span"
-                      sx={{
-                        background:
-                          "linear-gradient(90deg, #fda4af 0%, #fcd34d 100%)",
-                        WebkitBackgroundClip: "text",
-                        WebkitTextFillColor: "transparent",
-                      }}
-                    >
-                      vibecoded
+                    <Box component="span" sx={{ color: BRAND_PALETTE.seafoam }}>
+                      indie
                     </Box>{" "}
                     apps.
                   </>
                 )}
               </Typography>
 
-              <Typography sx={{ color: "rgba(255,255,255,0.8)" }}>
+              <Typography sx={{ color: "rgba(37, 52, 58, 0.8)" }}>
                 {isLogin
-                  ? "Pick up where you left off — your library, sales and listings are ready."
-                  : "Join 3,240+ indie creators shipping apps on VibeStack. 5 minutes to list your first app."}
+                  ? "Pick up where you left off - your library, sales and listings are ready."
+                  : `Join indie creators shipping apps on ${APP_NAME}. 5 minutes to list your first app.`}
               </Typography>
 
               <Stack spacing={1.25} sx={{ mt: 2 }}>
@@ -437,7 +427,7 @@ const LoginForm = () => {
                 }}
               />
               <Typography variant="h4" sx={{ fontWeight: 900 }}>
-                {isLogin ? "Welcome back" : "Join VibeStack"}
+                {isLogin ? "Welcome back" : `Join ${APP_NAME}`}
               </Typography>
               <Typography variant="body2" color="text.secondary">
                 {isLogin
@@ -624,16 +614,9 @@ const LoginForm = () => {
                 sx={{
                   mt: 1,
                   borderRadius: 2,
-                  textTransform: "none",
-                  fontWeight: 700,
-                  boxShadow: "none",
-                  background:
-                    "linear-gradient(135deg, #7c3aed 0%, #ec4899 100%)",
-                  "&:hover": {
-                    boxShadow: "0 6px 16px rgba(124,58,237,0.35)",
-                  },
+                  ...brandContainedButtonSx,
                   "&.Mui-disabled": {
-                    background: "#e5e7eb",
+                    backgroundColor: "#e5e7eb",
                     color: "#9ca3af",
                   },
                 }}
@@ -658,7 +641,7 @@ const LoginForm = () => {
               )}
 
               <Typography variant="body2" sx={{ textAlign: "center", mt: 1 }}>
-                {isLogin ? "New to VibeStack?" : "Already have an account?"}{" "}
+                {isLogin ? `New to ${APP_NAME}?` : "Already have an account?"}{" "}
                 <Link
                   component="button"
                   type="button"
