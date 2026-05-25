@@ -16,24 +16,40 @@ import StripeCheckoutProvider from "@/components/StripeProvider/StripeCheckoutPr
 import { LiveChatWidget } from "@/components/SupportChat/LiveChatWidget";
 import { LiveChatProvider } from "@/context/live-chat-context";
 import { AppThemeProvider } from "@/theme/app-theme";
+import { APP_DOMAIN } from "@/brand";
 import Typography from "@mui/material/Typography";
 
+const SITE_OG_IMAGE = "/3.png";
+
 export const metadata: Metadata = {
+  metadataBase: new URL(`https://${APP_DOMAIN}`),
   title: "Dap & Flip — Discover & Sell Apps | Dapandflip.com",
   description:
     "Dapandflip.com is the marketplace to discover, buy, and sell indie apps. List your app on Dap & Flip or find your next flip — secure checkout and seller payouts built in.",
   applicationName: "Dap & Flip",
+  icons: {
+    icon: [{ url: "/favicon.png", type: "image/png" }],
+    shortcut: "/favicon.png",
+    apple: "/favicon.png",
+  },
   openGraph: {
     title: "Dap & Flip | Dapandflip.com",
     description:
       "Discover, buy, and sell indie apps. The marketplace to list and flip digital products.",
     siteName: "Dap & Flip",
+    images: [
+      {
+        url: SITE_OG_IMAGE,
+        alt: "Dap & Flip",
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
     title: "Dap & Flip | Dapandflip.com",
     description:
       "Discover, buy, and sell indie apps on dapandflip.com.",
+    images: [SITE_OG_IMAGE],
   },
 };
 
