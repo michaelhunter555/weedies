@@ -390,6 +390,8 @@ export default function ProductsPage() {
 
   // ── Photo upload state ────────────────────────────────────────────────────
   const [photoSlots, setPhotoSlots] = useState<PhotoSlot[]>([]);
+  const photoSlotsRef = useRef(photoSlots);
+  photoSlotsRef.current = photoSlots;
   const [coverIndex, setCoverIndex] = useState(0);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -492,10 +494,9 @@ export default function ProductsPage() {
   // Revoke any still-live blob URLs on unmount.
   useEffect(() => {
     return () => {
-      photoSlots.forEach((s) => {
+      photoSlotsRef.current.forEach((s) => {
         if (s.kind === "file") URL.revokeObjectURL(s.preview);
       });
-      // eslint-disable-next-line react-hooks/exhaustive-deps
     };
   }, []);
 
@@ -951,7 +952,7 @@ export default function ProductsPage() {
 
             <Alert severity="warning">
               <Typography variant="body2" color="text.secondary">
-                Incomplete or "in-progress" apps will be rejected.
+                Incomplete or &quot;in-progress&quot; apps will be rejected.
               </Typography>
             </Alert>
             <Stack spacing={1} direction="row" alignItems="center">
@@ -1573,7 +1574,7 @@ export default function ProductsPage() {
                   </Typography>
                 </Stack>
                 <Typography variant="subtitle2" color="text.secondary">
-                Control who can and can't view your app. We e-mail you when a request is made, you review the customer, start a conversation, and deny or grant access.
+                Control who can and can&apos;t view your app. We e-mail you when a request is made, you review the customer, start a conversation, and deny or grant access.
                 </Typography>
 
                 <Stack direction="row" alignItems="center" spacing={1}>

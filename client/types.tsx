@@ -581,7 +581,7 @@ export type ChatParticipant = {
   name: string;
   image: string;
   role: "user" | "seller" | "barber" | "admin";
-  pushToken?: string;
+  email?: string;
 };
 
 /**

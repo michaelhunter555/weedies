@@ -176,7 +176,7 @@ export default function Home() {
         </Stack>
         <Stack sx={{ minWidth: 0 }}>
           <Typography variant="h5" fontWeight={800}>
-            One Person's App is Another Person's Treasure.
+            One Person&apos;s App is Another Person&apos;s Treasure.
           </Typography>
           <Typography variant="body1" color="text.secondary">
             For a limited time, list your next <span style={{ color: PALETTE.seafoam, fontWeight: 800, }}>3 Apps for Free</span>.
@@ -350,7 +350,7 @@ export default function Home() {
               </Typography>
               </Stack>
               <Typography sx={{ fontSize: 12 }} variant="caption" color="text.secondary">
-                No app too big or small. We've got you covered.
+                No app too big or small. We&apos;ve got you covered.
               </Typography>
               <Divider sx={{ width: '100%', borderColor: PALETTE.sage, my: 2 }} />
               <Chip
@@ -877,13 +877,13 @@ export default function Home() {
                 variant="overline"
                 sx={{ fontWeight: 700, color: PALETTE.seafoam }}
               >
-                Got a Question? Let's Chat!
+                Got a Question? Let&apos;s Chat!
               </Typography>
               <Typography
                 variant="h5"
                 sx={{ fontWeight: 800, mb: 1, color: PALETTE.charcoal }}
               >
-                We're here to help. Get in touch with our support team.
+                We&apos;re here to help. Get in touch with our support team.
               </Typography>
               
             </Grid>

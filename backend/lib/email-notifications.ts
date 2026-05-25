@@ -73,7 +73,7 @@ export const userChatMessageReceivedNotificationEmail = async (
                 email: userEmail, //info@elevatedappgroup.com
             }
         ],
-        subject: `${userName} received a chat message`,
+        subject: `New message from ${senderName} on Dap & Flip`,
         htmlContent: `
         <html>
         <body>

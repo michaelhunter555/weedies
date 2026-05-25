@@ -3,6 +3,7 @@
 import { useCallback } from "react";
 
 import { useApiFetchOrThrow } from "@/hooks/use-api-fetch";
+import type { BillingHistoryPayload } from "../../types";
 
 /**
  * Thin client for the buyer-side Stripe endpoints that the wallet page
@@ -34,21 +35,7 @@ export type SellerOnboardingStartResult = {
   stripeAccountId: string;
 };
 
-export type BillingHistoryResponse = {
-  ok?: boolean;
-  items: Array<{
-    transactionId: string;
-    listingId: string;
-    slug: string;
-    appName: string;
-    coverUrl: string | null;
-    billingReason: string;
-    amountCents: number;
-    currency: string;
-    paymentStatus?: string;
-    purchasedAt: string;
-  }>;
-};
+export type BillingHistoryResponse = BillingHistoryPayload;
 
 export type ConnectBalanceResponse = {
   ok?: boolean;

@@ -1,9 +1,8 @@
 import type { Request, Response } from "express";
 import mongoose from "mongoose";
 
-import { io } from "../../app";
 import { displayImage, participantRoleForListing } from "../../lib/chat-helpers";
-import { SocketEvents } from "../../lib/socket-events";
+import { notifyChatRecipient } from "../../lib/chat-notifications";
 import Chat from "../../models/conversations";
 import Listing from "../../models/listing";
 import Message from "../../models/messages";
@@ -15,7 +14,12 @@ type Body = {
   listingId?: unknown;
 };
 
-type UserLean = { name?: string; image?: string | null; mode?: string };
+type UserLean = {
+  name?: string;
+  image?: string | null;
+  mode?: string;
+  email?: string;
+};
 
 /**
  * Start a 1:1 chat between the authenticated user and `recipientId`.
@@ -59,8 +63,8 @@ export async function createChat(req: Request, res: Response) {
 
   try {
     const [sender, recipient] = (await Promise.all([
-      User.findById(senderId).select("name image mode").lean(),
-      User.findById(rid).select("name image mode").lean(),
+      User.findById(senderId).select("name image mode email").lean(),
+      User.findById(rid).select("name image mode email").lean(),
     ])) as [UserLean | null, UserLean | null];
 
     if (!sender || !recipient) {
@@ -89,12 +93,14 @@ export async function createChat(req: Request, res: Response) {
           name: String(sender.name ?? "User"),
           image: displayImage(sender.image),
           role: senderRole,
+          email: String(sender.email ?? "").trim(),
         },
         {
           id: new mongoose.Types.ObjectId(rid),
           name: String(recipient.name ?? "User"),
           image: displayImage(recipient.image),
           role: recipientRole,
+          email: String(recipient.email ?? "").trim(),
         },
       ],
       lastMessage: text,
@@ -111,11 +117,13 @@ export async function createChat(req: Request, res: Response) {
       read: false,
     });
 
-    io.to(rid).emit(SocketEvents.CHAT_MESSAGE_NEW, {
-      message: "New message",
-      chatId: String(chat._id),
-      listingId: lid ?? undefined,
-      preview: text.length > 140 ? `${text.slice(0, 137)}…` : text,
+    await notifyChatRecipient({
+      chat,
+      senderUserId: senderId,
+      senderRealName: String(sender.name ?? "User"),
+      text,
+      isNewChat: true,
+      listingId: lid,
     });
 
     return void res.status(201).json({ chat });

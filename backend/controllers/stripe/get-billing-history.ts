@@ -4,6 +4,22 @@ import mongoose from "mongoose";
 import Listing from "../../models/listing";
 import Transaction from "../../models/transactions";
 
+const BILLING_PAYMENT_STATUSES = [
+  "succeeded",
+  "failed",
+  "canceled",
+  "pending",
+] as const;
+
+type BillingPaymentStatus = (typeof BILLING_PAYMENT_STATUSES)[number];
+
+function normalizePaymentStatus(raw: unknown): BillingPaymentStatus {
+  const s = String(raw ?? "pending");
+  return (BILLING_PAYMENT_STATUSES as readonly string[]).includes(s)
+    ? (s as BillingPaymentStatus)
+    : "pending";
+}
+
 function pickCoverUrl(
   photos: string[] | undefined,
   coverIndex: number | undefined,
@@ -69,7 +85,7 @@ export async function getBillingHistory(req: Request, res: Response) {
         billingReason: String(t.billingReason ?? "Charge"),
         amountCents: Number(t.amountCharged ?? t.amountPaid ?? 0),
         currency: String(t.currency ?? "usd"),
-        paymentStatus: String(t.paymentStatus ?? "pending"),
+        paymentStatus: normalizePaymentStatus(t.paymentStatus),
         purchasedAt: createdAt,
       };
     });

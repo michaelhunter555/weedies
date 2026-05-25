@@ -7,7 +7,8 @@ export interface IParticipantInfo {
   name: string;
   image: string;
   role: ParticipantRole;
-  pushToken?: string;
+  /** Notification address captured when the chat is created (usually the user account email). */
+  email?: string;
 }
 
 export interface IChat extends mongoose.Document {
@@ -38,7 +39,7 @@ const ChatSchema = new mongoose.Schema<IChat>(
           enum: ["user", "seller", "customer", "admin"],
           required: true,
         },
-        pushToken: { type: String, required: false },
+        email: { type: String, required: false },
       },
     ],
     initiatedBy: {

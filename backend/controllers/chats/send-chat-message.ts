@@ -1,10 +1,8 @@
 import type { Request, Response } from "express";
 import mongoose from "mongoose";
 
-import { io } from "../../app";
-import { senderLabelForRealtime } from "../../lib/chat-view-serialization";
+import { notifyChatRecipient } from "../../lib/chat-notifications";
 import Chat from "../../models/conversations";
-import type { IParticipantInfo } from "../../models/conversations";
 import Message from "../../models/messages";
 import User from "../../models/user";
 
@@ -14,7 +12,8 @@ type Body = {
 
 /**
  * Append a message to a chat and bump `lastMessage` / `lastMessageTime`.
- * Emits `chat:message` to the other participant when they are connected via Socket.IO.
+ * Notifies the other participant via Socket.IO when online, otherwise email
+ * if the prior message in the thread was more than 2 hours ago.
  */
 export async function sendChatMessage(req: Request, res: Response) {
   const userId = req.user?.userId;
@@ -46,6 +45,10 @@ export async function sendChatMessage(req: Request, res: Response) {
       return void res.status(404).json({ message: "Chat not found." });
     }
 
+    const previousLastMessageTime = chat.lastMessageTime
+      ? new Date(chat.lastMessageTime)
+      : null;
+
     const participantIds = (chat.participants ?? []).map((p: mongoose.Types.ObjectId) =>
       String(p),
     );
@@ -64,30 +67,16 @@ export async function sendChatMessage(req: Request, res: Response) {
       read: false,
     });
 
-    const infos = (chat.participantInfo ?? []) as IParticipantInfo[];
-    const receiver = infos.find((p) => String(p.id) !== String(userId));
-    const receiverId = receiver?.id != null ? String(receiver.id) : "";
-    const senderRealName = String(sender.name ?? "User");
-    const senderName = await senderLabelForRealtime(
-      {
-        _id: chat._id,
-        listingId: chat.listingId,
-        initiatedBy: chat.initiatedBy,
-        participantInfo: infos as { id?: unknown; name: string; image?: string; role: string }[],
-      },
-      userId,
-      receiverId,
-      senderRealName,
-    );
-    const room = receiverId ? io.sockets.adapter.rooms.get(receiverId) : undefined;
-    if (receiverId && room && room.size > 0) {
-      io.to(receiverId).emit("chat:message", {
-        chatId: String(chat._id),
-        text,
-        senderId: userId,
-        senderName,
-      });
-    }
+    await notifyChatRecipient({
+      chat,
+      senderUserId: userId,
+      senderRealName: String(sender.name ?? "User"),
+      text,
+      previousLastMessageTime,
+      isNewChat: false,
+      listingId:
+        chat.listingId != null ? String(chat.listingId) : null,
+    });
 
     return void res.status(201).json({ message, ok: true });
   } catch (err) {

@@ -492,7 +492,15 @@ function MessagesPageContent() {
       }
       return chatsQuery.data!.chats[0]?._id ?? null;
     });
-  }, [hydrated, user?.id, chatFromUrl, chatsQuery.data?.chats, composeIntent, selectedId]);
+  }, [
+    hydrated,
+    user?.id,
+    chatFromUrl,
+    chatsQuery.data,
+    chatsQuery.data?.chats,
+    composeIntent,
+    selectedId,
+  ]);
 
   const messagesQuery = useQuery({
     queryKey: ["chat", selectedId, "messages"],
