@@ -366,7 +366,7 @@ const LoginForm = () => {
                     >
                       {p.icon}
                     </Box>
-                    <Typography sx={{ color: "rgba(255,255,255,0.9)" }}>
+                    <Typography sx={{ color: BRAND_PALETTE.seafoam }}>
                       {p.text}
                     </Typography>
                   </Stack>
