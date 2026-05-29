@@ -1,6 +1,7 @@
 "use client";
 
 import { ThemeProvider, createTheme } from "@mui/material/styles";
+import CssBaseline from "@mui/material/CssBaseline";
 
 import { BRAND_PALETTE } from "./brand-palette";
 
@@ -30,6 +31,17 @@ export const appTheme = createTheme({
     borderRadius: 12,
   },
   components: {
+    MuiCssBaseline: {
+      styleOverrides: {
+        html: {
+          overflowX: "clip",
+        },
+        body: {
+          margin: 0,
+          overflowX: "clip",
+        },
+      },
+    },
     MuiButton: {
       styleOverrides: {
         containedPrimary: {
@@ -54,5 +66,10 @@ export const appTheme = createTheme({
 });
 
 export function AppThemeProvider({ children }: { children: React.ReactNode }) {
-  return <ThemeProvider theme={appTheme}>{children}</ThemeProvider>;
+  return (
+    <ThemeProvider theme={appTheme}>
+      <CssBaseline />
+      {children}
+    </ThemeProvider>
+  );
 }

@@ -179,6 +179,9 @@ export async function createListing(req: Request, res: Response) {
     listing.status = "pending_review";
     listing.rejectionReason = undefined;
     listing.sellerCommittedAt = new Date();
+    if (isPrivateListing) {
+      listing.privateListingFeePaid = true;
+    }
     await listing.save();
 
     return void res.status(existingDraftId ? 200 : 201).json(listing);

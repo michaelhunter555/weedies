@@ -7,13 +7,20 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { useAuth } from "@/context/auth-context";
 import { useListings } from "@/hooks/use-listings";
+import { useEscrow } from "@/hooks/use-escrow";
 import { useStripeWallet } from "@/hooks/use-stripe-wallet";
+import {
+  isEscrowEligiblePrice,
+  isEscrowRequiredPrice,
+} from "@/lib/escrow-eligible";
 import { TURNAROUND_OPTIONS } from "@/utils/listingOptions";
 import { brandContainedButtonSx } from "@/theme/brand-palette";
 
 import ArrowBackRoundedIcon from "@mui/icons-material/ArrowBackRounded";
 import ChatRoundedIcon from "@mui/icons-material/ChatRounded";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
+import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import {
   Alert,
   Box,
@@ -25,12 +32,14 @@ import {
   Divider,
   FormControlLabel,
   FormGroup,
+  Modal,
   Paper,
   Stack,
   Typography,
 } from "@mui/material";
 
 import type { Listing } from "../../../../types";
+import StyledBoxContainer from "@/components/Shared/Modals/ModalStyles";
 
 const PLACEHOLDER_COVER = "/placeholder-app-cover.svg";
 const PENDING_AUCTION_BID_KEY = "weedies.pendingAuctionBid";
@@ -99,12 +108,16 @@ export function CheckoutListingClient() {
   const { getListing, placeAuctionBid } = useListings();
   const queryClient = useQueryClient();
   const { getPaymentMethods, createCheckoutSession } = useStripeWallet();
+  const { initEscrowTransaction } = useEscrow();
   const [acknowledged, setAcknowledged] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [pendingYourBid, setPendingYourBid] = useState<number | null>(null);
   const [confirmSubmitting, setConfirmSubmitting] = useState(false);
   const [checkoutSubmitting, setCheckoutSubmitting] = useState(false);
   const [confirmError, setConfirmError] = useState<string | null>(null);
+  const [escrowStartedMessage, setEscrowStartedMessage] = useState<string | null>(
+    null,
+  );
 
   const {
     data: listing,
@@ -154,6 +167,16 @@ export function CheckoutListingClient() {
   }, [listing]);
 
   const currency = listing?.currency ?? "USD";
+  const isEscrowEligible = isEscrowEligiblePrice(displayPrice);
+  const isEscrowRequired = isEscrowRequiredPrice(displayPrice);
+
+  const isReservingBuyer = Boolean(
+    listing?.status === "reserved" &&
+      user?.id &&
+      listing.buyerId &&
+      String(listing.buyerId) === String(user.id),
+  );
+  const checkoutAvailable = listing?.status === "live" || isReservingBuyer;
 
   const seller = extractSeller(listing?.sellerId);
   const walletHref =
@@ -226,7 +249,7 @@ export function CheckoutListingClient() {
 
   const handleStripeCheckout = async () => {
     if (!acknowledged || !listing?._id || listing.saleType === "auction") return;
-    if (checkoutSubmitting) return;
+    if (checkoutSubmitting || isEscrowRequired) return;
     setConfirmError(null);
     setCheckoutSubmitting(true);
     try {
@@ -238,6 +261,36 @@ export function CheckoutListingClient() {
       setCheckoutSubmitting(false);
     }
   };
+
+  
+  const [openEscrowConfirm, setOpenEscrowConfirm] = useState(false);
+  const handleEscrowCheckout = async () => {
+    if (!acknowledged || !listing?._id || listing.saleType === "auction") return;
+    if (!isEscrowEligible || checkoutSubmitting) return;
+    setConfirmError(null);
+    setEscrowStartedMessage(null);
+    setOpenEscrowConfirm(false);
+    setCheckoutSubmitting(true);
+    try {
+      const result = await initEscrowTransaction(String(listing._id));
+      if (result.agreeUrl) {
+        window.location.assign(result.agreeUrl);
+        return;
+      }
+      setEscrowStartedMessage(
+        result.message ||
+          "Escrow checkout started. Check your email from Escrow.com to agree and pay.",
+      );
+      setCheckoutSubmitting(false);
+    } catch (e) {
+      setConfirmError(e instanceof Error ? e.message : "Could not start Escrow checkout.");
+      setCheckoutSubmitting(false);
+    }
+  };
+
+  const handleConfirmEscrowModal = () => {
+    setOpenEscrowConfirm(prev => !prev);
+  }
 
   if (!listingId) {
     return (
@@ -297,7 +350,7 @@ export function CheckoutListingClient() {
     );
   }
 
-  if (listing.saleType !== "auction" && !stripeCustomerId) {
+  if (listing.saleType !== "auction" && !stripeCustomerId && !isEscrowEligible) {
     return (
       <Container maxWidth="md" sx={{ py: 6 }}>
         <Alert severity="info">
@@ -318,6 +371,27 @@ export function CheckoutListingClient() {
 
   return (
     <Container maxWidth="md" sx={{ py: { xs: 3, md: 5 } }}>
+      <Modal open={openEscrowConfirm} onClose={handleConfirmEscrowModal}>
+        <StyledBoxContainer width="350px" height="auto" sx={{ p: 2 }}>
+          <Stack direction="column" spacing={2}>
+            <Typography variant="h6" textAlign="center" fontWeight={800} gutterBottom>
+              Confirm Escrow Transaction
+            </Typography>
+          <Typography variant="subtitle2" color="text.secondary" textAlign="center" gutterBottom>
+            You are about to initiate an Escrow transaction flow. This step does not require payment. Please confirm your intent to proceed.
+          </Typography>
+          <Divider sx={{ my: 2 }} />
+          <Stack direction="row" alignItems="center" justifyContent="center" spacing={2}>
+          <Button variant="text" color="error" onClick={handleConfirmEscrowModal}>
+            cancel
+          </Button>
+          <Button endIcon={<CheckCircleIcon />} variant="contained" color="success" onClick={handleEscrowCheckout}>
+            I confirm
+          </Button>
+          </Stack>
+          </Stack>
+        </StyledBoxContainer>
+      </Modal>
       <Button
         startIcon={<ArrowBackRoundedIcon />}
         onClick={() => router.push(listingProductPath(listing))}
@@ -338,6 +412,12 @@ export function CheckoutListingClient() {
           : "Review the listing and terms. Payment happens in Stripe Checkout; the charge is authorized first and only captured later so transfers stay under your control."}
       </Typography>
 
+      {isEscrowEligible ? (
+        <Alert severity="success" sx={{ mb: 3 }}>
+          This purchase is escrow eligible.
+        </Alert>
+      ) : null}
+
         {isAuctionListing && pendingYourBid != null ? (
         <Alert severity="info" sx={{ mb: 3 }}>
           Your intended bid is <b>{formatMoneyDetailed(pendingYourBid, currency)}</b>. Nothing is
@@ -345,7 +425,7 @@ export function CheckoutListingClient() {
         </Alert>
       ) : null}
 
-      {!isAuctionListing ? (
+      {!isAuctionListing && !isEscrowRequired ? (
         <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 3, mb: 3 }}>
           <Typography variant="subtitle1" fontWeight={700} gutterBottom>
             Stripe Checkout
@@ -375,6 +455,19 @@ export function CheckoutListingClient() {
               customer; Checkout is still the only place we take payment for this purchase.
             </Typography>
           )}
+        </Paper>
+      ) : null}
+
+      {!isAuctionListing && isEscrowEligible ? (
+        <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 3, mb: 3 }}>
+          <Typography variant="subtitle1" fontWeight={700} gutterBottom>
+            Escrow.com checkout
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            We create a protected Escrow transaction for this listing. You and the seller
+            agree on Escrow.com, then you fund the purchase there. Funds are released after
+            handover in the exchange room.
+          </Typography>
         </Paper>
       ) : null}
 
@@ -452,7 +545,7 @@ export function CheckoutListingClient() {
             </Typography>
             <Typography component="li" variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
               If you are the winning bidder, you are legally bound to complete this purchase.
-              Failure to do so may result in account suspension or a permanent ban from the platform.
+              Failure to do so may result in account suspension or a permanent ban from the platform. This does not include any potential action the user may seek to take against you.
             </Typography>
             <Typography component="li" variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
               It is important to speak with the seller before you bid. Use{" "}
@@ -466,19 +559,19 @@ export function CheckoutListingClient() {
         ) : (
           <Box component="ul" sx={{ m: 0, pl: 2.5 }}>
             <Typography component="li" variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-              The seller has the right to refuse this purchase or cancel the transaction before
+              The seller has the right to refuse this purchase and cancel the transaction before
               handover is complete.
             </Typography>
             <Typography component="li" variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
               If the seller does not respond within three (3) business days, the sale will
-              automatically be voided and your purchase will be refunded.
+              automatically be voided and your full payment will be refunded.
             </Typography>
             <Typography component="li" variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
               It is important to speak with the seller before you buy. Use{" "}
               <b>Message seller</b> if you still have questions.
             </Typography>
             <Typography component="li" variant="body2" color="text.secondary">
-              If you confirm and cancel within the seller&apos;s grace handoff period, you may
+              If you complete payment and cancel within the seller&apos;s grace handoff period, you may
               be charged a flat fee of 10% of the purchase price.{" "}
               <b>Pending investigation.</b>
             </Typography>
@@ -521,6 +614,12 @@ export function CheckoutListingClient() {
         </Alert>
       ) : null}
 
+      {escrowStartedMessage ? (
+        <Alert severity="success" sx={{ mb: 2 }} onClose={() => setEscrowStartedMessage(null)}>
+          {escrowStartedMessage}
+        </Alert>
+      ) : null}
+
       {isAuctionListing ? (
         <Stack direction={{ xs: "column", sm: "row" }} spacing={2} alignItems={{ sm: "center" }}>
           <Button
@@ -546,22 +645,42 @@ export function CheckoutListingClient() {
         </Stack>
       ) : (
         <Stack direction={{ xs: "column", sm: "row" }} spacing={2} flexWrap="wrap">
-          <Button
-            variant="contained"
-            size="large"
-            disabled={!acknowledged || checkoutSubmitting}
-            onClick={() => void handleStripeCheckout()}
-            sx={{
-              textTransform: "none",
-              fontWeight: 700,
-              borderRadius: 2,
-              px: 3,
-              ...brandContainedButtonSx,
-              boxShadow: "none",
-            }}
-          >
-            {checkoutSubmitting ? "Redirecting to Stripe…" : "Continue to Stripe Checkout"}
-          </Button>
+          {!isEscrowRequired ? (
+            <Button
+              variant="contained"
+              size="large"
+              disabled={!acknowledged || checkoutSubmitting || !checkoutAvailable}
+              onClick={() => void handleStripeCheckout()}
+              sx={{
+                textTransform: "none",
+                fontWeight: 700,
+                borderRadius: 2,
+                px: 3,
+                ...brandContainedButtonSx,
+                boxShadow: "none",
+              }}
+            >
+              {checkoutSubmitting ? "Redirecting to Stripe…" : "Continue to Stripe Checkout"}
+            </Button>
+          ) : null}
+          {isEscrowEligible ? (
+            <Button
+              startIcon={<AccountBalanceIcon />}
+              variant="contained"
+              size="large"
+              disabled={!acknowledged || checkoutSubmitting || !checkoutAvailable}
+              onClick={handleConfirmEscrowModal}
+              color="success"
+              sx={{
+                textTransform: "none",
+                fontWeight: 700,
+                borderRadius: 2,
+                px: 3,
+              }}
+            >
+              {checkoutSubmitting ? "Creating Transaction…" : "Start Escrow Processing"}
+            </Button>
+          ) : null}
         </Stack>
       )}
 

@@ -1,18 +1,16 @@
 import type { Request, Response } from "express";
-import mongoose from "mongoose";
 import Listing from "../../models/listing";
-import { attachAuctionSummary, countPendingAuctionBids } from "../../lib/listing-auction-summary";
+import { parsePageLimit } from "../../lib/parse-page-limit";
+import { serializeSellerListings } from "../../lib/serialize-seller-listings";
 import {
-  mapListingIdsToBuyerBlocked,
-  sellerCanEditListingFields,
-} from "../../lib/listing-seller-edit";
-import { auctionBidsClientJson } from "../../lib/listing-auction-bids-client";
-import { enrichPendingPrivateListingRequests } from "../../lib/enrich-private-listing-requests";
+  getSellerListingsMeta,
+  sellerListingStatusQuery,
+  type SellerListingStatusFilter,
+} from "../../lib/seller-listings-meta";
 
 /**
- * Returns all listings owned by the authenticated seller (any status).
- * Each item includes `sellerCanEdit` when the seller may still change listing
- * fields (no buyer purchases/bids, `openBidCount` is 0, editable status).
+ * Paginated listings owned by the authenticated seller.
+ * Query: `page`, `limit` (max 50), `status` = `active` | `sold` | `all` (default `active`).
  */
 export async function getListingsBySeller(req: Request, res: Response) {
   try {
@@ -21,42 +19,34 @@ export async function getListingsBySeller(req: Request, res: Response) {
       return void res.status(401).json({ message: "Unauthorized" });
     }
 
-    const listings = await Listing.find({ sellerId }).sort({ updatedAt: -1 });
-    const ids = listings.map((l) => l._id as mongoose.Types.ObjectId);
-    const blockedMap = await mapListingIdsToBuyerBlocked(ids);
+    const statusRaw = String(req.query.status ?? "active").trim().toLowerCase();
+    const status: SellerListingStatusFilter =
+      statusRaw === "sold" || statusRaw === "all" ? statusRaw : "active";
 
-    const payload = await Promise.all(
-      listings.map(async (l) => {
-        const o = l.toObject() as Record<string, unknown>;
-        const hasBuyerBlockingTx = blockedMap.get(String(l._id)) ?? false;
-        const gate = sellerCanEditListingFields({
-          status: l.status,
-          openBidCount: l.openBidCount,
-          hasBuyerBlockingTx,
-        });
-        const pendingPrivateListingRequests = await enrichPendingPrivateListingRequests(
-          l.pendingPrivateListingRequests as Parameters<
-            typeof enrichPendingPrivateListingRequests
-          >[0],
-        );
-        const base = {
-          ...o,
-          sellerCanEdit: gate.ok,
-          pendingPrivateListingRequests,
-        };
-        if (l.saleType === "auction") {
-          const summarized = attachAuctionSummary(base);
-          return {
-            ...summarized,
-            auctionPendingBidCount: countPendingAuctionBids(l.auctionBids),
-            auctionBids: auctionBidsClientJson(l.auctionBids),
-          };
-        }
-        return base;
-      }),
-    );
+    const { page, limit, skip, totalPages } = parsePageLimit(req, {
+      page: 1,
+      limit: 20,
+      maxLimit: 50,
+    });
 
-    return void res.status(200).json(payload);
+    const filter = { sellerId, ...sellerListingStatusQuery(status) };
+
+    const [listings, total, meta] = await Promise.all([
+      Listing.find(filter).sort({ updatedAt: -1 }).skip(skip).limit(limit),
+      Listing.countDocuments(filter),
+      getSellerListingsMeta(sellerId),
+    ]);
+
+    const items = await serializeSellerListings(listings);
+
+    return void res.status(200).json({
+      items,
+      page,
+      limit,
+      total,
+      totalPages: totalPages(total),
+      meta,
+    });
   } catch (err) {
     console.log("getListingsBySeller error:", err);
     return void res.status(500).json({ message: "Failed to fetch seller listings" });

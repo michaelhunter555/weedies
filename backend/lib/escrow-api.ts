@@ -1,0 +1,564 @@
+/**
+ * Escrow.com API client (sandbox by default).
+ * @see https://www.escrow-sandbox.com/api/docs/create-transaction
+ * @see https://www.escrow-sandbox.com/api/docs/agree-to-a-transaction
+ * @see https://www.escrow-sandbox.com/api/docs/integration-helper/approving-payments
+ */
+
+const DEFAULT_API_BASE = "https://api.escrow-sandbox.com/2017-09-01";
+const DEFAULT_INTEGRATION_BASE =
+  "https://integrationhelper.escrow-sandbox.com/v1";
+
+// --- Request / response shapes (Escrow API 2017-09-01) ---
+
+export type EscrowPartyRole = "buyer" | "seller" | "broker" | "partner";
+
+/** Customer email or the literal `"me"` for the authenticated API user. */
+export type EscrowCustomerRef = "me" | (string & {});
+
+export type EscrowCurrency = "usd" | "aud" | "euro" | "gbp" | "cad";
+
+export type EscrowItemType =
+  | "domain_name"
+  | "domain_name_holding"
+  | "general_merchandise"
+  | "milestone"
+  | "motor_vehicle"
+  | "broker_fee"
+  | "partner_fee"
+  | "shipping_fee"
+  | "mobile_apps"
+  | "business_and_internet";
+
+export type EscrowFeeType =
+  | "cheque_disbursement"
+  | "escrow"
+  | "paypal_deposit"
+  | "creditcard_deposit"
+  | "wire_disbursement";
+
+export interface EscrowParty {
+  role: EscrowPartyRole;
+  customer: EscrowCustomerRef;
+  visibility?: { hidden_from: EscrowCustomerRef[] };
+}
+
+export interface EscrowSchedule {
+  amount: number;
+  payer_customer: EscrowCustomerRef;
+  beneficiary_customer: EscrowCustomerRef;
+  /** Required for domain_name_holding and milestone multi-pay schedules. */
+  due_date?: string;
+}
+
+export interface EscrowFeeScheduleInput {
+  payer_customer: EscrowCustomerRef;
+  type: EscrowFeeType;
+  /** Only on create for type `escrow`; splits must sum to 1.0 across fee rows. */
+  split?: number;
+}
+
+export interface EscrowItemExtraAttributes {
+  image_url?: string;
+  merchant_url?: string;
+  with_content?: boolean;
+  concierge?: boolean;
+  term_period?: number;
+  vin?: string;
+  odometer?: string;
+  year?: number;
+  make?: string;
+  model?: string;
+  title_collection?: boolean;
+  lien_holder_payoff?: boolean;
+}
+
+export interface EscrowTransactionItemInput {
+  title?: string;
+  description: string;
+  type: EscrowItemType;
+  inspection_period?: number;
+  quantity?: number;
+  shipping_type?: "no_shipping";
+  category?: string;
+  schedule: EscrowSchedule[];
+  extra_attributes?: EscrowItemExtraAttributes;
+  fees?: EscrowFeeScheduleInput[];
+  visibility?: { hidden_from: EscrowCustomerRef[] };
+}
+
+/** POST /transaction body */
+export interface CreateEscrowTransactionRequest {
+  parties: EscrowParty[];
+  currency: EscrowCurrency;
+  description: string;
+  items: EscrowTransactionItemInput[];
+}
+
+/** PATCH /transaction/:id body */
+export interface AgreeToEscrowTransactionRequest {
+  action: "agree";
+}
+
+/** POST integration helper .../payments_in body */
+export type EscrowPaymentInMethod =
+  | "wire_transfer"
+  | "credit_card"
+  | "paypal"
+  | "ach"
+  | "check";
+
+export interface ApproveEscrowPaymentInRequest {
+  method: EscrowPaymentInMethod;
+  /** Decimal string, e.g. `"406.00"` */
+  amount: string;
+}
+
+/** GET .../web_link/agree response */
+export interface EscrowAgreeWebLinkResponse {
+  landing_page: string;
+}
+
+export interface EscrowWebhookRegistration {
+  id: number;
+  url: string;
+}
+
+export interface EscrowWebhookListResponse {
+  webhooks: EscrowWebhookRegistration[];
+}
+
+/** Inbound POST from Escrow.com */
+export interface EscrowWebhookPayload {
+  event: string;
+  event_type: "transaction";
+  transaction_id: number;
+}
+
+// --- Response shapes (subset; API returns more fields) ---
+
+export interface EscrowPartyResponse {
+  customer: string;
+  agreed: boolean;
+  role: EscrowPartyRole;
+}
+
+export interface EscrowScheduleStatus {
+  secured?: boolean;
+}
+
+export interface EscrowScheduleResponse {
+  amount: string;
+  payer_customer: string;
+  beneficiary_customer: string;
+  due_date?: string;
+  status?: EscrowScheduleStatus;
+}
+
+export interface EscrowFeeResponse {
+  payer_customer: string;
+  amount: string;
+  type: EscrowFeeType;
+}
+
+export interface EscrowItemStatus {
+  received?: boolean;
+  rejected_returned?: boolean;
+  rejected?: boolean;
+  received_returned?: boolean;
+  shipped?: boolean;
+  accepted?: boolean;
+  shipped_returned?: boolean;
+  accepted_returned?: boolean;
+  canceled?: boolean;
+}
+
+export interface EscrowTransactionItemResponse {
+  id: number;
+  title?: string;
+  description: string;
+  type: EscrowItemType;
+  inspection_period?: number;
+  quantity?: number;
+  schedule: EscrowScheduleResponse[];
+  fees?: EscrowFeeResponse[];
+  extra_attributes?: EscrowItemExtraAttributes;
+  status?: EscrowItemStatus;
+}
+
+export interface EscrowTransactionResponse {
+  id: number;
+  currency: EscrowCurrency;
+  description: string;
+  parties: EscrowPartyResponse[];
+  items: EscrowTransactionItemResponse[];
+  creation_date?: string;
+  close_date?: string | null;
+  is_cancelled?: boolean;
+}
+
+/** PATCH /transaction/:id — cancel */
+export interface CancelEscrowTransactionRequest {
+  action: "cancel";
+  cancel_information?: {
+    cancellation_reason?: string;
+  };
+}
+
+// --- Config & HTTP ---
+
+export interface EscrowApiConfig {
+  email: string;
+  apiKey: string;
+  /** Integration helper may use a separate password; defaults to apiKey. */
+  integrationPassword?: string;
+  apiBaseUrl?: string;
+  integrationBaseUrl?: string;
+}
+
+export class EscrowApiError extends Error {
+  status: number;
+  body: unknown;
+
+  constructor(message: string, status: number, body: unknown) {
+    super(message);
+    this.name = "EscrowApiError";
+    this.status = status;
+    this.body = body;
+  }
+}
+
+function getEscrowConfig(): EscrowApiConfig {
+  const email = process.env.ESCROW_API_EMAIL?.trim();
+  const apiKey = process.env.ESCROW_API_KEY?.trim();
+  if (!email || !apiKey) {
+    throw new Error(
+      "Escrow API is not configured. Set ESCROW_API_EMAIL and ESCROW_API_KEY.",
+    );
+  }
+  return {
+    email,
+    apiKey,
+    integrationPassword:
+      process.env.ESCROW_INTEGRATION_PASSWORD?.trim() || apiKey,
+    apiBaseUrl: process.env.ESCROW_API_BASE_URL?.trim() || DEFAULT_API_BASE,
+    integrationBaseUrl:
+      process.env.ESCROW_INTEGRATION_BASE_URL?.trim() ||
+      DEFAULT_INTEGRATION_BASE,
+  };
+}
+
+function basicAuthHeader(email: string, secret: string): string {
+  const token = Buffer.from(`${email}:${secret}`, "utf8").toString("base64");
+  return `Basic ${token}`;
+}
+
+async function parseJsonSafe(res: Response): Promise<unknown> {
+  const text = await res.text();
+  if (!text) return null;
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    return text;
+  }
+}
+
+async function escrowRequest<T>(
+  url: string,
+  init: RequestInit & {
+    authSecret: string;
+    email: string;
+    extraHeaders?: Record<string, string>;
+  },
+): Promise<T> {
+  const { authSecret, email, extraHeaders, ...fetchInit } = init;
+  const headers = new Headers(fetchInit.headers);
+  if (extraHeaders) {
+    for (const [key, value] of Object.entries(extraHeaders)) {
+      headers.set(key, value);
+    }
+  }
+  headers.set(
+    "Authorization",
+    basicAuthHeader(email, authSecret),
+  );
+  if (!headers.has("Content-Type") && fetchInit.body) {
+    headers.set("Content-Type", "application/json");
+  }
+
+  const res = await fetch(url, { ...fetchInit, headers });
+  const body = await parseJsonSafe(res);
+
+  if (!res.ok) {
+    const msg =
+      typeof body === "object" &&
+      body !== null &&
+      "message" in body &&
+      typeof (body as { message: unknown }).message === "string"
+        ? (body as { message: string }).message
+        : `Escrow API error (${res.status})`;
+    throw new EscrowApiError(msg, res.status, JSON.stringify(body));
+  }
+
+  return body as T;
+}
+
+function apiBase(config: EscrowApiConfig): string {
+  return (config.apiBaseUrl ?? DEFAULT_API_BASE).replace(/\/$/, "");
+}
+
+function integrationBase(config: EscrowApiConfig): string {
+  return (config.integrationBaseUrl ?? DEFAULT_INTEGRATION_BASE).replace(
+    /\/$/,
+    "",
+  );
+}
+
+// --- Public API ---
+
+/**
+ * Create an Escrow transaction.
+ * POST /transaction
+ */
+export async function createEscrowTransaction(
+  payload: CreateEscrowTransactionRequest,
+  config: EscrowApiConfig = getEscrowConfig(),
+): Promise<EscrowTransactionResponse> {
+  return escrowRequest<EscrowTransactionResponse>(
+    `${apiBase(config)}/transaction`,
+    {
+      method: "POST",
+      email: config.email,
+      authSecret: config.apiKey,
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
+/**
+ * Agree to a transaction on behalf of the authenticated API user.
+ * PATCH /transaction/:transactionId
+ */
+export async function agreeToEscrowTransaction(
+  transactionId: number | string,
+  config: EscrowApiConfig = getEscrowConfig(),
+): Promise<EscrowTransactionResponse> {
+  const body: AgreeToEscrowTransactionRequest = { action: "agree" };
+  return escrowRequest<EscrowTransactionResponse>(
+    `${apiBase(config)}/transaction/${transactionId}`,
+    {
+      method: "PATCH",
+      email: config.email,
+      authSecret: config.apiKey,
+      body: JSON.stringify(body),
+    },
+  );
+}
+
+/**
+ * Cancel a transaction (before both parties have agreed and funds are secured).
+ * PATCH /transaction/:transactionId
+ */
+export async function cancelEscrowTransaction(
+  transactionId: number | string,
+  cancellationReason?: string,
+  config: EscrowApiConfig = getEscrowConfig(),
+): Promise<EscrowTransactionResponse> {
+  const body: CancelEscrowTransactionRequest = {
+    action: "cancel",
+    cancel_information: {
+      cancellation_reason:
+        cancellationReason?.trim() ||
+        "A party cancelled the transaction on the marketplace.",
+    },
+  };
+  return escrowRequest<EscrowTransactionResponse>(
+    `${apiBase(config)}/transaction/${transactionId}`,
+    {
+      method: "PATCH",
+      email: config.email,
+      authSecret: config.apiKey,
+      body: JSON.stringify(body),
+    },
+  );
+}
+
+export type EscrowAgreeWebLinkOptions = {
+  /**
+   * Party email for brokered transactions — required for buyer/seller agree links.
+   * @see https://www.escrow.com/api/docs/basics (As-Customer header)
+   */
+  asCustomer?: string;
+};
+
+/**
+ * Generate a web link where a party can agree (useful when acting on behalf of another customer).
+ * GET /transaction/:transactionId/web_link/agree
+ */
+export async function getEscrowAgreeWebLink(
+  transactionId: number | string,
+  config: EscrowApiConfig = getEscrowConfig(),
+  options?: EscrowAgreeWebLinkOptions,
+): Promise<EscrowAgreeWebLinkResponse> {
+  const extraHeaders: Record<string, string> = {};
+  const asCustomer = options?.asCustomer?.trim();
+  if (asCustomer) {
+    extraHeaders["As-Customer"] = asCustomer;
+  }
+
+  return escrowRequest<EscrowAgreeWebLinkResponse>(
+    `${apiBase(config)}/transaction/${transactionId}/web_link/agree`,
+    {
+      method: "GET",
+      email: config.email,
+      authSecret: config.apiKey,
+      extraHeaders,
+    },
+  );
+}
+
+/**
+ * Buyer agree link when available. Returns null if Escrow has no link yet (broker already agreed).
+ * Does not throw on 404.
+ */
+export async function tryGetEscrowAgreeWebLink(
+  transactionId: number | string,
+  options?: EscrowAgreeWebLinkOptions,
+  config: EscrowApiConfig = getEscrowConfig(),
+): Promise<string | null> {
+  try {
+    const res = await getEscrowAgreeWebLink(transactionId, config, options);
+    return res.landing_page?.trim() || null;
+  } catch (err) {
+    if (err instanceof EscrowApiError) {
+      // No link yet, wrong party, or partner cannot use As-Customer — checkout still succeeds via Escrow email.
+      if (err.status === 404 || err.status === 403 || err.status === 401) {
+        console.warn(
+          `[escrow] agree web link unavailable for tx=${transactionId} (${err.status})`,
+        );
+        return null;
+      }
+    }
+    console.warn(`[escrow] agree web link error for tx=${transactionId}:`, err);
+    return null;
+  }
+}
+
+const BUYER_AGREE_RETRY_MS = [0, 500, 1200];
+
+/**
+ * Poll briefly for a buyer agree URL — Escrow may not expose the link immediately after create.
+ */
+/**
+ * Optional buyer redirect after create. Never throws — Escrow email is the fallback.
+ */
+export async function resolveBuyerEscrowAgreeUrl(
+  transactionId: number | string,
+  buyerEmail: string,
+): Promise<string | null> {
+  const email = buyerEmail.trim().toLowerCase();
+  if (!email) return null;
+
+  try {
+    for (const delayMs of BUYER_AGREE_RETRY_MS) {
+      if (delayMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+      }
+      const url = await tryGetEscrowAgreeWebLink(transactionId, {
+        asCustomer: email,
+      });
+      if (url) return url;
+    }
+  } catch (err) {
+    console.warn(`[escrow] resolveBuyerEscrowAgreeUrl tx=${transactionId}:`, err);
+  }
+  return null;
+}
+
+/**
+ * Approve / record an incoming payment (Integration Helper).
+ * POST /transaction/:transactionId/payments_in
+ */
+export async function approveEscrowPaymentIn(
+  transactionId: number | string,
+  payload: ApproveEscrowPaymentInRequest,
+  config: EscrowApiConfig = getEscrowConfig(),
+): Promise<unknown> {
+  const secret = config.integrationPassword ?? config.apiKey;
+  return escrowRequest<unknown>(
+    `${integrationBase(config)}/transaction/${transactionId}/payments_in`,
+    {
+      method: "POST",
+      email: config.email,
+      authSecret: secret,
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
+/** Fetch transaction details. GET /transaction/:transactionId */
+export async function getEscrowTransaction(
+  transactionId: number | string,
+  config: EscrowApiConfig = getEscrowConfig(),
+): Promise<EscrowTransactionResponse> {
+  return escrowRequest<EscrowTransactionResponse>(
+    `${apiBase(config)}/transaction/${transactionId}`,
+    {
+      method: "GET",
+      email: config.email,
+      authSecret: config.apiKey,
+    },
+  );
+}
+
+/** POST /customer/me/webhook */
+export async function registerEscrowWebhook(
+  url: string,
+  config: EscrowApiConfig = getEscrowConfig(),
+): Promise<EscrowWebhookRegistration> {
+  return escrowRequest<EscrowWebhookRegistration>(
+    `${apiBase(config)}/customer/me/webhook`,
+    {
+      method: "POST",
+      email: config.email,
+      authSecret: config.apiKey,
+      body: JSON.stringify({ url }),
+    },
+  );
+}
+
+/** GET /customer/me/webhook */
+export async function listEscrowWebhooks(
+  config: EscrowApiConfig = getEscrowConfig(),
+): Promise<EscrowWebhookListResponse> {
+  return escrowRequest<EscrowWebhookListResponse>(
+    `${apiBase(config)}/customer/me/webhook`,
+    {
+      method: "GET",
+      email: config.email,
+      authSecret: config.apiKey,
+    },
+  );
+}
+
+/** DELETE /customer/me/webhook/:webhookId */
+export async function deleteEscrowWebhook(
+  webhookId: number | string,
+  config: EscrowApiConfig = getEscrowConfig(),
+): Promise<void> {
+  await escrowRequest<unknown>(
+    `${apiBase(config)}/customer/me/webhook/${webhookId}`,
+    {
+      method: "DELETE",
+      email: config.email,
+      authSecret: config.apiKey,
+    },
+  );
+}
+
+export function isEscrowApiConfigured(): boolean {
+  return Boolean(
+    process.env.ESCROW_API_EMAIL?.trim() &&
+      process.env.ESCROW_API_KEY?.trim(),
+  );
+}

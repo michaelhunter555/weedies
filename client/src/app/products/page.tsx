@@ -166,7 +166,7 @@ export default function ProductsPage() {
     false,
   );
 
-  const { uploadPhotos, createListing, saveDraft, getMyListings, updateListing } =
+  const { uploadPhotos, createListing, saveDraft, getListing, updateListing } =
     useListings();
   const queryClient = useQueryClient();
 
@@ -177,6 +177,7 @@ export default function ProductsPage() {
   const [draftLoading, setDraftLoading] = useState(false);
   const [isSaveDrafting, setIsSaveDrafting] = useState(false);
   const [editBlocked, setEditBlocked] = useState(false);
+  const [editListingWasPrivate, setEditListingWasPrivate] = useState(false);
 
   useLayoutEffect(() => {
     if (!listingFormMode) {
@@ -227,8 +228,7 @@ export default function ProductsPage() {
       setDraftLoading(true);
       setSubmitError(null);
       try {
-        const mine = await getMyListings();
-        const found = mine.find((l) => String(l._id) === workListingId);
+        const found = await getListing(workListingId);
         if (cancelled) return;
         if (!found) {
           setSubmitError("That listing was not found on your account.");
@@ -252,6 +252,7 @@ export default function ProductsPage() {
           Boolean(editParam?.trim()) && found.status !== "draft";
         setPublishedEdit(isPublished);
         setEditBlocked(Boolean(isPublished && found.sellerCanEdit === false));
+        setEditListingWasPrivate(Boolean(found.isPrivateListing));
 
         const appName = String(found.appName ?? "");
         const tagline = String(found.tagline ?? "");
@@ -382,7 +383,7 @@ export default function ProductsPage() {
     workListingId,
     draftHydrated,
     auth.user?.id,
-    getMyListings,
+    getListing,
     setFormData,
     draftParam,
     editParam,
@@ -518,6 +519,8 @@ export default function ProductsPage() {
   const freeRemaining = freeListingsRemaining(priorListings);
   const baseListingFee = withinFreeTier ? 0 : FLAT_LISTING_FEE;
   const privateListingFee = isPrivateListing ? PRIVATE_LISTING_FEE : 0;
+  const needsPrivateFeeOnEdit =
+    publishedEdit && isPrivateListing && !editListingWasPrivate;
 
   const selectedCategory = String(formState?.inputs?.category?.value || "");
   const selectedTurnaround = String(formState?.inputs?.turnaround?.value || "");
@@ -549,10 +552,11 @@ export default function ProductsPage() {
     .filter(([id, input]) => !input?.isValid && FIELD_LABELS[id])
     .map(([id]) => FIELD_LABELS[id]);
 
-  const stripeMissing = listingFee > 0 && !auth?.user?.stripeCustomerId;
+  const stripeMissing =
+    (listingFee > 0 || needsPrivateFeeOnEdit) && !auth?.user?.stripeCustomerId;
 
   const canSubmit = publishedEdit
-    ? formState.isValid && !isSubmitting && !editBlocked
+    ? formState.isValid && !isSubmitting && !editBlocked && !stripeMissing
     : formState.isValid && !isSubmitting && !stripeMissing;
 
   const meta = useMemo(() => {
@@ -1672,7 +1676,7 @@ export default function ProductsPage() {
                 <Divider sx={{ my: 0.5 }} />
                 <Stack direction="row" justifyContent="space-between">
                   <Typography variant="body2" color="text.secondary">
-                    Starting price
+                    Starting price {startingPriceNum > 999.99 ? <span style={{ fontSize: 12}}>(Customers are escrow eligible)</span> : ""}
                   </Typography>
                   <Typography variant="body2">
                     ${startingPriceNum.toLocaleString()}
@@ -1731,10 +1735,15 @@ export default function ProductsPage() {
             </Paper>
             )}
 
-            {stripeMissing && !publishedEdit && (
+            {stripeMissing && (
               <Alert severity="error" sx={{ borderRadius: 2 }}>
                 Add a default payment method in your wallet to pay the listing
-                fee{isPrivateListing ? " (includes $4.99 private listing)" : ""}.
+                fee
+                {needsPrivateFeeOnEdit
+                  ? " ($4.99 private listing add-on)."
+                  : isPrivateListing
+                    ? " (includes $4.99 private listing)."
+                    : "."}
               </Alert>
             )}
 

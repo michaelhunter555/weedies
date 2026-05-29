@@ -19,11 +19,13 @@ import { confirmListingExchange } from "../controllers/listings/confirm-listing-
 import { submitExchangeReview } from "../controllers/listings/submit-exchange-review";
 import { getListingReviews } from "../controllers/listings/get-listing-reviews";
 import { authenticate, optionalAuthenticate } from "../middleware/auth";
+import { enforceAccountStanding } from "../middleware/account-standing";
 import { getListingGoogleAnalyticsMetrics } from "../controllers/listings/get-listing-google-analytics-metrics";
 import { getMyMarketplaceOrders } from "../controllers/listings/get-my-marketplace-orders";
 import { requestPrivateListingAccess } from "../controllers/listings/request-private-listing-access";
 import { resolvePrivateListingAccess } from "../controllers/listings/resolve-private-listing-access";
 import { writeLimiter } from "../middleware/rate-limiter";
+import { followListing } from "../controllers/listings/follow-listing";
 
 const router = Router();
 
@@ -78,6 +80,7 @@ router.get("/:id/reviews", getListingReviews);
 router.get("/:id", optionalAuthenticate, getListingById);
 // ── Protected ───────────────────────────────────────────────────────────
 router.use(authenticate);
+router.use(enforceAccountStanding);
 
 router.get("/exchange/:listingId", getListingExchange);
 router.post(
@@ -88,7 +91,7 @@ router.post(
 );
 router.post("/exchange/:listingId/confirm", writeLimiter, confirmListingExchange);
 router.post("/exchange/:listingId/review", writeLimiter, submitExchangeReview);
-
+router.post("/:id/follow", writeLimiter, followListing);
 router.get("/me/mine", getListingsBySeller);
 router.get("/me/marketplace-orders", getMyMarketplaceOrders);
 router.get("/me/auction-bids", getMyAuctionBids);

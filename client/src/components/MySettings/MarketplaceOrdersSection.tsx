@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { useListings } from "@/hooks/use-listings";
@@ -14,6 +15,7 @@ import {
   Chip,
   CircularProgress,
   Divider,
+  Pagination,
   Paper,
   Stack,
   Table,
@@ -27,6 +29,8 @@ import {
 import type { MarketplaceOrderRow, MyMarketplaceOrdersPayload } from "../../../types";
 
 const PLACEHOLDER = "/placeholder-app-cover.svg";
+const FULL_PAGE_LIMIT = 20;
+const COMPACT_LIMIT = 3;
 
 function formatAmount(cents: number, currency: string): string {
   try {
@@ -261,10 +265,25 @@ export function MarketplaceOrdersSection({
   ordersPageHref,
 }: MarketplaceOrdersSectionProps) {
   const { getMyMarketplaceOrders } = useListings();
+  const limit = variant === "compact" ? COMPACT_LIMIT : FULL_PAGE_LIMIT;
+  const [purchasePage, setPurchasePage] = useState(1);
+  const [salePage, setSalePage] = useState(1);
 
   const { data, isLoading, isError, error } = useQuery<MyMarketplaceOrdersPayload>({
-    queryKey: ["my-marketplace-orders", userId],
-    queryFn: getMyMarketplaceOrders,
+    queryKey: [
+      "my-marketplace-orders",
+      userId,
+      variant,
+      purchasePage,
+      salePage,
+      limit,
+    ],
+    queryFn: () =>
+      getMyMarketplaceOrders({
+        purchasePage: variant === "full" ? purchasePage : 1,
+        salePage: variant === "full" ? salePage : 1,
+        limit,
+      }),
     enabled: Boolean(enabled && userId),
     staleTime: 15_000,
   });
@@ -287,13 +306,13 @@ export function MarketplaceOrdersSection({
     );
   }
 
-  const purchases = data?.purchases ?? [];
-  const sales = data?.sales ?? [];
-
-  const maxEach = variant === "compact" ? 3 : undefined;
-  const purchaseRows = maxEach ? purchases.slice(0, maxEach) : purchases;
-  const saleRows = maxEach ? sales.slice(0, maxEach) : sales;
-  const hasAny = purchases.length > 0 || sales.length > 0;
+  const purchases = data?.purchases;
+  const sales = data?.sales;
+  const purchaseRows = purchases?.items ?? [];
+  const saleRows = sales?.items ?? [];
+  const purchaseTotal = purchases?.total ?? 0;
+  const saleTotal = sales?.total ?? 0;
+  const hasAny = purchaseTotal > 0 || saleTotal > 0;
 
   if (!hasAny) {
     return (
@@ -316,9 +335,15 @@ export function MarketplaceOrdersSection({
     icon: React.ReactNode,
     rows: MarketplaceOrderRow[],
     total: number,
+    page: number,
+    totalPages: number,
+    onPageChange: (page: number) => void,
   ) => {
-    if (!rows.length) return null;
-    const countLabel = total > rows.length ? `${rows.length} of ${total}` : `${rows.length}`;
+    if (!total) return null;
+    const countLabel =
+      variant === "full"
+        ? `${rows.length ? (page - 1) * limit + 1 : 0}-${(page - 1) * limit + rows.length} of ${total}`
+        : `${rows.length} of ${total}`;
     return (
       <Box sx={{ mb: variant === "full" ? 3 : 2 }}>
         <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.5 }}>
@@ -352,6 +377,17 @@ export function MarketplaceOrdersSection({
             </TableBody>
           </Table>
         </Box>
+        {variant === "full" && totalPages > 1 ? (
+          <Stack alignItems="center" sx={{ mt: 2 }}>
+            <Pagination
+              count={totalPages}
+              page={page}
+              onChange={(_, next) => onPageChange(next)}
+              color="primary"
+              size="small"
+            />
+          </Stack>
+        ) : null}
       </Box>
     );
   };
@@ -368,11 +404,23 @@ export function MarketplaceOrdersSection({
               Open the <b>exchange</b> room to coordinate asset transfer with the other party. Payment
               may show as pending until capture completes; the room still works once the sale is
               recorded.
+              {variant === "full" ? (
+                <>
+                  {" "}
+                  Showing <b>{limit}</b> orders per page (newest first).
+                </>
+              ) : (
+                <>
+                  {" "}
+                  Dashboard preview shows <b>{COMPACT_LIMIT}</b> per list. Use View all orders for
+                  the full paginated history.
+                </>
+              )}
             </Typography>
           </Box>
           {variant === "compact" &&
           ordersPageHref &&
-          (purchases.length > (maxEach ?? 0) || sales.length > (maxEach ?? 0)) ? (
+          (purchaseTotal > COMPACT_LIMIT || saleTotal > COMPACT_LIMIT) ? (
             <Button
               component={Link}
               href={ordersPageHref}
@@ -391,13 +439,19 @@ export function MarketplaceOrdersSection({
           "Your purchases",
           <ReceiptLongRoundedIcon color="primary" fontSize="small" />,
           purchaseRows,
-          purchases.length,
+          purchaseTotal,
+          purchases?.page ?? 1,
+          purchases?.totalPages ?? 1,
+          setPurchasePage,
         )}
         {renderTable(
           "Your sales",
           <StorefrontRoundedIcon color="secondary" fontSize="small" />,
           saleRows,
-          sales.length,
+          saleTotal,
+          sales?.page ?? 1,
+          sales?.totalPages ?? 1,
+          setSalePage,
         )}
       </Stack>
     </Paper>

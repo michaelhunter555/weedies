@@ -41,6 +41,7 @@ export const Notifications = {
   NEW_MESSAGE: "chat.message.new",
   NEW_REVIEW: "review.submitted",
   DISPUTE_OPENED: "dispute.opened",
+  DISPUTE_UPDATED: "dispute.updated",
   DISPUTE_RESOLVED: "dispute.resolved",
 } as const;
 

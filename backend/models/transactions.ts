@@ -4,8 +4,8 @@ export interface ITransaction extends mongoose.Document {
   ListingId: mongoose.Types.ObjectId;
   customerId: mongoose.Types.ObjectId;
   sellerId: mongoose.Types.ObjectId;
-  stripePaymentIntentId: string;
-  stripeCustomerId: string;
+  stripePaymentIntentId?: string;
+  stripeCustomerId?: string;
   amountCharged: number; // <--- amount paid to barber - service fee
   amountPaid: number;
   
@@ -21,14 +21,16 @@ export interface ITransaction extends mongoose.Document {
   paidOut?: boolean;
   payoutDate?: Date;
   refundId?: string;
+  escrowTransactionId?: string;
+  paymentType?: 'stripe' | 'escrow';
 }
 
 const TransactionSchema = new mongoose.Schema<ITransaction>({
   ListingId: { type: mongoose.Schema.Types.ObjectId, ref: "Listing", required: true },
   customerId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
   sellerId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
-  stripePaymentIntentId: { type: String, required: true },
-  stripeCustomerId: { type: String, required: true },
+  stripePaymentIntentId: { type: String, required: false, default: "" },
+  stripeCustomerId: { type: String, required: false, default: "" },
   serviceFee: { type: Number, required: true,},
   chargeId: { type: String, required: false, },
   refundId: { type: String, required: false, },
@@ -41,6 +43,8 @@ const TransactionSchema = new mongoose.Schema<ITransaction>({
   disputeId: { type: mongoose.Schema.Types.ObjectId, required: false},
   paidOut: { type: Boolean, required: false, default: false },
   payoutDate: { type: Date, required: false,},
+  escrowTransactionId: { type: String, required: false, },
+  paymentType: { type: String, enum: ['stripe', 'escrow'], required: false, default: 'stripe' },
 }, { timestamps: true });
 
 TransactionSchema.index(

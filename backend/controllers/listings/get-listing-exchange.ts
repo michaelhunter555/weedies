@@ -5,6 +5,11 @@ import ListingExchange from "../../models/exchange";
 import Listing from "../../models/listing";
 import Transaction from "../../models/transactions";
 import Review from "../../models/review";
+import {
+  escrowWebTransactionUrl,
+  LISTING_PURCHASE_BILLING_REASONS,
+} from "../../lib/listing-purchase-billing";
+import { reconcileEscrowPaymentFromApi } from "../../lib/escrow-reconcile";
 
 function listingOwnerIdString(listing: { sellerId?: unknown }): string {
   const sid = listing.sellerId;
@@ -16,13 +21,19 @@ function listingOwnerIdString(listing: { sellerId?: unknown }): string {
   return String(sid);
 }
 
-export type ExchangePaymentStatusJson = "pending" | "succeeded" | "canceled" | "failed";
+export type ExchangePaymentStatusJson =
+  | "pending"
+  | "succeeded"
+  | "canceled"
+  | "failed"
+  | "disputed";
 
 function normalizeExchangePaymentStatus(
   raw: string | undefined | null,
 ): ExchangePaymentStatusJson {
   if (raw === "captured") return "succeeded";
   if (raw === "cancelled") return "canceled";
+  if (raw === "disputed") return "disputed";
   if (raw === "succeeded" || raw === "canceled" || raw === "failed" || raw === "pending") {
     return raw;
   }
@@ -83,21 +94,102 @@ export async function getListingExchange(req: Request, res: Response) {
       startingPrice?: number;
     } | null;
 
-    if (!listing || listing.status !== "sold") {
+    if (!listing) {
+      return void res.status(404).json({ message: "Listing not found." });
+    }
+
+    const sellerIdFromListing = listingOwnerIdString(listing);
+
+    type SaleTxLean = {
+      _id: mongoose.Types.ObjectId;
+      customerId: mongoose.Types.ObjectId;
+      sellerId: mongoose.Types.ObjectId;
+      hasDispute?: boolean;
+      disputeId?: mongoose.Types.ObjectId;
+      paymentStatus?: string;
+      amountPaid?: number;
+      paymentType?: "stripe" | "escrow";
+      escrowTransactionId?: string;
+      createdAt?: Date;
+    };
+
+    let saleTx = (await Transaction.findOne({
+      ListingId: listing._id,
+      billingReason: { $in: [...LISTING_PURCHASE_BILLING_REASONS] },
+      paymentStatus: { $in: ["pending", "succeeded"] },
+    })
+      .sort({ createdAt: -1 })
+      .select(
+        "_id customerId sellerId hasDispute disputeId paymentStatus amountPaid paymentType escrowTransactionId createdAt",
+      )
+      .lean()) as SaleTxLean | null;
+
+    if (
+      saleTx?.paymentType === "escrow" &&
+      saleTx.escrowTransactionId &&
+      saleTx.paymentStatus === "pending"
+    ) {
+      try {
+        await reconcileEscrowPaymentFromApi(String(saleTx.escrowTransactionId));
+        saleTx = (await Transaction.findOne({
+          ListingId: listing._id,
+          billingReason: { $in: [...LISTING_PURCHASE_BILLING_REASONS] },
+          paymentStatus: { $in: ["pending", "succeeded", "canceled"] },
+        })
+          .sort({ createdAt: -1 })
+          .select(
+            "_id customerId sellerId hasDispute disputeId paymentStatus amountPaid paymentType escrowTransactionId createdAt",
+          )
+          .lean()) as SaleTxLean | null;
+        if (listing.status !== "sold") {
+          const listingRefresh = (await Listing.findById(listing._id)
+            .select("status buyerId")
+            .lean()) as { status?: string; buyerId?: unknown } | null;
+          if (listingRefresh?.status) {
+            listing.status = listingRefresh.status;
+            listing.buyerId = listingRefresh.buyerId;
+          }
+        }
+      } catch (err) {
+        console.warn("getListingExchange escrow reconcile:", err);
+      }
+    }
+
+    const listingIsSold = listing.status === "sold";
+    const escrowInProgress =
+      saleTx?.paymentType === "escrow" && saleTx.paymentStatus === "pending";
+
+    if (!listingIsSold && !escrowInProgress) {
+      return void res.status(404).json({
+        message:
+          "Exchange opens after checkout. For Escrow, finish payment on Escrow.com first.",
+      });
+    }
+
+    if (!listingIsSold && !saleTx) {
       return void res.status(404).json({
         message: "Exchange is only available for sold listings.",
       });
     }
 
-    const sellerId = listingOwnerIdString(listing);
-    const buyerId = listing.buyerId ? String(listing.buyerId) : "";
-    if (!buyerId) {
-      return void res.status(409).json({ message: "Listing has no buyer recorded." });
+    const sellerId = saleTx
+      ? String(saleTx.sellerId)
+      : sellerIdFromListing;
+    const buyerId = listing.buyerId
+      ? String(listing.buyerId)
+      : saleTx
+        ? String(saleTx.customerId)
+        : "";
+
+    if (!buyerId || !sellerId) {
+      return void res.status(409).json({ message: "Sale parties could not be resolved." });
     }
 
     if (userId !== sellerId && userId !== buyerId) {
       return void res.status(403).json({ message: "Not a party to this sale." });
     }
+
+    const escrowAwaitingFunds = escrowInProgress && !listingIsSold;
 
     type ExchangeLean = {
       _id: mongoose.Types.ObjectId;
@@ -116,9 +208,34 @@ export async function getListingExchange(req: Request, res: Response) {
     let ex: ExchangeLean | null = (await ListingExchange.findOne({
       listingId: listing._id,
     }).lean()) as ExchangeLean | null;
+
+    if (
+      saleTx?.paymentType === "escrow" &&
+      saleTx.paymentStatus === "succeeded" &&
+      ex &&
+      normalizeExchangePaymentStatus(ex.paymentStatus ?? undefined) !== "succeeded"
+    ) {
+      await ListingExchange.updateOne(
+        { _id: ex._id },
+        {
+          $set: {
+            paymentStatus: "succeeded",
+            sellerCapturedPayment: true,
+            paymentReceivedAt: ex.paymentReceivedAt ?? new Date(),
+          },
+        },
+      );
+      ex = {
+        ...ex,
+        paymentStatus: "succeeded",
+        sellerCapturedPayment: true,
+        paymentReceivedAt: ex.paymentReceivedAt ?? new Date(),
+      };
+    }
     if (!ex) {
       const tx = (await Transaction.findOne({
         ListingId: listing._id,
+        billingReason: { $in: [...LISTING_PURCHASE_BILLING_REASONS] },
         paymentStatus: { $in: ["succeeded", "pending"] },
       })
         .sort({ createdAt: -1 })
@@ -141,6 +258,7 @@ export async function getListingExchange(req: Request, res: Response) {
     } else if (!ex.paymentReceivedAt) {
       const tx = (await Transaction.findOne({
         ListingId: listing._id,
+        billingReason: { $in: [...LISTING_PURCHASE_BILLING_REASONS] },
         paymentStatus: { $in: ["succeeded", "pending"] },
       })
         .sort({ createdAt: -1 })
@@ -204,7 +322,25 @@ export async function getListingExchange(req: Request, res: Response) {
     return void res.status(200).json({
       role,
       phase,
+      escrowAwaitingFunds,
       buyerReview,
+      transaction: saleTx
+        ? {
+            id: String(saleTx._id),
+            hasDispute: Boolean(saleTx.hasDispute),
+            disputeId: saleTx.disputeId ? String(saleTx.disputeId) : null,
+            amountPaidCents: Number(saleTx.amountPaid ?? 0),
+            paymentStatus: saleTx.paymentStatus ?? null,
+            paymentType: saleTx.paymentType ?? "stripe",
+            escrowTransactionId: saleTx.escrowTransactionId
+              ? String(saleTx.escrowTransactionId)
+              : null,
+            escrowTransactionUrl:
+              saleTx.paymentType === "escrow" && saleTx.escrowTransactionId
+                ? escrowWebTransactionUrl(String(saleTx.escrowTransactionId))
+                : null,
+          }
+        : null,
       exchange: {
         _id: String(ex._id),
         listingId: String(ex.listingId),
@@ -243,6 +379,7 @@ export async function getListingExchange(req: Request, res: Response) {
         photos: listing.photos ?? [],
         coverIndex: listing.coverIndex ?? 0,
         saleType: listing.saleType,
+        status: listing.status,
         currency: listing.currency ?? "USD",
         buyItNowPrice: listing.buyItNowPrice,
         startingPrice: listing.startingPrice,

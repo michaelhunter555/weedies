@@ -57,7 +57,7 @@ const MainNavigation = () => {
         backdropFilter: "saturate(180%) blur(8px)",
       }}
     >
-      <Container maxWidth="lg" sx={{ py: 1, overflow: "hidden" }}>
+      <Container maxWidth="lg" sx={{ py: 1 }}>
         <Stack
           direction="row"
           alignItems="center"

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   GoogleAuthProvider,
   createUserWithEmailAndPassword,
+  sendEmailVerification,
   signInWithEmailAndPassword,
   signInWithPopup,
   updateProfile,
@@ -47,13 +48,16 @@ import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import { styled } from "@mui/material/styles";
 
-import { type UserProps } from "../../../types";
+import { needsEmailVerification, type UserProps } from "../../../types";
+import { VERIFY_EMAIL_PATH } from "@/lib/email-verification";
 import { loginFields } from "./formFields";
 
 const Card = styled(MuiCard)(({ theme }) => ({
   display: "flex",
   flexDirection: "column",
   width: "100%",
+  maxWidth: "100%",
+  boxSizing: "border-box",
   padding: theme.spacing(3),
   gap: theme.spacing(2),
   borderRadius: 20,
@@ -132,7 +136,14 @@ const LoginForm = () => {
           user.password
         );
         const idToken = await cred.user.getIdToken();
-        await authCtx.loginWithProviderToken("firebase", idToken);
+        const { user: appUser } = await authCtx.loginWithProviderToken(
+          "firebase",
+          idToken,
+        );
+        router.replace(
+          needsEmailVerification(appUser) ? VERIFY_EMAIL_PATH : "/",
+        );
+        return;
       } else {
         const cred = await createUserWithEmailAndPassword(
           firebaseAuth,
@@ -150,18 +161,28 @@ const LoginForm = () => {
           }
         }
         // Force refresh so the new displayName is included in the ID token claims
+        try {
+          await sendEmailVerification(cred.user);
+        } catch {
+          // non-fatal; user can resend from verify page
+        }
         const idToken = await cred.user.getIdToken(true);
-        const { isNewUser } = await authCtx.signupWithProviderToken(
-          "firebase",
-          idToken
-        );
-        if (isNewUser) {
-          setInfo(`Welcome to ${APP_NAME} — your account is ready.`);
+        try {
+          await authCtx.signupWithProviderToken("firebase", idToken);
+        } catch (signupErr: unknown) {
+          const code =
+            signupErr &&
+            typeof signupErr === "object" &&
+            "code" in signupErr
+              ? String((signupErr as { code?: string }).code)
+              : "";
+          if (code !== "ACCOUNT_EXISTS") throw signupErr;
+          await authCtx.loginWithProviderToken("firebase", idToken);
         }
         setFormData(loginFields, false);
+        router.replace(VERIFY_EMAIL_PATH);
+        return;
       }
-
-      router.replace("/");
     } catch (e: any) {
       setError(e?.message || "Authentication failed");
     } finally {
@@ -241,15 +262,39 @@ const LoginForm = () => {
       const result = await signInWithPopup(firebaseAuth, provider);
       const idToken = await result.user.getIdToken(true);
       if (isLogin) {
-        await authCtx.loginWithProviderToken("firebase", idToken);
-      } else {
-        const { isNewUser } = await authCtx.signupWithProviderToken(
+        const { user: appUser } = await authCtx.loginWithProviderToken(
           "firebase",
-          idToken
+          idToken,
         );
-        if (isNewUser) setInfo(`Welcome to ${APP_NAME}!`);
+        router.replace(
+          needsEmailVerification(appUser) ? VERIFY_EMAIL_PATH : "/",
+        );
+      } else {
+        try {
+          const { user: appUser } = await authCtx.signupWithProviderToken(
+            "firebase",
+            idToken,
+          );
+          router.replace(
+            needsEmailVerification(appUser) ? VERIFY_EMAIL_PATH : "/",
+          );
+        } catch (signupErr: unknown) {
+          const code =
+            signupErr &&
+            typeof signupErr === "object" &&
+            "code" in signupErr
+              ? String((signupErr as { code?: string }).code)
+              : "";
+          if (code !== "ACCOUNT_EXISTS") throw signupErr;
+          const { user: appUser } = await authCtx.loginWithProviderToken(
+            "firebase",
+            idToken,
+          );
+          router.replace(
+            needsEmailVerification(appUser) ? VERIFY_EMAIL_PATH : "/",
+          );
+        }
       }
-      router.replace("/");
     } catch (e: any) {
       setError(e?.message || "Google sign-in failed");
     } finally {
@@ -268,12 +313,18 @@ const LoginForm = () => {
     <Box
       sx={{
         width: "100%",
-        maxWidth: { xs: 480, md: 1080 },
+        maxWidth: { xs: "100%", sm: 480, md: 1080 },
+        minWidth: 0,
         mx: "auto",
-        px: { xs: 2, sm: 3 },
+        boxSizing: "border-box",
       }}
     >
-      <Grid container spacing={{ xs: 0, md: 4 }} alignItems="stretch">
+      <Grid
+        container
+        spacing={{ xs: 0, md: 4 }}
+        alignItems="stretch"
+        sx={{ width: "100%", minWidth: 0 }}
+      >
         {/* Marketing side panel - desktop only */}
         <Grid
           size={{ xs: 12, md: 6 }}

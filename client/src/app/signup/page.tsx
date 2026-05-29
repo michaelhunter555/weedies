@@ -8,10 +8,12 @@ const LoginPage = () => {
       sx={{
         display: "flex",
         justifyContent: "center",
-        alignItems: "center",
+        alignItems: "flex-start",
         py: { xs: 3, md: 8 },
-        px: 0,
-        minHeight: "calc(100vh - 140px)",
+        px: { xs: 2, sm: 3 },
+        width: "100%",
+        maxWidth: "100%",
+        boxSizing: "border-box",
         backgroundColor: BRAND_PALETTE.mint,
       }}
     >

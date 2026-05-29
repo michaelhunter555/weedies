@@ -7,6 +7,7 @@ import createConnectAccount from "../controllers/stripe/create-connect-account";
 import refreshedOnboardingLink from "../controllers/stripe/refreshed-onboarding-link";
 import deleteConnectedAccount from "../controllers/stripe/delete-connected-account";
 import { authenticate } from "../middleware/auth";
+import { enforceAccountStanding } from "../middleware/account-standing";
 import { paymentUpdateLimiter } from "../middleware/rate-limiter";
 import setupIntent from "../controllers/stripe/setup-intent";
 import getPaymentMethods from "../controllers/customers/get-payment-methods";
@@ -40,6 +41,7 @@ router.post("/v2-webhook", rawJson, v2Webhook);
 
 // ── Protected ───────────────────────────────────────────────────────────
 router.use(authenticate);
+router.use(enforceAccountStanding);
 
 // Payment methods
 router.get("/payment-methods", getPaymentMethods);

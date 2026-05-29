@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { LineChart } from "@mui/x-charts/LineChart";
+import { areaElementClasses, LineChart } from "@mui/x-charts/LineChart";
+import { useDrawingArea } from "@mui/x-charts/hooks";
 import {
   Alert,
   AlertTitle,
@@ -14,12 +15,35 @@ import {
   Stack,
   Typography,
 } from "@mui/material";
-import { useTheme } from "@mui/material/styles";
 
 import { useListings } from "@/hooks/use-listings";
+import { BRAND_PALETTE } from "@/theme/brand-palette";
 import type { GaListingMetricsSnapshot } from "../../../types";
 
 const GA_NEEDS_RECONNECT = "GA_NEEDS_RECONNECT";
+const GA_CHART_GRADIENT_ID = "listing-ga-sessions-gradient";
+
+function GaSessionsAreaGradient() {
+  const { top, height, bottom } = useDrawingArea();
+  const svgHeight = top + bottom + height;
+
+  return (
+    <defs>
+      <linearGradient
+        id={GA_CHART_GRADIENT_ID}
+        x1="0"
+        x2="0"
+        y1="0"
+        y2={svgHeight}
+        gradientUnits="userSpaceOnUse"
+      >
+        <stop offset="0%" stopColor={BRAND_PALETTE.seafoam} stopOpacity={0.55} />
+        <stop offset="55%" stopColor={BRAND_PALETTE.sage} stopOpacity={0.2} />
+        <stop offset="100%" stopColor={BRAND_PALETTE.mint} stopOpacity={0} />
+      </linearGradient>
+    </defs>
+  );
+}
 
 function errorCode(err: unknown): string | undefined {
   if (err && typeof err === "object" && "code" in err) {
@@ -84,7 +108,6 @@ export function ListingGaMetricsPanel(props: ListingGaMetricsPanelProps) {
     reconnectHref,
   } = props;
   const { getListingGoogleAnalyticsMetrics } = useListings();
-  const theme = useTheme();
 
   const lid = listingId ? String(listingId) : "";
 
@@ -152,7 +175,6 @@ export function ListingGaMetricsPanel(props: ListingGaMetricsPanelProps) {
   const data = q.data!;
   const labels = data.dailySessions.map((p) => shortDayLabel(p.date));
   const values = data.dailySessions.map((p) => p.sessions);
-  const color = theme.palette.warning.main;
   const dense = values.length > 14;
 
   return (
@@ -211,7 +233,7 @@ export function ListingGaMetricsPanel(props: ListingGaMetricsPanelProps) {
                 {
                   data: values,
                   label: "Sessions",
-                  color,
+                  color: BRAND_PALETTE.seafoam,
                   area: true,
                   showMark: false,
                   curve: "monotoneX",
@@ -234,7 +256,18 @@ export function ListingGaMetricsPanel(props: ListingGaMetricsPanelProps) {
               }}
               grid={{ horizontal: true }}
               slotProps={{ legend: { hidden: true } }}
-            />
+              sx={{
+                [`& .${areaElementClasses.root}`]: {
+                  fill: `url(#${GA_CHART_GRADIENT_ID})`,
+                },
+                "& .MuiLineElement-root": {
+                  stroke: BRAND_PALETTE.charcoal,
+                  strokeWidth: 2,
+                },
+              }}
+            >
+              <GaSessionsAreaGradient />
+            </LineChart>
           )}
         </Box>
       </Stack>

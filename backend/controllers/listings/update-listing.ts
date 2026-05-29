@@ -1,9 +1,13 @@
 import type { Request, Response } from "express";
 import Listing from "../../models/listing";
+import User from "../../models/user";
+import stripe from "../../utils/stripe";
+import { PRIVATE_LISTING_FEE_USD } from "../../lib/listing-fee";
 import {
   hasBuyerBlockingTransactions,
   sellerCanEditListingFields,
 } from "../../lib/listing-seller-edit";
+import { parsePrivateListingFlag } from "../../lib/listing-submission-fields";
 
 /** Seller-only: patch mutable fields on their own listing (blocked if bids / buyer purchases exist). */
 export async function updateListing(req: Request, res: Response) {
@@ -35,6 +39,7 @@ export async function updateListing(req: Request, res: Response) {
       averageRating: _ar,
       sellerCommittedAt: _sca,
       paymentIntentId: _pi,
+      privateListingFeePaid: _plfp,
       openBidCount: _obc,
       auctionBids: _ab,
       approvedUsersList: _aul,
@@ -64,9 +69,63 @@ export async function updateListing(req: Request, res: Response) {
       return void res.status(409).json({ message: msg, reason: gate.reason });
     }
 
+    const body = (req.body || {}) as Record<string, unknown>;
+    const wantsPrivate =
+      "isPrivateListing" in body
+        ? parsePrivateListingFlag(body.isPrivateListing)
+        : Boolean(existing.isPrivateListing);
+
+    const turningOnPrivate =
+      wantsPrivate &&
+      !existing.isPrivateListing &&
+      !existing.privateListingFeePaid;
+
+    const patch: Record<string, unknown> = { ...safe, status: "pending_review" };
+
+    if (turningOnPrivate) {
+      const user = await User.findById(sellerId).select(
+        "stripeCustomerId defaultPaymentIntendId",
+      );
+      if (!user?.stripeCustomerId || !user.defaultPaymentIntendId) {
+        return void res.status(400).json({
+          message:
+            "Add a default payment method in your wallet before enabling private listing ($4.99).",
+        });
+      }
+
+      const paymentIntent = await stripe.paymentIntents.create(
+        {
+          amount: Math.round(PRIVATE_LISTING_FEE_USD * 100),
+          currency: "usd",
+          customer: user.stripeCustomerId,
+          description: "Private listing fee",
+          payment_method: user.defaultPaymentIntendId,
+          capture_method: "automatic",
+          off_session: true,
+          confirm: true,
+          metadata: {
+            listingId: String(existing._id),
+            sellerId: String(user._id),
+            paymentType: "listing-fee",
+            isPrivateListing: "true",
+            listingFeeKind: "private-addon",
+          },
+        },
+        {
+          idempotencyKey: `${String(existing._id)}::private-listing-fee`,
+        },
+      );
+
+      patch.isPrivateListing = true;
+      patch.privateListingFeePaid = true;
+      if (!existing.paymentIntentId) {
+        patch.paymentIntentId = paymentIntent.id;
+      }
+    }
+
     const listing = await Listing.findOneAndUpdate(
       { _id: id, sellerId },
-      { $set: { ...safe, status: "pending_review" } },
+      { $set: patch },
       { new: true },
     );
 

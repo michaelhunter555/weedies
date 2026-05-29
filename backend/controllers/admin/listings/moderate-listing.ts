@@ -104,10 +104,10 @@ export async function moderateListing(req: Request, res: Response) {
       seller.name as string,
       listingId,
       listing.appName,
-      listing.id.toString(),
       listing.status,
+      new Date(),
     );
-    
+
     res.json({ ok: true, listing: listing.toObject() });
   } catch (err) {
     console.error("moderateListing", err);

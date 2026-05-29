@@ -35,6 +35,11 @@ export function platformApplicationFeeRatio(priceDollars: number): number {
 }
 
 /** Application fee in cents for Stripe `application_fee_amount`. */
+export function EscrowApplicationFee(priceDollars: number): number {
+  return Math.round(priceDollars * platformApplicationFeeRatio(priceDollars));
+}
+
+/** Application fee in cents for Stripe `application_fee_amount`. */
 export function platformApplicationFeeCents(priceDollars: number): number {
   return Math.round(priceDollars * platformApplicationFeeRatio(priceDollars) * 100);
 }

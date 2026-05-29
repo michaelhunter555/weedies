@@ -10,7 +10,7 @@ import Transaction from "../../../models/transactions";
 import User from "../../../models/user";
 import Disputes from "../../../models/disputes";
 import ProcessedWebhookEvent from "../../../models/proccessedWebhookEvents";
-
+import { userSaleNotificationEmail } from "../../../lib/email-notifications";
 // socket event names for the buyer-facing app webhook
 const Events = {
   CARD_ADDED: "stripe.setup_intent.succeeded",
@@ -264,11 +264,11 @@ export default async function appWebhook(req: Request, res: Response) {
             { upsert: true, session: dbSession },
           );
 
-          await User.findByIdAndUpdate(
+         const seller = await User.findByIdAndUpdate(
             sellerId,
             { $inc: { totalSales: 1 } },
             { session: dbSession },
-          );
+          ).select("email name");
 
           await dbSession.commitTransaction();
           dbSession.endSession();
@@ -281,11 +281,25 @@ export default async function appWebhook(req: Request, res: Response) {
           };
 
           if (checkRoom(io, String(sellerId))) {
+            // notify in-app if user is live.
             io.to(String(sellerId)).emit(Events.PURCHASE_SUCCEEDED, {
               ...payload,
               message: `Your listing "${listing.appName}" just sold!`,
             });
           }
+
+          // send email notification to seller.
+          await userSaleNotificationEmail(
+            seller.email as string,
+            seller.name as string,
+            Number(amountFmt),
+            new Date(),
+            listing.appName,
+            listingId,
+            listing.slug,
+            String(sellerId),
+            "stripe",
+          );
 
           if (checkRoom(io, String(buyerId))) {
             io.to(String(buyerId)).emit(Events.PURCHASE_SUCCEEDED, {

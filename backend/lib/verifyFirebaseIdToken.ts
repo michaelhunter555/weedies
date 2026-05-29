@@ -5,6 +5,7 @@ export type FirebaseIdTokenClaims = {
   email?: string;
   name?: string;
   picture?: string;
+  email_verified?: boolean;
   firebase?: {
     sign_in_provider?: string;
   };

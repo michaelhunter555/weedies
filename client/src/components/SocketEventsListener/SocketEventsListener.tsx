@@ -79,6 +79,9 @@ export default function SocketEventsListener() {
         invalidateQuery("my-marketplace-orders"),
         invalidateQuery("listing"),
         invalidateQuery("listing-exchange"),
+        ...(lid != null
+          ? [invalidateQuery(["listing-exchange", lid])]
+          : []),
         invalidateQuery("stripe-wallet"),
         // Profile counters (totalSales, totalListingsSold) bumped server-side.
         syncUserFromServer().catch(() => null),
@@ -97,11 +100,15 @@ export default function SocketEventsListener() {
     };
 
     const onPurchaseCanceled = async (data: AnyData) => {
+      const lid = listingIdFromData(data);
       showSnackbar({
         title: "Checkout",
         message: data?.message || "Checkout canceled",
         severity: "info",
       });
+      if (lid != null) {
+        await invalidateQuery(["listing-exchange", lid]);
+      }
     };
 
     const onRefundStarted = async (data: AnyData) => {
@@ -445,15 +452,37 @@ export default function SocketEventsListener() {
       ]);
     };
 
+    const resolutionPath = (disputeId?: string) => {
+      const base = `/my-settings/${encodeURIComponent(uid)}/resolution-center`;
+      return disputeId ? `${base}/${encodeURIComponent(String(disputeId))}` : base;
+    };
+
     const onDisputeOpened = async (data: AnyData) => {
       showSnackbar({
         title: "Disputes",
         message: data?.message || "Dispute opened",
         severity: "warning",
-        path: settingsPath(uid),
-        actionLabel: "Dashboard",
+        path: resolutionPath(data?.disputeId as string | undefined),
+        actionLabel: "View dispute",
       });
       await invalidateQuery("disputes");
+      if (data?.listingId) {
+        await invalidateQuery(["listing-exchange", String(data.listingId)]);
+      }
+    };
+
+    const onDisputeUpdated = async (data: AnyData) => {
+      showSnackbar({
+        title: "Disputes",
+        message: data?.message || "Dispute updated",
+        severity: "info",
+        path: resolutionPath(data?.disputeId as string | undefined),
+        actionLabel: "View dispute",
+      });
+      await invalidateQuery("disputes");
+      if (data?.disputeId) {
+        await invalidateQuery(["dispute", String(data.disputeId)]);
+      }
     };
 
     const onDisputeResolved = async (data: AnyData) => {
@@ -461,8 +490,8 @@ export default function SocketEventsListener() {
         title: "Disputes",
         message: data?.message || "Dispute resolved",
         severity: "info",
-        path: settingsPath(uid),
-        actionLabel: "Dashboard",
+        path: resolutionPath(data?.disputeId as string | undefined),
+        actionLabel: "View dispute",
       });
       await invalidateQuery("disputes");
     };
@@ -498,6 +527,7 @@ export default function SocketEventsListener() {
     socket.on(Notifications.AUCTION_BID_RESOLVED, onAuctionBidResolved);
     socket.on(Notifications.NEW_REVIEW, onNewReview);
     socket.on(Notifications.DISPUTE_OPENED, onDisputeOpened);
+    socket.on(Notifications.DISPUTE_UPDATED, onDisputeUpdated);
     socket.on(Notifications.DISPUTE_RESOLVED, onDisputeResolved);
 
     return () => {
@@ -532,6 +562,7 @@ export default function SocketEventsListener() {
       socket.off(Notifications.AUCTION_BID_RESOLVED, onAuctionBidResolved);
       socket.off(Notifications.NEW_REVIEW, onNewReview);
       socket.off(Notifications.DISPUTE_OPENED, onDisputeOpened);
+      socket.off(Notifications.DISPUTE_UPDATED, onDisputeUpdated);
       socket.off(Notifications.DISPUTE_RESOLVED, onDisputeResolved);
     };
   }, [socket, invalidateQuery, showSnackbar, syncUserFromServer, uid]);

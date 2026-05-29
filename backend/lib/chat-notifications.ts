@@ -123,7 +123,6 @@ export async function notifyChatRecipient(params: {
 
   await userChatMessageReceivedNotificationEmail(
     receiverEmail,
-    receiver.name,
     senderName,
     text,
   );

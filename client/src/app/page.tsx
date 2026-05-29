@@ -50,8 +50,8 @@ const PALETTE = BRAND_PALETTE;
 
 /** Homepage highlight row — swap captions when final copy is ready. */
 const HIGHLIGHT_CARDS = [
-  { image: "homepage_pack/9.png", caption: "You list apps that you built and are ready to sell. " },
-  { image: "homepage_pack/1.png", caption: "We market and find people in the the U.S. and Canada who are interested in buying your app." },
+  { image: "your_apps.png", caption: "You list apps that you've built and are ready to sell. " },
+  { image: "homepage_pack/1.png", caption: "Connect with users interested in buying your app in the U.S and Canada." },
   { image: "homepage_pack/3.png", caption: "We provide the platform and security to guarantee a safe & secure exchange." },
 ] as const;
 
@@ -337,7 +337,7 @@ export default function Home() {
               }}
             >
               <Image
-                src="/3.png"
+                src="/homepage_pack/3.png"
                 alt="Dap & Flip"
                 width={150}
                 height={150}

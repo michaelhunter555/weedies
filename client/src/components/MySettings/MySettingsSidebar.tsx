@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import ChatRoundedIcon from "@mui/icons-material/ChatRounded";
 import CreditCardRoundedIcon from "@mui/icons-material/CreditCardRounded";
 import GavelRoundedIcon from "@mui/icons-material/GavelRounded";
+import BalanceRoundedIcon from "@mui/icons-material/BalanceRounded";
 import HomeRoundedIcon from "@mui/icons-material/HomeRounded";
 import LocalShippingRoundedIcon from "@mui/icons-material/LocalShippingRounded";
 import ReceiptLongRoundedIcon from "@mui/icons-material/ReceiptLongRounded";
@@ -79,15 +80,15 @@ export function MySettingsSidebar({ userId, mode }: MySettingsSidebarProps) {
       icon: <GavelRoundedIcon fontSize="small" />,
       isActive: (p) => pathMatchesHref(p, `${base}/bids`),
     },
-    // {
-    //   key: "listings",
-    //   href: `${base}#my-listings`,
-    //   label: "My listings",
-    //   description: "Selling on the marketplace",
-    //   icon: <StorefrontRoundedIcon fontSize="small" />,
-    //   hidden: !showSelling,
-    //   isActive: () => false,
-    // },
+    {
+      key: "listings",
+      href: `${base}/listings`,
+      label: "My listings",
+      description: "Selling on the marketplace",
+      icon: <StorefrontRoundedIcon fontSize="small" />,
+      hidden: !showSelling,
+      isActive: (p) => pathMatchesHref(p, `${base}/listings`),
+    },
     {
       key: "wallet",
       href: `${base}/wallet`,
@@ -103,6 +104,14 @@ export function MySettingsSidebar({ userId, mode }: MySettingsSidebarProps) {
       description: "Purchases & receipts",
       icon: <ReceiptLongRoundedIcon fontSize="small" />,
       isActive: (p) => pathMatchesHref(p, `${base}/order-history`),
+    },
+    {
+      key: "resolution",
+      href: `${base}/resolution-center`,
+      label: "Resolution center",
+      description: "Disputes after a sale",
+      icon: <BalanceRoundedIcon fontSize="small" />,
+      isActive: (p) => pathMatchesHref(p, `${base}/resolution-center`),
     },
     // {
     //   key: "shipping",

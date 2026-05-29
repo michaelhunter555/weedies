@@ -160,7 +160,13 @@ function normalizeUser(backendUser: any): UserObject {
     name: backendUser?.name,
     userName: backendUser?.name,
     role: backendUser?.role,
+    accountStanding:
+      backendUser?.accountStanding === "suspended" ||
+      backendUser?.accountStanding === "banned"
+        ? backendUser.accountStanding
+        : "good",
     authProvider: backendUser?.authProvider,
+    emailVerified: backendUser?.emailVerified === true,
     firebaseUid: backendUser?.firebaseUid ?? null,
     googleSub: backendUser?.googleSub ?? null,
     totalListings: backendUser?.totalListings,
@@ -198,11 +204,11 @@ export type AuthContextProps = {
   loginWithProviderToken: (
     provider: AuthProviderType,
     idToken: string
-  ) => Promise<void>;
+  ) => Promise<{ isNewUser: boolean; user: UserObject }>;
   signupWithProviderToken: (
     provider: AuthProviderType,
     idToken: string
-  ) => Promise<{ isNewUser: boolean }>;
+  ) => Promise<{ isNewUser: boolean; user: UserObject }>;
   refreshSession: () => Promise<void>;
   /** Reload profile from `/user/me` (syncs Stripe Connect onboarding flags). */
   syncUserFromServer: () => Promise<UserObject | null>;
@@ -215,8 +221,14 @@ export const AuthContext = createContext<AuthContextProps>({
   isLoggedIn: false,
   user: null,
   accessToken: null,
-  loginWithProviderToken: async () => {},
-  signupWithProviderToken: async () => ({ isNewUser: false }),
+  loginWithProviderToken: async () => ({
+    isNewUser: false,
+    user: { id: "", email: "" },
+  }),
+  signupWithProviderToken: async () => ({
+    isNewUser: false,
+    user: { id: "", email: "" },
+  }),
   refreshSession: async () => {},
   syncUserFromServer: async () => null,
   logout: async () => {},
@@ -237,7 +249,7 @@ const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       path: "login" | "sign-up",
       provider: AuthProviderType,
       idToken: string
-    ): Promise<{ isNewUser: boolean }> => {
+    ): Promise<{ isNewUser: boolean; user: UserObject }> => {
       if (!apiBase) throw new Error("Missing NEXT_PUBLIC_SERVER");
 
       const localePrefs = readBrowserLocalePreferences();
@@ -253,7 +265,14 @@ const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       });
 
       const data = await resp.json().catch(() => ({}));
-      if (!resp.ok) throw new Error(data?.message || `${path} failed`);
+      if (!resp.ok) {
+        const err = new Error(
+          (data?.message as string) || `${path} failed`,
+        ) as Error & { code?: string; status?: number };
+        err.code = data?.code as string | undefined;
+        err.status = resp.status;
+        throw err;
+      }
 
       const accessToken =
         (data?.accessToken as string | undefined) || null;
@@ -264,14 +283,14 @@ const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       dispatch({ type: "LOGIN", user, accessToken });
       writeToStorage(user, accessToken, refreshToken);
 
-      return { isNewUser: Boolean(data?.isNewUser) };
+      return { isNewUser: Boolean(data?.isNewUser), user };
     },
     [apiBase]
   );
 
   const loginWithProviderToken = useCallback(
     async (provider: AuthProviderType, idToken: string) => {
-      await exchangeProviderToken("login", provider, idToken);
+      return exchangeProviderToken("login", provider, idToken);
     },
     [exchangeProviderToken]
   );
@@ -368,8 +387,10 @@ const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   useEffect(() => {
     if (didInitRef.current) return;
     didInitRef.current = true;
-    refreshSession().catch(() => undefined);
-  }, [refreshSession]);
+    void refreshSession()
+      .then(() => syncUserFromServer())
+      .catch(() => undefined);
+  }, [refreshSession, syncUserFromServer]);
 
   const value = useMemo<AuthContextProps>(
     () => ({

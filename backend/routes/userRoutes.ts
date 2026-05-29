@@ -10,8 +10,10 @@ import { createOrder } from "../controllers/orders/create-order";
 import { refresh } from "../controllers/customers/refresh";
 import { logout } from "../controllers/customers/logout";
 import { authenticate } from "../middleware/auth";
+import { enforceAccountStanding } from "../middleware/account-standing";
 import { getMe } from "../controllers/customers/get-me";
 import { patchMePreferences } from "../controllers/customers/patch-me-preferences";
+import { confirmEmailVerified } from "../controllers/customers/confirm-email-verified";
 
 const router = express.Router();
 
@@ -24,6 +26,8 @@ router.post("/logout", logout);
 // users - protected routes
 router.use(authenticate);
 router.get("/me", getMe);
+router.post("/confirm-email-verified", confirmEmailVerified);
+router.use(enforceAccountStanding);
 router.patch("/me/preferences", patchMePreferences);
 router.get("/customer/:id", getCustomerById);
 router.post("/create-custoemr", createCustomer);

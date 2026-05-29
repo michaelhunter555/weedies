@@ -144,6 +144,9 @@ type ComposeIntent = {
   recipientId: string;
   listingId: string;
   listingName: string;
+  /** Opened from success room — simpler compose UI, correct buyer/seller copy. */
+  fromExchange?: boolean;
+  counterpartyRole?: "buyer" | "seller";
 };
 
 function mapApiChatToConversation(c: ApiChatRow): Conversation {
@@ -412,13 +415,21 @@ function MessagesPageContent() {
     const sp = new URLSearchParams(window.location.search);
     const listingId = sp.get("listingId")?.trim() ?? "";
     const sellerId = sp.get("sellerId")?.trim() ?? "";
+    const recipientIdParam = sp.get("recipientId")?.trim() ?? "";
+    const recipientId = recipientIdParam || sellerId;
+    const fromExchange = sp.get("exchange") === "1";
+    const counterpartyRaw = sp.get("counterparty")?.trim() ?? "";
+    const counterpartyRole =
+      counterpartyRaw === "buyer" || counterpartyRaw === "seller"
+        ? counterpartyRaw
+        : undefined;
     const listingName =
       sp.get("subject")?.trim() ||
       sp.get("listingName")?.trim() ||
       (listingId ? `Listing ${listingId.slice(0, 8)}…` : "");
     const prefill = sp.get("prefill")?.trim() ?? "";
 
-    if (!listingId && !sellerId) {
+    if (!listingId && !recipientId) {
       setComposeIntent(null);
       setComposeError(null);
       return;
@@ -430,45 +441,51 @@ function MessagesPageContent() {
       return;
     }
 
-    if (!listingId && sellerId && !isMongoObjectId(sellerId)) {
-      setComposeError("Invalid seller id in link.");
+    if (!listingId && recipientId && !isMongoObjectId(recipientId)) {
+      setComposeError("Invalid recipient id in link.");
       setComposeIntent(null);
       return;
     }
 
-    if (sellerId && user.id === sellerId) {
+    if (recipientId && user.id === recipientId) {
       setComposeError("You cannot message yourself.");
       setComposeIntent(null);
       return;
     }
 
     if (listingId && isMongoObjectId(listingId)) {
-      if (!sellerId || !isMongoObjectId(sellerId)) {
+      if (!recipientId || !isMongoObjectId(recipientId)) {
         setComposeError(
-          "This link is missing the seller id. Open “Message seller” from the listing page, or add sellerId=… to the URL.",
+          fromExchange
+            ? "This exchange message link is missing the recipient."
+            : "This link is missing the seller id. Open “Message seller” from the listing page, or add sellerId=… to the URL.",
         );
         setComposeIntent(null);
         return;
       }
-      if (user.id === sellerId) {
+      if (user.id === recipientId) {
         setComposeError("You cannot message yourself.");
         setComposeIntent(null);
         return;
       }
       setComposeIntent({
-        recipientId: sellerId,
+        recipientId,
         listingId,
         listingName: listingName || "Listing",
+        fromExchange,
+        counterpartyRole: fromExchange ? counterpartyRole : undefined,
       });
       if (prefill) setDraft(prefill);
       return;
     }
 
-    if (sellerId && isMongoObjectId(sellerId)) {
+    if (recipientId && isMongoObjectId(recipientId)) {
       setComposeIntent({
-        recipientId: sellerId,
+        recipientId,
         listingId: "",
         listingName: listingName || "Seller",
+        fromExchange,
+        counterpartyRole: fromExchange ? counterpartyRole : undefined,
       });
       if (prefill) setDraft(prefill);
     }
@@ -798,7 +815,13 @@ function MessagesPageContent() {
                 }}
               >
                 <Typography variant="h6" sx={{ fontWeight: 800 }}>
-                  Message seller
+                  {composeIntent.fromExchange
+                    ? composeIntent.counterpartyRole === "buyer"
+                      ? "Message buyer"
+                      : composeIntent.counterpartyRole === "seller"
+                        ? "Message seller"
+                        : "Message"
+                    : "Message seller"}
                 </Typography>
                 <Tooltip title="Cancel">
                   <IconButton
@@ -813,28 +836,54 @@ function MessagesPageContent() {
               </Stack>
 
               <Box sx={{ px: { xs: 2, md: 3 }, py: 2, bgcolor: "#fafafa", borderBottom: "1px solid #ececec" }}>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-                  Your first message will go to the seller of this listing (we only show their
-                  name in the thread after they reply, when the chat is tied to a listing).
-                </Typography>
-                <Stack direction="row" flexWrap="wrap" gap={1} alignItems="center">
-                  {composeIntent.listingId ? (
-                    <Chip
-                      size="small"
-                      variant="outlined"
-                      label={`Listing ${composeIntent.listingId}`}
-                      sx={{ fontFamily: "monospace", fontSize: 12 }}
-                    />
-                  ) : null}
-                  <Chip size="small" color="primary" variant="outlined" label={composeIntent.listingName} />
-                  <Chip size="small" label="Seller" />
-                </Stack>
-                <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1.5 }}>
-                  Recipient user id:{" "}
-                  <Box component="span" sx={{ fontFamily: "monospace" }}>
-                    {composeIntent.recipientId}
-                  </Box>
-                </Typography>
+                {composeIntent.fromExchange ? (
+                  <>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                      {composeIntent.counterpartyRole === "buyer"
+                        ? "Send a message to the buyer about this sale."
+                        : composeIntent.counterpartyRole === "seller"
+                          ? "Send a message to the seller about this sale."
+                          : "Send a message about this sale."}
+                    </Typography>
+                    <Stack direction="row" flexWrap="wrap" gap={1} alignItems="center">
+                      <Chip size="small" color="primary" variant="outlined" label={composeIntent.listingName} />
+                      {composeIntent.counterpartyRole ? (
+                        <Chip
+                          size="small"
+                          variant="outlined"
+                          label={
+                            composeIntent.counterpartyRole === "buyer" ? "Buyer" : "Seller"
+                          }
+                        />
+                      ) : null}
+                    </Stack>
+                  </>
+                ) : (
+                  <>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                      Your first message will go to the seller of this listing (we only show their
+                      name in the thread after they reply, when the chat is tied to a listing).
+                    </Typography>
+                    <Stack direction="row" flexWrap="wrap" gap={1} alignItems="center">
+                      {composeIntent.listingId ? (
+                        <Chip
+                          size="small"
+                          variant="outlined"
+                          label={`Listing ${composeIntent.listingId}`}
+                          sx={{ fontFamily: "monospace", fontSize: 12 }}
+                        />
+                      ) : null}
+                      <Chip size="small" color="primary" variant="outlined" label={composeIntent.listingName} />
+                      <Chip size="small" label="Seller" />
+                    </Stack>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1.5 }}>
+                      Recipient user id:{" "}
+                      <Box component="span" sx={{ fontFamily: "monospace" }}>
+                        {composeIntent.recipientId}
+                      </Box>
+                    </Typography>
+                  </>
+                )}
               </Box>
 
               <Box
@@ -847,8 +896,15 @@ function MessagesPageContent() {
                 }}
               >
                 <Typography variant="body2" color="text.secondary">
-                  Write your opening message below, then send. We will open the chat and notify the
-                  seller in real time when they are online.
+                  {composeIntent.fromExchange
+                    ? `Write your message below, then send. We will notify the ${
+                        composeIntent.counterpartyRole === "buyer"
+                          ? "buyer"
+                          : composeIntent.counterpartyRole === "seller"
+                            ? "seller"
+                            : "other party"
+                      } when they are online.`
+                    : "Write your opening message below, then send. We will open the chat and notify the seller in real time when they are online."}
                 </Typography>
               </Box>
 

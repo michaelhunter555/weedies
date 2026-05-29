@@ -6,6 +6,8 @@ import { getRedirectResult } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { useContext } from "react";
 import { AuthContext } from "@/context/auth-context";
+import { needsEmailVerification } from "../../../../types";
+import { VERIFY_EMAIL_PATH } from "@/lib/email-verification";
 
 export default function GoogleCallbackPage() {
   const router = useRouter();
@@ -25,10 +27,12 @@ export default function GoogleCallbackPage() {
         }
 
         const idToken = await result.user.getIdToken();
-        await authCtx.loginWithProviderToken("google", idToken);
+        const { user } = await authCtx.loginWithProviderToken("google", idToken);
 
         if (!cancelled) setMessage("Signed in. Redirecting...");
-        router.replace("/");
+        router.replace(
+          needsEmailVerification(user) ? VERIFY_EMAIL_PATH : "/",
+        );
       } catch (err) {
         if (!cancelled) setMessage("Google sign-in failed. Please try again.");
       }

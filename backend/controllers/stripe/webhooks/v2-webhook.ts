@@ -6,14 +6,68 @@ import { io } from "../../../app";
 import Transaction from "../../../models/transactions";
 import PayoutBatch from "../../../models/payoutBatch";
 import ProcessedWebhookEvent from "../../../models/proccessedWebhookEvents";
+import User from "../../../models/user";
+import {
+  payoutsNotificationEmail,
+  type PayoutEmailStatus,
+} from "../../../lib/email-notifications";
 
-// socket event names for the seller-facing Connect webhook
 const Events = {
   PAYOUT_CREATED: "stripe.payout.created",
   PAYOUT_PAID: "stripe.payout.paid",
   PAYOUT_FAILED: "stripe.payout.failed",
   PAYOUT_CANCELED: "stripe.payout.canceled",
 } as const;
+
+type SellerContact = { email: string; name: string };
+
+async function resolveSellerContact(
+  sellerId: string,
+  payout: Stripe.Payout,
+): Promise<SellerContact | null> {
+  const meta = payout.metadata ?? {};
+  const fromMetaEmail =
+    typeof meta.sellerEmail === "string" ? meta.sellerEmail.trim() : "";
+  const fromMetaName =
+    typeof meta.sellerName === "string" ? meta.sellerName.trim() : "";
+
+  if (fromMetaEmail) {
+    return { email: fromMetaEmail, name: fromMetaName || "Seller" };
+  }
+
+  const seller = (await User.findById(sellerId)
+    .select("email name")
+    .lean()) as { email?: string; name?: string } | null;
+
+  const email = seller?.email?.trim();
+  if (!email) return null;
+
+  return { email, name: seller?.name?.trim() || "Seller" };
+}
+
+function payoutCreatedAt(payout: Stripe.Payout): Date {
+  return typeof payout.created === "number"
+    ? new Date(payout.created * 1000)
+    : new Date();
+}
+
+async function emailSellerAboutPayout(
+  sellerId: string,
+  payout: Stripe.Payout,
+  status: PayoutEmailStatus,
+): Promise<void> {
+  const contact = await resolveSellerContact(sellerId, payout);
+  if (!contact) return;
+
+  await payoutsNotificationEmail(
+    contact.email,
+    contact.name,
+    payout.amount / 100,
+    payout.currency,
+    payoutCreatedAt(payout),
+    status,
+  );
+}
 
 /**
  * Seller-side Stripe webhook (Connect).
@@ -22,8 +76,6 @@ const Events = {
  * updates, etc. - and emits socket notifications to the seller.
  *
  * Buyer-side events (purchases, refunds, disputes) are in `./app-webhook.ts`.
- *
- * Brevo email hooks are stubbed as `TODO(brevo)` until the integration lands.
  */
 export default async function v2Webhook(req: Request, res: Response) {
   const sig = req.headers["stripe-signature"];
@@ -33,14 +85,18 @@ export default async function v2Webhook(req: Request, res: Response) {
     event = stripe.webhooks.constructEvent(
       req.body,
       sig as string,
-      String(process.env.STRIPE_CONNECT_WEBHOOK),
+      String(process.env.STRIPE_CUSTOMER_WEBHOOK_SECRET),
     );
 
-    // dedupe against webhook retries
     try {
       await ProcessedWebhookEvent.create({ eventId: event.id });
-    } catch (err: any) {
-      if (err.code === 11000) {
+    } catch (err: unknown) {
+      if (
+        err &&
+        typeof err === "object" &&
+        "code" in err &&
+        (err as { code: number }).code === 11000
+      ) {
         return void res.status(200).send({ received: true });
       }
       throw err;
@@ -59,6 +115,8 @@ export default async function v2Webhook(req: Request, res: Response) {
             currency: payout.currency,
           });
         }
+
+        await emailSellerAboutPayout(String(sellerId), payout, "created");
         break;
       }
 
@@ -74,6 +132,8 @@ export default async function v2Webhook(req: Request, res: Response) {
             currency: payout.currency,
           });
         }
+
+        await emailSellerAboutPayout(String(sellerId), payout, "canceled");
         break;
       }
 
@@ -91,7 +151,7 @@ export default async function v2Webhook(req: Request, res: Response) {
           });
         }
 
-        // TODO(brevo): email seller with remediation steps
+        await emailSellerAboutPayout(String(sellerId), payout, "failed");
         break;
       }
 
@@ -132,11 +192,12 @@ export default async function v2Webhook(req: Request, res: Response) {
           });
         }
 
-        // TODO(brevo): sendPayoutNotificationEmail(sellerEmail, sellerName, usAmount, currency)
+        if (sellerId) {
+          await emailSellerAboutPayout(String(sellerId), payout, "paid");
+        }
         break;
       }
 
-      // account.updated - grow into KYC / onboarding status changes
       case "account.updated":
       default:
         break;

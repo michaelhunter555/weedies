@@ -4,7 +4,8 @@ import mongoose from "mongoose";
 import Listing from "../../models/listing";
 import Transaction from "../../models/transactions";
 
-const LISTING_PURCHASE = "Listing purchase";
+import { LISTING_PURCHASE_BILLING_REASONS } from "../../lib/listing-purchase-billing";
+import { parsePageLimit } from "../../lib/parse-page-limit";
 
 function pickCoverUrl(
   photos: string[] | undefined,
@@ -16,6 +17,20 @@ function pickCoverUrl(
   return list[idx] ?? null;
 }
 
+function paginatedEmpty(page: number, limit: number) {
+  return {
+    items: [],
+    page,
+    limit,
+    total: 0,
+    totalPages: 1,
+  };
+}
+
+/**
+ * Buy-it-now purchases (buyer) and sales (seller), paginated separately.
+ * Query: `purchasePage`, `salePage`, `limit` (max 50, default 20).
+ */
 export async function getMyMarketplaceOrders(req: Request, res: Response) {
   try {
     const uid = req.user?.userId;
@@ -25,21 +40,45 @@ export async function getMyMarketplaceOrders(req: Request, res: Response) {
 
     const oid = new mongoose.Types.ObjectId(uid);
 
-    const [purchaseTx, saleTx] = await Promise.all([
-      Transaction.find({
-        customerId: oid,
-        billingReason: LISTING_PURCHASE,
-      })
+    const purchasePage = Math.max(
+      1,
+      Number.parseInt(String(req.query.purchasePage ?? "1"), 10) || 1,
+    );
+    const salePage = Math.max(
+      1,
+      Number.parseInt(String(req.query.salePage ?? "1"), 10) || 1,
+    );
+    const { limit, skip: _skip, totalPages } = parsePageLimit(req, {
+      page: 1,
+      limit: 20,
+      maxLimit: 50,
+    });
+
+    const purchaseSkip = (purchasePage - 1) * limit;
+    const saleSkip = (salePage - 1) * limit;
+
+    const purchaseFilter = {
+      customerId: oid,
+      billingReason: { $in: [...LISTING_PURCHASE_BILLING_REASONS] },
+    };
+    const saleFilter = {
+      sellerId: oid,
+      billingReason: { $in: [...LISTING_PURCHASE_BILLING_REASONS] },
+    };
+
+    const [purchaseTx, saleTx, purchaseTotal, saleTotal] = await Promise.all([
+      Transaction.find(purchaseFilter)
         .sort({ createdAt: -1 })
-        .limit(100)
+        .skip(purchaseSkip)
+        .limit(limit)
         .lean(),
-      Transaction.find({
-        sellerId: oid,
-        billingReason: LISTING_PURCHASE,
-      })
+      Transaction.find(saleFilter)
         .sort({ createdAt: -1 })
-        .limit(100)
+        .skip(saleSkip)
+        .limit(limit)
         .lean(),
+      Transaction.countDocuments(purchaseFilter),
+      Transaction.countDocuments(saleFilter),
     ]);
 
     const listingIdSet = new Set<string>();
@@ -87,10 +126,29 @@ export async function getMyMarketplaceOrders(req: Request, res: Response) {
       };
     };
 
-    return void res.status(200).json({
-      purchases: purchaseTx.map((t) => mapRow(t, "buyer")),
-      sales: saleTx.map((t) => mapRow(t, "seller")),
-    });
+    const purchases =
+      purchaseTotal === 0
+        ? paginatedEmpty(purchasePage, limit)
+        : {
+            items: purchaseTx.map((t) => mapRow(t, "buyer")),
+            page: purchasePage,
+            limit,
+            total: purchaseTotal,
+            totalPages: totalPages(purchaseTotal),
+          };
+
+    const sales =
+      saleTotal === 0
+        ? paginatedEmpty(salePage, limit)
+        : {
+            items: saleTx.map((t) => mapRow(t, "seller")),
+            page: salePage,
+            limit,
+            total: saleTotal,
+            totalPages: totalPages(saleTotal),
+          };
+
+    return void res.status(200).json({ purchases, sales });
   } catch (err) {
     console.error("getMyMarketplaceOrders error:", err);
     return void res.status(500).json({ message: "Failed to load marketplace orders" });

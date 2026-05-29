@@ -1,5 +1,14 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "secureapi.escrow.com",
+        pathname: "/api/ecart/Content/Images/**",
+      },
+    ],
+  },
   async headers() {
     return [
       {

@@ -3,13 +3,16 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useRef, useState } from "react";
-
+import { useEffect, useRef, useState } from "react";
 
 import { useAuth } from "@/context/auth-context";
+import { useSocket } from "@/context/socket-io/socket-provider";
+import { Notifications } from "@/context/socket-io/events";
+import { useEscrow } from "@/hooks/use-escrow";
 import { useListings } from "@/hooks/use-listings";
 
 import ArrowBackRoundedIcon from "@mui/icons-material/ArrowBackRounded";
+import ChatRoundedIcon from "@mui/icons-material/ChatRounded";
 import OpenInNewRoundedIcon from "@mui/icons-material/OpenInNewRounded";
 import UploadFileRoundedIcon from "@mui/icons-material/UploadFileRounded";
 import {
@@ -39,6 +42,7 @@ import {
   useTheme,
 } from "@mui/material";
 import { useStripeWallet } from "@/hooks/use-stripe-wallet";
+import { ExchangeDisputeSection } from "@/components/Exchange/ExchangeDisputeSection";
 
 import type { ListingExchangeDeliverable, ListingExchangePayload } from "../../../../types";
 
@@ -52,9 +56,16 @@ function coverFromListing(listing: ListingExchangePayload["listing"]): string {
   return photos[idx] ?? PLACEHOLDER;
 }
 
-const EXCHANGE_STEPS = [
+const EXCHANGE_STEPS_STRIPE = [
   "Authorize & capture",
   "Funds captured",
+  "Buyer confirmed",
+  "Optional review",
+] as const;
+
+const EXCHANGE_STEPS_ESCROW = [
+  "Waiting for payment",
+  "Funds secured",
   "Buyer confirmed",
   "Optional review",
 ] as const;
@@ -74,12 +85,18 @@ export function ExchangeRoomClient() {
     submitExchangeReview,
   } = useListings();
   const { managePaymentCapture } = useStripeWallet();
+  const { getEscrowTransactionStatus, cancelEscrowTransaction } = useEscrow();
+  const { socket } = useSocket();
 
   const listingId = decodeURIComponent(params?.listingId ?? "").trim();
   const walletHref =
     user?.id != null && String(user.id).length > 0
       ? `/my-settings/${encodeURIComponent(String(user.id))}/wallet`
       : "/signup";
+  const resolutionCenterHref =
+    user?.id != null && String(user.id).length > 0
+      ? `/my-settings/${encodeURIComponent(String(user.id))}/resolution-center`
+      : "/";
 
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [confirmError, setConfirmError] = useState<string | null>(null);
@@ -88,6 +105,7 @@ export function ExchangeRoomClient() {
   const [reviewStarChoice, setReviewStarChoice] = useState<string>("");
   const [reviewComment, setReviewComment] = useState("");
   const [reviewError, setReviewError] = useState<string | null>(null);
+  const [escrowCancelError, setEscrowCancelError] = useState<string | null>(null);
 
   const {
     data,
@@ -98,6 +116,60 @@ export function ExchangeRoomClient() {
     queryFn: () => getListingExchange(listingId),
     enabled: Boolean(hydrated && isLoggedIn && listingId),
   });
+
+  const escrowTxId =
+    data?.transaction?.paymentType === "escrow"
+      ? data.transaction.escrowTransactionId ?? null
+      : null;
+
+  const escrowStatusQ = useQuery({
+    queryKey: ["escrow-tx-status", escrowTxId],
+    queryFn: () => getEscrowTransactionStatus(escrowTxId!),
+    enabled: Boolean(
+      escrowTxId &&
+        data?.transaction?.paymentStatus === "pending" &&
+        data.exchange.paymentStatus !== "canceled",
+    ),
+    staleTime: 30_000,
+  });
+
+  const cancelEscrowMutation = useMutation({
+    mutationFn: () => cancelEscrowTransaction(escrowTxId!),
+    onSuccess: async () => {
+      setEscrowCancelError(null);
+      await queryClient.invalidateQueries({ queryKey: ["listing-exchange", listingId] });
+      if (escrowTxId) {
+        await queryClient.invalidateQueries({ queryKey: ["escrow-tx-status", escrowTxId] });
+      }
+    },
+    onError: (e: Error) => {
+      setEscrowCancelError(e.message ?? "Could not cancel Escrow transaction.");
+    },
+  });
+
+  useEffect(() => {
+    if (!socket || !listingId) return;
+
+    const refreshIfMatch = (payload: { listingId?: unknown }) => {
+      const lid =
+        typeof payload?.listingId === "string" ? payload.listingId.trim() : "";
+      if (lid && lid === listingId) {
+        void queryClient.invalidateQueries({
+          queryKey: ["listing-exchange", listingId],
+        });
+      }
+    };
+
+    socket.on(Notifications.PURCHASE_SUCCEEDED, refreshIfMatch);
+    socket.on(Notifications.PURCHASE_CANCELED, refreshIfMatch);
+    socket.on(Notifications.EXCHANGE_UPDATED, refreshIfMatch);
+
+    return () => {
+      socket.off(Notifications.PURCHASE_SUCCEEDED, refreshIfMatch);
+      socket.off(Notifications.PURCHASE_CANCELED, refreshIfMatch);
+      socket.off(Notifications.EXCHANGE_UPDATED, refreshIfMatch);
+    };
+  }, [socket, listingId, queryClient]);
 
   const [recentCaptureAction, setRecentCaptureAction] =
     useState<"capture" | "cancel" | null>(null);
@@ -227,11 +299,15 @@ export function ExchangeRoomClient() {
     );
   }
 
-  const { exchange, listing, role, buyerReview } = data;
+  const { exchange, listing, role, buyerReview, transaction, escrowAwaitingFunds } =
+    data;
   const buyerReviewSnapshot = buyerReview ?? null;
+  const isEscrow = transaction?.paymentType === "escrow";
+  const exchangeSteps = isEscrow ? EXCHANGE_STEPS_ESCROW : EXCHANGE_STEPS_STRIPE;
   const paymentAuthorized = Boolean(exchange.paymentReceivedAt);
   const paymentStatus = exchange.paymentStatus ?? "pending";
   const saleCanceled = paymentStatus === "canceled";
+  const saleDisputed = paymentStatus === "disputed";
   const fundsCaptured =
     Boolean(exchange.sellerCapturedPayment) || paymentStatus === "succeeded";
   const handoverDone = Boolean(exchange.buyerConfirmedAt);
@@ -269,6 +345,32 @@ export function ExchangeRoomClient() {
     return `/products/${encodeURIComponent(id)}`;
   })();
 
+  const messageCounterpartId =
+    role === "buyer" ? exchange.sellerId : exchange.buyerId;
+  const messageHref = (() => {
+    const q = new URLSearchParams();
+    q.set("exchange", "1");
+    if (messageCounterpartId) q.set("recipientId", messageCounterpartId);
+    q.set("listingId", listing._id);
+    if (listing.appName) q.set("subject", listing.appName);
+    q.set("counterparty", role === "buyer" ? "seller" : "buyer");
+    return `/messages?${q.toString()}`;
+  })();
+  const messageButtonLabel = role === "buyer" ? "Message seller" : "Message buyer";
+
+  const messageCounterpartyButton = (
+    <Button
+      component={Link}
+      href={messageHref}
+      variant="outlined"
+      startIcon={<ChatRoundedIcon />}
+      disabled={!messageCounterpartId}
+      sx={{ textTransform: "none", fontWeight: 600 }}
+    >
+      {messageButtonLabel}
+    </Button>
+  );
+
   return (
     <Container maxWidth="md" sx={{ py: { xs: 3, md: 5 }, minWidth: 0, overflowX: "hidden" }}>
       <Button
@@ -284,11 +386,74 @@ export function ExchangeRoomClient() {
         Success room
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-        You are signed in as the <b>{role}</b>. The buyer pays through checkout; the seller
-        must capture (or cancel) the authorized charge before the capture window ends. After
-        capture, the buyer can confirm receipt at any time. Optional files below are not
-        required to confirm.
+        You are signed in as the <b>{role}</b>.
+        {isEscrow ? (
+          <>
+            {" "}
+            Payment and inspection run on Escrow.com. Use this room for optional file
+            sharing, buyer confirmation, and reviews after funds are secured.
+          </>
+        ) : (
+          <>
+            {" "}
+            The buyer pays through checkout; the seller must capture (or cancel) the
+            authorized charge before the capture window ends. After capture, the buyer can
+            confirm receipt at any time.
+          </>
+        )}{" "}
+        Optional files below are not required to confirm.
       </Typography>
+
+      {escrowAwaitingFunds ? (
+        <Alert severity="info" sx={{ mb: 2 }}>
+          Escrow payment is still in progress on Escrow.com. This room is open for
+          coordination, but the sale is not final until we receive a payment webhook
+          from Escrow. Buyer confirmation unlocks after funds are secured.
+        </Alert>
+      ) : null}
+
+      {saleDisputed && (
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          This sale has an open dispute. Payout and handover may be paused until the case
+          is resolved. See{" "}
+          <Link href={resolutionCenterHref} style={{ fontWeight: 700 }}>
+            Resolution center
+          </Link>
+          .
+        </Alert>
+      )}
+
+      {transaction && role === "buyer" && fundsCaptured && !saleCanceled && (
+        <ExchangeDisputeSection
+          listingId={listingId}
+          transaction={transaction}
+          resolutionCenterHref={resolutionCenterHref}
+        />
+      )}
+
+      {transaction?.hasDispute && role === "seller" && (
+        <Paper variant="outlined" sx={{ p: 2, borderRadius: 3, mb: 2 }}>
+          <Typography variant="subtitle1" fontWeight={800} gutterBottom>
+            Buyer dispute
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+            Respond in Resolution center. You can accept the refund request or escalate to
+            platform review.
+          </Typography>
+          <Button
+            component={Link}
+            href={
+              transaction.disputeId
+                ? `${resolutionCenterHref}/${encodeURIComponent(transaction.disputeId)}`
+                : resolutionCenterHref
+            }
+            variant="contained"
+            sx={{ textTransform: "none", fontWeight: 700 }}
+          >
+            Open Resolution center
+          </Button>
+        </Paper>
+      )}
 
       <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 3, mb: 3 }}>
         <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
@@ -316,6 +481,18 @@ export function ExchangeRoomClient() {
             >
               Listing ID: {listing._id}
             </Typography>
+            {isEscrow && transaction?.escrowTransactionId ? (
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ wordBreak: "break-all", display: "block", mt: 0.5 }}
+              >
+                Escrow transaction #{transaction.escrowTransactionId}
+                {transaction.paymentStatus
+                  ? ` · ${transaction.paymentStatus}`
+                  : ""}
+              </Typography>
+            ) : null}
           </Box>
         </Stack>
       </Paper>
@@ -326,46 +503,113 @@ export function ExchangeRoomClient() {
             <StepLabel
               optional={
                 <Typography variant="caption" color="text.secondary">
-                  Checkout &amp; seller capture
+                  {isEscrow ? "Escrow.com" : "Checkout & seller capture"}
                 </Typography>
               }
             >
-              {EXCHANGE_STEPS[0]}
+              {exchangeSteps[0]}
             </StepLabel>
           </Step>
           <Step completed={stepCaptureResolved}>
-            <StepLabel>{EXCHANGE_STEPS[1]}</StepLabel>
+            <StepLabel>{exchangeSteps[1]}</StepLabel>
           </Step>
           <Step completed={stepBuyerConfirmed}>
-            <StepLabel>{EXCHANGE_STEPS[2]}</StepLabel>
+            <StepLabel>{exchangeSteps[2]}</StepLabel>
           </Step>
           <Step completed={stepReviewDone}>
-            <StepLabel>{EXCHANGE_STEPS[3]}</StepLabel>
+            <StepLabel>{exchangeSteps[3]}</StepLabel>
           </Step>
         </Stepper>
       ) : (
         <Stepper activeStep={activeStep} alternativeLabel sx={{ mb: 4 }}>
           <Step completed={stepPaymentReady}>
-            <StepLabel>{EXCHANGE_STEPS[0]}</StepLabel>
+            <StepLabel>{exchangeSteps[0]}</StepLabel>
           </Step>
           <Step completed={stepCaptureResolved}>
-            <StepLabel>{EXCHANGE_STEPS[1]}</StepLabel>
+            <StepLabel>{exchangeSteps[1]}</StepLabel>
           </Step>
           <Step completed={stepBuyerConfirmed}>
-            <StepLabel>{EXCHANGE_STEPS[2]}</StepLabel>
+            <StepLabel>{exchangeSteps[2]}</StepLabel>
           </Step>
           <Step completed={stepReviewDone}>
-            <StepLabel>{EXCHANGE_STEPS[3]}</StepLabel>
+            <StepLabel>{exchangeSteps[3]}</StepLabel>
           </Step>
         </Stepper>
       )}
 
-      {/* Step 1 — checkout + seller capture window */}
+      {/* Step 1 — payment (Stripe capture or Escrow.com) */}
       <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 3, mb: 2 }}>
         <Typography variant="subtitle1" fontWeight={700} gutterBottom>
-          1. Payment authorization &amp; capture
+          {isEscrow ? "1. Escrow payment" : "1. Payment authorization & capture"}
         </Typography>
-        {saleCanceled ? (
+        <Stack
+          direction={{ xs: "column", sm: "row" }}
+          spacing={1.5}
+          flexWrap="wrap"
+          sx={{ mb: 2 }}
+        >
+          {messageCounterpartyButton}
+        </Stack>
+        {isEscrow ? (
+          <Stack spacing={2}>
+            {saleCanceled ? (
+              <Alert severity="warning">
+                This Escrow transaction was canceled on Escrow.com. The sale cannot proceed
+                here until a new checkout is started.
+              </Alert>
+            ) : fundsCaptured ? (
+              <Alert severity="success">
+                Escrow reports funds secured. Continue with handover and buyer confirmation
+                below.
+              </Alert>
+            ) : (
+              <Alert severity="info">
+                {role === "buyer"
+                  ? "Complete agree and payment on Escrow.com. Accept or reject terms there, not in this app."
+                  : "The buyer pays through Escrow.com. Accept or reject the transaction in your Escrow dashboard."}
+              </Alert>
+            )}
+            <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5} flexWrap="wrap" alignItems="flex-start">
+              {transaction?.escrowTransactionUrl ? (
+                <Button
+                  component="a"
+                  href={transaction.escrowTransactionUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  variant="outlined"
+                  endIcon={<OpenInNewRoundedIcon />}
+                  sx={{ textTransform: "none", fontWeight: 700 }}
+                >
+                  Open on Escrow.com
+                </Button>
+              ) : null}
+              {escrowStatusQ.data?.canCancel ? (
+                <Button
+                  variant="outlined"
+                  color="error"
+                  disabled={cancelEscrowMutation.isPending}
+                  onClick={() => {
+                    setEscrowCancelError(null);
+                    cancelEscrowMutation.mutate();
+                  }}
+                  sx={{ textTransform: "none", fontWeight: 700 }}
+                >
+                  {cancelEscrowMutation.isPending
+                    ? "Cancelling…"
+                    : "Cancel Escrow checkout"}
+                </Button>
+              ) : null}
+            </Stack>
+            {escrowCancelError ? (
+              <Alert severity="error" sx={{ borderRadius: 2 }}>
+                {escrowCancelError}
+              </Alert>
+            ) : null}
+            <Typography variant="caption" color="text.secondary">
+              This page updates when Escrow notifies us (usually within a minute of payment).
+            </Typography>
+          </Stack>
+        ) : saleCanceled ? (
           <Alert severity="warning">
             This checkout payment was canceled. The sale cannot proceed on this authorization.
           </Alert>

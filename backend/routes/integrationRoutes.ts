@@ -1,5 +1,6 @@
 import express from "express";
 import { authenticate } from "../middleware/auth";
+import { enforceAccountStanding } from "../middleware/account-standing";
 import { startGoogleAnalyticsOAuth } from "../controllers/integrations/start-google-analytics-oauth";
 import { googleAnalyticsOAuthCallback } from "../controllers/integrations/google-analytics-oauth-callback";
 import { listGoogleAnalyticsProperties } from "../controllers/integrations/list-google-analytics-properties";
@@ -13,6 +14,7 @@ const router = express.Router();
 router.get("/google-analytics/callback", googleAnalyticsOAuthCallback);
 
 router.use(authenticate);
+router.use(enforceAccountStanding);
 router.get("/google-analytics/start", startGoogleAnalyticsOAuth);
 router.get("/google-analytics/properties", listGoogleAnalyticsProperties);
 router.post("/google-analytics/link-listing", linkGoogleAnalyticsToListing);

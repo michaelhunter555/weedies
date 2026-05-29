@@ -69,6 +69,8 @@ export async function placeAuctionBid(req: Request, res: Response) {
       });
     }
 
+    listing.auctionFollowers = [...(listing.auctionFollowers ?? []), bidderId];
+
     listing.auctionBids = [
       ...bids,
       {

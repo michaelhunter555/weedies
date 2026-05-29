@@ -77,6 +77,15 @@ export type UserProps = {
   password: string;
 };
 
+/** Mirrors `backend/types/account-status.ts`. */
+export type AccountStanding = "good" | "suspended" | "banned";
+
+export function isAccountRestricted(
+  standing: AccountStanding | string | undefined | null,
+): boolean {
+  return standing === "suspended" || standing === "banned";
+}
+
 /**
  * Shape of the currently-authenticated user as held by the auth context.
  * This mirrors what the backend returns from /api/user/{login,sign-up}
@@ -86,11 +95,14 @@ export type UserProps = {
 export interface UserObject {
   id: string;
   email: string;
+  /** False for email/password until Firebase inbox is verified and synced. */
+  emailVerified?: boolean;
   name?: string;
   mode?: "customer" | "seller";
   /** Backwards-compatible alias for `name` used by older UI bits. */
   userName?: string;
   role?: UserRole;
+  accountStanding?: AccountStanding;
   authProvider?: AuthProvider;
   sellerRating?: number;
   totalSellerReviews?: number;
@@ -135,6 +147,15 @@ export interface UserObject {
   locale?: string | null;
   createdAt?: string | Date;
   updatedAt?: string | Date;
+}
+
+/** Email/password accounts must verify inbox before using the marketplace. */
+export function needsEmailVerification(
+  user: Pick<UserObject, "authProvider" | "emailVerified"> | null | undefined,
+): boolean {
+  if (!user) return false;
+  if (user.authProvider === "google") return false;
+  return user.emailVerified !== true;
 }
 
 // =========================
@@ -212,7 +233,7 @@ export type GaListingMetricsSnapshot = {
 /**
  * One `auctionBids` subdocument (same field as Mongo). `bidderId` is a string in JSON.
  * Omitted on public listing GETs (use `auctionCurrentPrice` / `auctionMinimumNextBid` / counts);
- * included on `GET /listings/me/mine` and seller bid PATCH responses for auction listings.
+ * included on paginated `GET /listings/me/mine` and seller bid PATCH responses for auction listings.
  */
 export type ListingAuctionBid = {
   _id: string;
@@ -258,6 +279,7 @@ export type ListingStatus =
   | "draft"
   | "pending_review"
   | "live"
+  | "reserved"
   | "paused"
   | "rejected"
   | "sold"
@@ -278,6 +300,7 @@ export type Listing = {
   difficulty: ListingDifficulty;
   turnaround: ListingTurnaround;
   ageOfBusinessMonths: number;
+  auctionFollowers?: string[];
 
   saleType?: ListingSaleType;
   startingPrice: number;
@@ -341,7 +364,7 @@ export type Listing = {
   auctionPendingBidCount?: number;
   /** Full bid rows - same field name as Mongo `auctionBids`; only on seller mine / bid PATCH. */
   auctionBids?: ListingAuctionBid[];
-  /** Present on `GET /listings/me/mine` - whether listing copy can still be edited. */
+  /** Present on paginated `GET /listings/me/mine` - whether listing copy can still be edited. */
   sellerCanEdit?: boolean;
 
   createdAt?: string | Date;
@@ -402,7 +425,18 @@ export type ListingExchangeSnapshot = {
   updatedAt?: string | null;
   sellerCapturedPayment?: boolean;
   paymentCaptureExpiration?: string | Date | null;
-  paymentStatus?: 'succeeded' | 'failed' | 'canceled' | 'pending';
+  paymentStatus?: "succeeded" | "failed" | "canceled" | "pending" | "disputed";
+};
+
+export type ListingExchangeTransactionSnapshot = {
+  id: string;
+  hasDispute: boolean;
+  disputeId: string | null;
+  amountPaidCents: number;
+  paymentStatus: string | null;
+  paymentType?: "stripe" | "escrow";
+  escrowTransactionId?: string | null;
+  escrowTransactionUrl?: string | null;
 };
 
 /** Buyer-only snapshot from `GET /listings/exchange/:id` (null for seller). */
@@ -416,8 +450,11 @@ export type ListingExchangeBuyerReview = {
 export type ListingExchangePayload = {
   role: ListingExchangeRoomRole;
   phase: ListingExchangePhase;
+  /** Escrow checkout started but listing not sold until payment webhooks. */
+  escrowAwaitingFunds?: boolean;
   /** Present when `role === "buyer"`; omitted or null for seller. */
   buyerReview?: ListingExchangeBuyerReview | null;
+  transaction?: ListingExchangeTransactionSnapshot | null;
   exchange: ListingExchangeSnapshot;
   listing: {
     _id: string;
@@ -426,13 +463,14 @@ export type ListingExchangePayload = {
     photos: string[];
     coverIndex: number;
     saleType?: ListingSaleType;
+    status?: string;
     currency: string;
     buyItNowPrice?: number;
     startingPrice?: number;
   };
 };
 
-/** Row from `GET /listings/me/marketplace-orders` (buy-it-now checkout). */
+/** Row from paginated `GET /listings/me/marketplace-orders` (buy-it-now checkout). */
 export type MarketplaceOrderRow = {
   transactionId: string;
   role: "buyer" | "seller";
@@ -447,9 +485,27 @@ export type MarketplaceOrderRow = {
   purchasedAt: string;
 };
 
+export type Paginated<T> = {
+  items: T[];
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+};
+
+export type MyListingsMeta = {
+  totalActive: number;
+  totalSold: number;
+  pendingPrivateAccessTotal: number;
+};
+
+export type MyListingsPayload = Paginated<Listing> & {
+  meta: MyListingsMeta;
+};
+
 export type MyMarketplaceOrdersPayload = {
-  purchases: MarketplaceOrderRow[];
-  sales: MarketplaceOrderRow[];
+  purchases: Paginated<MarketplaceOrderRow>;
+  sales: Paginated<MarketplaceOrderRow>;
 };
 
 /** Row from `GET /stripe/billing-history` (wallet Billing tab). */
@@ -644,21 +700,21 @@ export type Transaction = {
   updatedAt?: string | Date;
 };
 
-export type DisputeInitiator = "user" | "barber";
+export type DisputeInitiator = "user" | "seller";
 export type DisputeCategory =
   | "no_show"
   | "service_not_provided"
   | "unsafe_environment"
   | "client_behavoir"
-  | "barber_behavoir"
+  | "seller_behavoir"
   | "incorrect_charge_amount";
 export type DisputeStatus =
-  | "awaiting_barber_response"
+  | "awaiting_seller_response"
   | "in_review"
   | "awaiting_user_response"
   | "closed";
 export type DisputeDecision =
-  | "in_favor_barber"
+  | "in_favor_seller"
   | "in_favor_user"
   | "settled";
 export type DisputeAction = "none" | "refund" | "partial_refund" | "pending";
@@ -667,38 +723,54 @@ export type DesiredDisputeAction =
   | "partial_refund"
   | "strike_account";
 
-/**
- * Mirrors `backend/models/disputes.ts`.
- *
- * NOTE: the backend model is still carrying the barber/booking field names
- * from the legacy app. Think of `barberId` as `sellerId` and `bookingId` as
- * `listingId` until the model is migrated.
- */
-export type Dispute = {
-  _id?: string;
+/** Mirrors `backend/lib/serialize-dispute.ts`. */
+export type DisputeRecord = {
+  id: string;
   userId: string;
-  barberId: string;
-  bookingId: string;
+  sellerId: string;
+  listingId: string;
   transactionId: string;
   disputeExplanation: string;
-  disputeDate: string | Date;
+  disputeDate: string;
   initiator: DisputeInitiator;
   initiatorName: string;
   amountPaid: number;
   stripePaymentIntentId: string;
-  barberName: string;
-  barberResponse?: string;
+  sellerName: string;
+  sellerResponse?: string;
   imageOne?: string;
   imageTwo?: string;
   category: DisputeCategory;
-  disputeStatus?: DisputeStatus;
-  decision?: DisputeDecision;
+  disputeStatus: DisputeStatus;
+  decision?: DisputeDecision | null;
   action?: DisputeAction;
   platformResponse?: string;
   desiredAction?: DesiredDisputeAction;
   requestedRefundAmount?: number;
-  createdAt?: string | Date;
-  updatedAt?: string | Date;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type DisputesListResponse = {
+  ok?: boolean;
+  disputes: DisputeRecord[];
+  page: number;
+  limit: number;
+  totalPages: number;
+  totalDisputes: number;
+};
+
+export type DisputeDetailResponse = {
+  ok?: boolean;
+  role: "buyer" | "seller";
+  dispute: DisputeRecord;
+  listing: {
+    id: string;
+    appName: string;
+    slug: string;
+    photos: string[];
+    coverIndex: number;
+  } | null;
 };
 
 export type PayoutStatus = "pending" | "paid" | "failed" | "canceled";

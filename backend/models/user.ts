@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { AccountStatus } from "../types/account-status";
 
 type UserMode = "customer" | "seller";
 export interface User {
@@ -6,11 +7,12 @@ export interface User {
   /** Optional avatar URL (e.g. for chat participant chips). */
   image?: string | null;
   email: string;
+  emailVerified: boolean;
   password?: string;
   mode?: UserMode;
   role: "user" | "admin";
   authProvider: "local" | "firebase" | "google";
-
+  accountStanding: AccountStatus;
   sellerRating?: number;
   totalSellerReviews?: number;
 
@@ -61,6 +63,7 @@ const UserSchema = new mongoose.Schema<User>(
     name: { type: String, required: true },
     image: { type: String, required: false, default: null },
     email: { type: String, required: true, unique: true, index: true },
+    emailVerified: { type: Boolean, required: true, default: false },
     password: { type: String, required: false, default: null },
     role: {
       type: String,
@@ -84,6 +87,14 @@ const UserSchema = new mongoose.Schema<User>(
 
     firebaseUid: { type: String, required: false, default: null, index: true },
     googleSub: { type: String, required: false, default: null, index: true },
+
+    accountStanding: {
+      type: String,
+      required: true,
+      enum: Object.values(AccountStatus),
+      default: AccountStatus.GOOD,
+      index: true,
+    },
 
     refreshTokenHash: { type: String, required: false, default: null },
     lastLoginDate: { type: Date, required: false, default: null },

@@ -13,4 +13,7 @@ export const SocketEvents = {
   NEW_REVIEW: "review.submitted",
   /** Seller capture/cancel finished — both parties refresh exchange room. */
   EXCHANGE_UPDATED: "exchange.updated",
+  DISPUTE_OPENED: "dispute.opened",
+  DISPUTE_UPDATED: "dispute.updated",
+  DISPUTE_RESOLVED: "dispute.resolved",
 } as const;

@@ -5,6 +5,7 @@ import crypto from "crypto";
 import stripe from "../../utils/stripe";
 import User from "../../models/user";
 import Listing from "../../models/listing";
+import { isEscrowRequiredPrice } from "../../lib/escrow-eligible";
 import {
   listingBuyItNowPriceDollars,
   platformApplicationFeeCents,
@@ -77,6 +78,12 @@ export default async function createCheckoutSession(req: Request, res: Response)
     const priceDollars = listingBuyItNowPriceDollars(listing);
     if (!Number.isFinite(priceDollars) || priceDollars < 0.5) {
       return void res.status(400).json({ message: "Invalid or too small purchase amount." });
+    }
+    if (isEscrowRequiredPrice(priceDollars)) {
+      return void res.status(400).json({
+        message:
+          "Purchases of $4,000 or more must use Escrow.com checkout. Use Continue to Escrow.com on the checkout page.",
+      });
     }
 
     const unitAmountCents = Math.round(priceDollars * 100);

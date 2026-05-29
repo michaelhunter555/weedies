@@ -10,9 +10,22 @@ import type {
   ListingExchangeBuyerReview,
   ListingExchangePayload,
   MyAuctionBidRow,
+  MyListingsPayload,
   MyMarketplaceOrdersPayload,
   SellerListingEditMeta,
 } from "../../types";
+
+export type MyListingsParams = {
+  page?: number;
+  limit?: number;
+  status?: "active" | "sold" | "all";
+};
+
+export type MyMarketplaceOrdersParams = {
+  purchasePage?: number;
+  salePage?: number;
+  limit?: number;
+};
 
 export type ListingFeedParams = {
   category?: ListingCategory | string;
@@ -34,20 +47,45 @@ export type ListingFeed = {
 export const useListings = () => {
   const { apiFetch } = useApiFetchOrThrow();
 
-  /** All listings owned by the authenticated seller (any status). */
-  const getMyListings = useCallback(async (): Promise<Listing[]> => {
-    const data = await apiFetch<Listing[]>("/listings/me/mine", "GET");
-    return data ?? [];
-  }, [apiFetch]);
+  /** Paginated listings owned by the authenticated seller. */
+  const getMyListings = useCallback(
+    async (params: MyListingsParams = {}): Promise<MyListingsPayload> => {
+      const qs = new URLSearchParams();
+      if (params.page) qs.set("page", String(params.page));
+      if (params.limit) qs.set("limit", String(params.limit));
+      if (params.status) qs.set("status", params.status);
+      const path = qs.toString() ? `/listings/me/mine?${qs}` : "/listings/me/mine";
+      const data = await apiFetch<MyListingsPayload>(path, "GET");
+      return (
+        data ?? {
+          items: [],
+          page: 1,
+          limit: 20,
+          total: 0,
+          totalPages: 1,
+          meta: { totalActive: 0, totalSold: 0, pendingPrivateAccessTotal: 0 },
+        }
+      );
+    },
+    [apiFetch],
+  );
 
   /** Buy-it-now purchases (as buyer) and sales (as seller) with listing metadata. */
-  const getMyMarketplaceOrders = useCallback(async (): Promise<MyMarketplaceOrdersPayload> => {
-    const data = await apiFetch<MyMarketplaceOrdersPayload>(
-      "/listings/me/marketplace-orders",
-      "GET",
-    );
-    return data ?? { purchases: [], sales: [] };
-  }, [apiFetch]);
+  const getMyMarketplaceOrders = useCallback(
+    async (params: MyMarketplaceOrdersParams = {}): Promise<MyMarketplaceOrdersPayload> => {
+      const qs = new URLSearchParams();
+      if (params.purchasePage) qs.set("purchasePage", String(params.purchasePage));
+      if (params.salePage) qs.set("salePage", String(params.salePage));
+      if (params.limit) qs.set("limit", String(params.limit));
+      const path = qs.toString()
+        ? `/listings/me/marketplace-orders?${qs}`
+        : "/listings/me/marketplace-orders";
+      const data = await apiFetch<MyMarketplaceOrdersPayload>(path, "GET");
+      const emptyPage = { items: [], page: 1, limit: 20, total: 0, totalPages: 1 };
+      return data ?? { purchases: emptyPage, sales: emptyPage };
+    },
+    [apiFetch],
+  );
 
   /** Auction listings the current user has placed at least one bid on. */
   const getMyAuctionBids = useCallback(async (): Promise<MyAuctionBidRow[]> => {

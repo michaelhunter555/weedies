@@ -9,7 +9,6 @@ import {
   CardMedia,
   Chip,
   Paper,
-  Rating,
   Stack,
   Typography,
 } from "@mui/material";
@@ -125,8 +124,6 @@ export default function ProductCard({ listing, id }: IProductCard) {
 
   const creator = extractSellerName(listing?.sellerId);
   const installs = listing?.views ?? 0;
-  const rating = listing?.averageRating ?? 0;
-  const reviews = listing?.totalReviews ?? 0;
 
   const handleOpen = () => {
     const mongoId = listing?._id ? String(listing._id) : null;
@@ -275,48 +272,38 @@ export default function ProductCard({ listing, id }: IProductCard) {
         </Stack>
       </Box>
 
-      <Stack direction="column" spacing={1} sx={{ padding: 2 }}>
-        <Typography
-          variant="body2"
-          color="text.secondary"
-          sx={{
-            minHeight: 40,
-            display: "-webkit-box",
-            WebkitLineClamp: 2,
-            WebkitBoxOrient: "vertical",
-            overflow: "hidden",
-          }}
-        >
-          {isPrivateRestricted
-            ? "Request access to unlock full listing details."
-            : resolvedTagline}
-        </Typography>
-
-        {monthlyRevenueLabel ? (
-          <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
-            {monthlyRevenueLabel}/mo revenue
+      <Stack direction="column" spacing={1.25} sx={{ padding: 2 }}>
+        <Stack spacing={0.25}>
+          <Typography
+            variant="body2"
+            color="text.secondary"
+            sx={{
+              lineHeight: 1.35,
+              display: "-webkit-box",
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: "vertical",
+              overflow: "hidden",
+            }}
+          >
+            {isPrivateRestricted
+              ? "Request access to unlock full listing details."
+              : resolvedTagline}
           </Typography>
-        ) : null}
+          {monthlyRevenueLabel ? (
+            <Typography
+              variant="caption"
+              sx={{ fontWeight: 600, lineHeight: 1.2 }}
+            >
+              {monthlyRevenueLabel}/mo revenue
+            </Typography>
+          ) : null}
+        </Stack>
 
-        <Stack
-          direction="row"
-          alignItems="center"
-          justifyContent="space-between"
-        >
-          <Stack direction="row" alignItems="center" spacing={0.5}>
-            <Rating value={rating} precision={0.1} readOnly size="small" />
-            <Typography variant="caption" color="text.secondary">
-              {rating ? rating.toFixed(1) : "-"} ({reviews})
-            </Typography>
-          </Stack>
-          <Stack direction="row" alignItems="center" spacing={0.5}>
-            <VisibilityRoundedIcon
-              sx={{ fontSize: 16, color: "text.secondary" }}
-            />
-            <Typography variant="caption" color="text.secondary">
-              {installs}
-            </Typography>
-          </Stack>
+        <Stack direction="row" alignItems="center" spacing={0.5}>
+          <VisibilityRoundedIcon sx={{ fontSize: 16, color: "text.secondary" }} />
+          <Typography variant="caption" color="text.secondary">
+            {installs.toLocaleString()} views
+          </Typography>
         </Stack>
 
         <Stack

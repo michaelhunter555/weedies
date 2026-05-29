@@ -83,6 +83,7 @@ const statusChipProps: Record<
   { label: string; color: "success" | "warning" | "default" | "error" }
 > = {
   live: { label: "Live", color: "success" },
+  reserved: { label: "Reserved", color: "warning" },
   pending_review: { label: "In review", color: "warning" },
   draft: { label: "Draft", color: "default" },
   rejected: { label: "Rejected", color: "error" },
@@ -171,52 +172,62 @@ export default function DashboardPage() {
     router.push("/");
   };
 
-  // ── Listings ────────────────────────────────────────────────────────────
+  const DASHBOARD_LISTING_PREVIEW = 3;
+
+  // ── Listings (preview only on dashboard) ─────────────────────────────────
   const {
-    data: listings,
-    isLoading: listingsLoading,
-    isError: listingsError,
-    error: listingsErrorObj,
-  } = useQuery<Listing[], Error>({
-    queryKey: ["my-listings", user?.id],
-    queryFn: getMyListings,
+    data: activeListingsPage,
+    isLoading: activeListingsLoading,
+    isError: activeListingsError,
+    error: activeListingsErrorObj,
+  } = useQuery({
+    queryKey: ["my-listings", user?.id, "active", 1, DASHBOARD_LISTING_PREVIEW],
+    queryFn: () =>
+      getMyListings({
+        page: 1,
+        limit: DASHBOARD_LISTING_PREVIEW,
+        status: "active",
+      }),
     enabled: Boolean(hydrated && user?.id),
     staleTime: 30_000,
   });
 
-  const activeListings = useMemo(
-    () =>
-      (listings ?? []).filter(
-        (l) => l.status !== "sold" && l.status !== "removed",
-      ),
-    [listings],
-  );
+  const {
+    data: soldListingsPage,
+    isLoading: soldListingsLoading,
+  } = useQuery({
+    queryKey: ["my-listings", user?.id, "sold", 1, DASHBOARD_LISTING_PREVIEW],
+    queryFn: () =>
+      getMyListings({
+        page: 1,
+        limit: DASHBOARD_LISTING_PREVIEW,
+        status: "sold",
+      }),
+    enabled: Boolean(hydrated && user?.id && (activeListingsPage?.meta.totalSold ?? 0) > 0),
+    staleTime: 30_000,
+  });
 
-  const soldListings = useMemo(
-    () => (listings ?? []).filter((l) => l.status === "sold"),
-    [listings],
-  );
-
-  const totalPendingPrivateAccess = useMemo(
-    () =>
-      activeListings.reduce(
-        (sum, l) => sum + countPendingPrivateAccessRequests(l),
-        0,
-      ),
-    [activeListings],
-  );
+  const activeListings = activeListingsPage?.items ?? [];
+  const soldListings = soldListingsPage?.items ?? [];
+  const listingsMeta = activeListingsPage?.meta;
+  const totalActiveListings = listingsMeta?.totalActive ?? 0;
+  const totalSoldListings = listingsMeta?.totalSold ?? 0;
+  const totalPendingPrivateAccess = listingsMeta?.pendingPrivateAccessTotal ?? 0;
+  const listingsLoading = activeListingsLoading;
+  const listingsError = activeListingsError;
+  const listingsErrorObj = activeListingsErrorObj;
 
   useEffect(() => {
-    if (typeof window === "undefined" || !listings?.length) return;
+    if (typeof window === "undefined" || !activeListings.length) return;
     const reviewId = new URLSearchParams(window.location.search)
       .get("reviewPrivateAccess")
       ?.trim();
     if (!reviewId) return;
-    const target = listings.find((l) => String(l._id) === reviewId);
+    const target = activeListings.find((l) => String(l._id) === reviewId);
     if (target && countPendingPrivateAccessRequests(target) > 0) {
       setPrivateAccessListing(target);
     }
-  }, [listings]);
+  }, [activeListings]);
 
   // ── Payment methods (buyer billing) ─────────────────────────────────────
   const {
@@ -367,8 +378,8 @@ export default function DashboardPage() {
   // decremented on soft-delete). The headline should match what we actually
   // show in "My listings" — use the same pool as `activeListings` once loaded.
   const totalListingsCount =
-    listings !== undefined
-      ? activeListings.length
+    activeListingsPage !== undefined
+      ? totalActiveListings
       : Number(user?.totalListings ?? 0);
   const salesCount = Number(
     user?.totalListingsSold ?? user?.totalSales ?? 0,
@@ -419,8 +430,8 @@ export default function DashboardPage() {
         id: "listings" as const,
         label: "Active listings",
         value: String(totalListingsCount),
-        delta: activeListings.length
-          ? `${activeListings.length} live or pending`
+        delta: totalActiveListings
+          ? `${totalActiveListings} live or pending`
           : "No active listings yet",
         icon: <AutoAwesomeIcon />,
         tint: BRAND_STAT_TINTS.listings,
@@ -444,7 +455,7 @@ export default function DashboardPage() {
     ],
     [
       totalListingsCount,
-      activeListings.length,
+      totalActiveListings,
       salesValue,
       salesDelta,
       unreadMessages,
@@ -936,21 +947,34 @@ export default function DashboardPage() {
             Edit details, monitor engagement, and pause anytime.
           </Typography>
         </Box>
-        <Button
-          onClick={() => router.push("/products?list=new")}
-          variant="contained"
-          size="small"
-          startIcon={<AddRoundedIcon />}
-          sx={{
-            borderRadius: 999,
-            textTransform: "none",
-            fontWeight: 700,
-            boxShadow: "none",
-            ...brandContainedButtonSx,
-          }}
-        >
-          New listing
-        </Button>
+        <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+          {totalActiveListings > DASHBOARD_LISTING_PREVIEW ? (
+            <Button
+              component={Link}
+              href={`/my-settings/${encodeURIComponent(String(user.id))}/listings`}
+              variant="outlined"
+              size="small"
+              sx={{ borderRadius: 999, textTransform: "none", fontWeight: 700 }}
+            >
+              View all ({totalActiveListings})
+            </Button>
+          ) : null}
+          <Button
+            onClick={() => router.push("/products?list=new")}
+            variant="contained"
+            size="small"
+            startIcon={<AddRoundedIcon />}
+            sx={{
+              borderRadius: 999,
+              textTransform: "none",
+              fontWeight: 700,
+              boxShadow: "none",
+              ...brandContainedButtonSx,
+            }}
+          >
+            New listing
+          </Button>
+        </Stack>
       </Stack>
 
       {totalPendingPrivateAccess > 0 ? (
@@ -1349,7 +1373,21 @@ export default function DashboardPage() {
           })}
       </Box>
 
-      {soldListings.length > 0 ? (
+      {totalActiveListings > DASHBOARD_LISTING_PREVIEW ? (
+        <Box sx={{ mb: 3, textAlign: { xs: "center", sm: "left" } }}>
+          <Button
+            component={Link}
+            href={`/my-settings/${encodeURIComponent(String(user.id))}/listings`}
+            variant="text"
+            size="small"
+            sx={{ textTransform: "none", fontWeight: 700 }}
+          >
+            View all active listings ({totalActiveListings})
+          </Button>
+        </Box>
+      ) : null}
+
+      {totalSoldListings > 0 ? (
         <>
           <Stack
             direction="row"
@@ -1373,6 +1411,17 @@ export default function DashboardPage() {
                 (header or sidebar).
               </Typography>
             </Box>
+            {totalSoldListings > DASHBOARD_LISTING_PREVIEW ? (
+              <Button
+                component={Link}
+                href={`/my-settings/${encodeURIComponent(String(user.id))}/listings?tab=sold`}
+                variant="outlined"
+                size="small"
+                sx={{ borderRadius: 999, textTransform: "none", fontWeight: 700 }}
+              >
+                View all ({totalSoldListings})
+              </Button>
+            ) : null}
           </Stack>
 
           <Box
@@ -1384,7 +1433,27 @@ export default function DashboardPage() {
               width: "100%",
             }}
           >
-            {soldListings.map((l) => {
+            {soldListingsLoading ? (
+              <>
+                {[0, 1].map((i) => (
+                  <Skeleton
+                    key={i}
+                    variant="rounded"
+                    height={200}
+                    sx={{
+                      borderRadius: 4,
+                      width: {
+                        xs: "100%",
+                        sm: "calc((100% - 16px) / 2)",
+                        md: "calc((100% - 32px) / 3)",
+                      },
+                    }}
+                  />
+                ))}
+              </>
+            ) : null}
+            {!soldListingsLoading &&
+            soldListings.map((l) => {
               const cover =
                 (l.photos && l.photos[l.coverIndex ?? 0]) ||
                 l.photos?.[0] ||
@@ -1470,7 +1539,7 @@ export default function DashboardPage() {
         open={Boolean(privateAccessListing)}
         listing={
           privateAccessListing?._id
-            ? listings?.find(
+            ? activeListings.find(
                 (row) => String(row._id) === String(privateAccessListing._id),
               ) ?? privateAccessListing
             : null

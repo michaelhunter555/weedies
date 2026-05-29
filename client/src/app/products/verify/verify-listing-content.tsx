@@ -131,8 +131,10 @@ export default function VerifyListingContent() {
     let cancelled = false;
     (async () => {
       try {
-        const mine = await apiFetch<Listing[]>("/listings/me/mine", "GET");
-        const row = (mine ?? []).find((l) => String(l._id) === bootListingId);
+        const row = await apiFetch<Listing>(
+          `/listings/${encodeURIComponent(bootListingId)}`,
+          "GET",
+        );
         if (cancelled || !row) return;
         const next: PendingListing = {
           _id: String(row._id),

@@ -4,6 +4,7 @@ import mongoose from "mongoose";
 import ListingExchange from "../../models/exchange";
 import Listing from "../../models/listing";
 import Transaction from "../../models/transactions";
+import { LISTING_PURCHASE_BILLING_REASONS } from "../../lib/listing-purchase-billing";
 
 export async function confirmListingExchange(req: Request, res: Response) {
   try {
@@ -36,7 +37,7 @@ export async function confirmListingExchange(req: Request, res: Response) {
 
     const tx = (await Transaction.findOne({
       ListingId: listing._id,
-      billingReason: "Listing purchase",
+      billingReason: { $in: [...LISTING_PURCHASE_BILLING_REASONS] },
     })
       .sort({ createdAt: -1 })
       .lean()) as { paymentStatus?: string } | null;

@@ -1,5 +1,6 @@
 import type { HydratedDocument } from "mongoose";
 import type { User } from "../models/user";
+import { AccountStatus } from "../types/account-status";
 
 /**
  * Canonical JSON shape for `/user/login`, `/user/me`, etc.
@@ -10,7 +11,9 @@ export function toAppUserJson(user: HydratedDocument<User>) {
     id: String(user._id),
     name: user.name,
     email: user.email,
+    emailVerified: Boolean(user.emailVerified),
     role: user.role,
+    accountStanding: user.accountStanding ?? AccountStatus.GOOD,
     authProvider: user.authProvider,
     firebaseUid: user.firebaseUid ?? null,
     googleSub: user.googleSub ?? null,

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -316,6 +317,9 @@ export function ProductDetailsClient({ fetchBy }: ProductDetailsClientProps) {
       return "Request access from the seller first.";
     }
     if (isAuction) return "This listing is an auction — use Place bid.";
+    if (listing?.status === "reserved") {
+      return "A buyer is completing checkout for this listing.";
+    }
     if (!listing || listing.status !== "live") return "This listing is not available to buy.";
     if (isListingOwner) return "You can't purchase your own listing.";
     return "";
@@ -1092,7 +1096,39 @@ export function ProductDetailsClient({ fetchBy }: ProductDetailsClientProps) {
                           {countdown.label}
                         </Typography>
                       </Box>
-                      {placeBidDisabled && bidTooltip ? (
+                      {isPrivateRestricted ? (
+                        <>
+                          {privateAccessMutation.isError ? (
+                            <Alert severity="error" sx={{ borderRadius: 2 }}>
+                              {privateAccessMutation.error instanceof Error
+                                ? privateAccessMutation.error.message
+                                : "Could not submit access request."}
+                            </Alert>
+                          ) : null}
+                          <Alert severity="info" sx={{ borderRadius: 2 }}>
+                            {privateRequestStatus === "pending"
+                              ? "Your request is pending seller approval."
+                              : "This private auction is hidden until the seller approves you."}
+                          </Alert>
+                          <Button
+                            variant="contained"
+                            size="large"
+                            startIcon={<LockRoundedIcon />}
+                            disabled={
+                              privateAccessMutation.isPending ||
+                              privateRequestStatus === "pending"
+                            }
+                            onClick={handleRequestPrivateAccess}
+                            sx={{ borderRadius: 2, ...brandContainedButtonSx }}
+                          >
+                            {privateRequestStatus === "pending"
+                              ? "Access requested"
+                              : privateRequestStatus === "denied"
+                                ? "Request access again"
+                                : "Request access"}
+                          </Button>
+                        </>
+                      ) : placeBidDisabled && bidTooltip ? (
                         <Tooltip title={bidTooltip}>
                           <Box component="span" sx={{ display: "block" }}>
                             <Stack spacing={0.5}>
@@ -1134,6 +1170,14 @@ export function ProductDetailsClient({ fetchBy }: ProductDetailsClientProps) {
                       <Typography variant="h4" fontWeight={800}>
                         {formatMoney(buyPrice, currency)}
                       </Typography>
+                      {buyPrice > 999.99 && 
+                      <Stack direction="row" alignItems="center" spacing={1}>
+                        <Image src="https://secureapi.escrow.com/api/ecart/Content/Images/Affiliate%20Banners/banner-88x31.gif" alt="escrow_eligble" width={81} height={31} />
+                        <Typography sx={{ fontSize: 11 }} variant="caption" color="text.secondary">Escrow Eligible Listing</Typography>
+                       <Tooltip placement="top" title="Listings priced at $1000 USD and over are eligible for escrow payment.">
+                        <InfoRoundedIcon sx={{ fontSize: 16 }} />
+                       </Tooltip>
+                      </Stack>}
                       {listing.monthlyRevenue != null ? (
                         <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 600 }}>
                           {formatMoney(listing.monthlyRevenue, currency)}/mo reported revenue
@@ -1185,7 +1229,7 @@ export function ProductDetailsClient({ fetchBy }: ProductDetailsClientProps) {
                               >
                                 Buy it now
                               </Button>
-                              <SecureCheckoutNote />
+                              {buyPrice < 3999.99 && <SecureCheckoutNote />}
                             </Stack>
                           </Box>
                         </Tooltip>
@@ -1201,7 +1245,7 @@ export function ProductDetailsClient({ fetchBy }: ProductDetailsClientProps) {
                           >
                             Buy it now
                           </Button>
-                          <SecureCheckoutNote />
+                          {buyPrice < 3999.99 && <SecureCheckoutNote />}
                         </Stack>
                       )}
                     </>

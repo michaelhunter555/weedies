@@ -1,137 +1,197 @@
-import stripe from "../../utils/stripe";
-import Transaction from "../../models/transactions";
-
-import PayoutBatch from "../../models/payoutBatch";
 import mongoose from "mongoose";
 
-export enum AccountStatus {
-    GOOD = 'good',
-    SUSPENDED = 'suspended',
-    BANNED = 'banned',
-  }
+import { AccountStatus } from "../../types/account-status";
+import PayoutBatch from "../../models/payoutBatch";
+import Transaction from "../../models/transactions";
+import stripe from "../../utils/stripe";
 
-export default async function initiatePayout() {
-    // bi-weekly cron - twice a week
-    // check for stipe account id
-    // check all bookings completed successfully
-    try {
-        const transactions = await Transaction.aggregate([
-            {
-              $match: {
-                bookingCompleteTime: { $lte: new Date(Date.now() - 24*60*60*1000) },
-                hasDispute: { $ne: true },
-                paidOut: false,
-                stripePaymentIntentId: { $exists: true, $ne: null },
-                paymentType: { $ne: 'refund' },
-              }
-            },
-            {
-              $lookup: {
-                from: 'barbers',
-                localField: 'barberId',
-                foreignField: '_id',
-                as: 'barber'
-              }
-            },
-            { $unwind: '$barber' },
-            {
-              $match: {
-                'barber.accountStatus': AccountStatus.GOOD,
-                'barber.stripeAccountId': { $exists: true, $ne: null }
-              }
-            },
-            {
-              $group: {
-                _id: '$barberId',
-                name: { $first: '$barber.name' },
-                email: { $first: '$barber.email' },
-                stripeAccountId: { $first: '$barber.stripeAccountId' },
-                pushToken: { $first: '$barber.pushToken' },
-                transactions: { $push: '$_id' },
-                amountCharged: { $sum: '$amountCharged' }
-              }
-            }
-          ]);
+/** Hold completed sales at least this long before paying out (dispute window). */
+const PAYOUT_HOLD_MS = 24 * 60 * 60 * 1000;
 
-          for(const [i, barberGroup] of transactions.entries()) {
-            const { _id: barberId, stripeAccountId, pushToken, transactions: barberTransactions, name, email } = barberGroup;
+/** Minimum Stripe payout amount in cents ($1.00). */
+const MIN_PAYOUT_CENTS = 100;
 
-            if(!stripeAccountId) {
-              console.log("❌ No stripe account id found for barber:", barberId);
-              continue;
-            };
+type SellerPayoutGroup = {
+  _id: mongoose.Types.ObjectId;
+  name: string;
+  email: string;
+  stripeConnectAccountId: string;
+  transactions: mongoose.Types.ObjectId[];
+  sellerNetTotal: number;
+};
 
-            const balance = await stripe.balance.retrieve({ stripeAccount: stripeAccountId });
-            const totalAvailable = balance?.available?.find((b) => b.currency === 'usd');
+/**
+ * Bi-weekly seller payouts (Connect Express).
+ * Groups unpaid `Listing purchase` transactions by seller, skips restricted
+ * accounts, and creates Stripe payouts on each connected account.
+ */
+export default async function initiatePayout(): Promise<void> {
+  try {
+    const cutoff = new Date(Date.now() - PAYOUT_HOLD_MS);
 
-            if (!totalAvailable || totalAvailable?.amount <= 0) {
-              console.log("❌ No available balance found for barber:", barberId);
-              continue;
-            };
-            console.log("payout#:", i,"\n", "amount charged:", barberGroup.amountCharged);
+    const groups = (await Transaction.aggregate([
+      {
+        $match: {
+          createdAt: { $lte: cutoff },
+          hasDispute: { $ne: true },
+          paidOut: { $ne: true },
+          paymentStatus: "succeeded",
+          stripePaymentIntentId: { $exists: true, $ne: null },
+          billingReason: "Listing purchase",
+        },
+      },
+      {
+        $addFields: {
+          sellerNetCents: {
+            $max: [
+              0,
+              { $subtract: ["$amountPaid", { $ifNull: ["$serviceFee", 0] }] },
+            ],
+          },
+        },
+      },
+      { $match: { sellerNetCents: { $gt: 0 } } },
+      {
+        $lookup: {
+          from: "users",
+          localField: "sellerId",
+          foreignField: "_id",
+          as: "user",
+        },
+      },
+      { $unwind: "$user" },
+      {
+        $match: {
+          "user.accountStanding": AccountStatus.GOOD,
+          "user.stripeConnectAccountId": { $exists: true, $ne: null },
+        },
+      },
+      {
+        $group: {
+          _id: "$sellerId",
+          name: { $first: "$user.name" },
+          email: { $first: "$user.email" },
+          stripeConnectAccountId: { $first: "$user.stripeConnectAccountId" },
+          transactions: { $push: "$_id" },
+          sellerNetTotal: { $sum: "$sellerNetCents" },
+        },
+      },
+    ])) as SellerPayoutGroup[];
 
-            const payoutAmount = Math.min(totalAvailable?.amount ?? 0, Math.floor(barberGroup.amountCharged));
-            if(payoutAmount <= 100) {
-              console.log("⚠️ Payout amount is less than 100 for barber:", barberId);
-              continue;
-            };
+    let payoutsCreated = 0;
 
-            const orderedTransactions = await Transaction.find({ _id: { $in: barberTransactions } }).select('_id amountCharged bookingCompleteTime').sort({ bookingCompleteTime: 1 });
+    for (const [i, group] of groups.entries()) {
+      const sellerId = String(group._id);
+      const stripeConnectAccountId = String(group.stripeConnectAccountId ?? "");
 
-            let remainingAmount = payoutAmount;
-            const paidTransactions: mongoose.Types.ObjectId[] = [];
+      if (!stripeConnectAccountId) {
+        console.log("❌ No Connect account for seller:", sellerId);
+        continue;
+      }
 
-            for(const tx of orderedTransactions) {
-              if(remainingAmount <= 0) break;
-              if(remainingAmount >= tx.amountCharged) {
-                paidTransactions.push(tx._id);
-                remainingAmount -= tx.amountCharged;
-              } else {
-                console.log(`Partial payout left $${remainingAmount / 100}, transaction ${tx._id} not fully covered`);
-                break;
-              }
-            }
+      const balance = await stripe.balance.retrieve({
+        stripeAccount: stripeConnectAccountId,
+      });
+      const totalAvailable = balance.available?.find((b) => b.currency === "usd");
 
-            if(paidTransactions.length === 0) {
-              console.log("❌ No transactions to payout for barber:", barberId);
-              continue;
-            }
+      if (!totalAvailable || totalAvailable.amount <= 0) {
+        console.log("❌ No available USD balance for seller:", sellerId);
+        continue;
+      }
 
-            const batchPayout = await PayoutBatch.create({
-              barberId,
-              transactions: paidTransactions,
-              amount: payoutAmount - remainingAmount,
-              status: 'pending',
-              stripePayoutId: null,
-              payoutDate: null,
-            })
+      const owedCents = Math.floor(group.sellerNetTotal);
+      const payoutCap = Math.min(totalAvailable.amount, owedCents);
 
-            await stripe.payouts.create({
-                    amount: payoutAmount,
-                    currency: 'usd',
-                    metadata: {
-                      barberId: String(barberId),
-                      barberName: name as string,
-                      barberEmail: email as string,
-                      barberPushToken: pushToken ?? "",
-                      batchPayoutId: String(batchPayout._id),
-                    }
-                }, { 
-                  stripeAccount: stripeAccountId, 
-                  idempotencyKey: `${String(batchPayout._id)}:payout` 
-                })
+      if (payoutCap < MIN_PAYOUT_CENTS) {
+        console.log("⚠️ Payout below minimum for seller:", sellerId, payoutCap);
+        continue;
+      }
 
-                // console.log('payout', payout.id, payout.status);
-                // console.log(`✅ Payout created for barber ${barberId}`);
-                // console.log(`  ↳ Stripe Payout ID: ${payout.id}`);
-                // console.log(`  ↳ Status: ${payout.status}`);
-                // console.log(`  ↳ Amount: $${(payoutAmount / 100).toFixed(2)}`);
+      console.log(
+        `payout#${i}`,
+        "seller:",
+        sellerId,
+        "owed (cents):",
+        owedCents,
+        "cap:",
+        payoutCap,
+      );
 
-                // console.log(`✅ Payout sent to barber ${barberId}: $${(payoutAmount / 100).toFixed(2)}`);
+      const orderedTransactions = await Transaction.find({
+        _id: { $in: group.transactions },
+      })
+        .select("_id amountPaid serviceFee")
+        .sort({ createdAt: 1 });
+
+      let remainingAmount = payoutCap;
+      const paidTransactions: mongoose.Types.ObjectId[] = [];
+
+      for (const tx of orderedTransactions) {
+        if (remainingAmount <= 0) break;
+        const net = Math.max(
+          0,
+          Number(tx.amountPaid ?? 0) - Number(tx.serviceFee ?? 0),
+        );
+        if (net <= 0) continue;
+        if (remainingAmount >= net) {
+          paidTransactions.push(tx._id);
+          remainingAmount -= net;
+        } else {
+          console.log(
+            `Partial payout: $${(remainingAmount / 100).toFixed(2)} left, tx ${tx._id} skipped`,
+          );
+          break;
         }
+      }
 
-        console.log("Cron Completed: Payouts sent for", transactions.length, "barbers");
-    } catch (err) {
-        console.log("Cron Failed to run", err);
+      if (paidTransactions.length === 0) {
+        console.log("❌ No transactions covered for seller:", sellerId);
+        continue;
+      }
+
+      const batchAmount = payoutCap - remainingAmount;
+      if (batchAmount < MIN_PAYOUT_CENTS) {
+        continue;
+      }
+
+      const batchPayout = await PayoutBatch.create({
+        sellerId: group._id,
+        transactions: paidTransactions,
+        amount: batchAmount,
+        status: "pending",
+        stripePayoutId: null,
+        payoutDate: null,
+        currency: "usd",
+      });
+
+      await stripe.payouts.create(
+        {
+          amount: batchAmount,
+          currency: "usd",
+          metadata: {
+            sellerId,
+            sellerName: String(group.name ?? "Seller"),
+            sellerEmail: String(group.email ?? ""),
+            batchPayoutId: String(batchPayout._id),
+          },
+        },
+        {
+          stripeAccount: stripeConnectAccountId,
+          idempotencyKey: `${String(batchPayout._id)}:payout`,
+        },
+      );
+
+      payoutsCreated += 1;
     }
+
+    console.log(
+      "Cron completed: payouts initiated for",
+      payoutsCreated,
+      "of",
+      groups.length,
+      "seller groups",
+    );
+  } catch (err) {
+    console.error("Cron failed: initiatePayout", err);
+  }
 }

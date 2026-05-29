@@ -10,9 +10,13 @@ import adminRoutes from "./routes/adminRoutes";
 import integrationRoutes from "./routes/integrationRoutes";
 import chatRoutes from "./routes/chatRoutes";
 import supportRoutes from "./routes/supportRoutes";
+import disputeRoutes from "./routes/disputeRoutes";
+import escrowRoutes from "./routes/escrowRoutes";
 import { createServer } from "http";
 import { Server, type Socket } from "socket.io";
 import { verifyAccessToken } from "./lib/jwt";
+import cron from "node-cron";
+import initiatePayout from "./controllers/cron/payouts";
 
 dotenv.config();
 
@@ -125,6 +129,8 @@ app.use("/api/user", userRoutes);
 app.use("/api/listings", listingsRoutes);
 app.use("/api/chats", chatRoutes);
 app.use("/api/support", supportRoutes);
+app.use("/api/disputes", disputeRoutes);
+app.use("/api/escrow", escrowRoutes);
 app.use("/api/integrations", integrationRoutes);
 app.use("/api/stripe", stripeRoutes);
 app.use("/api/admin", adminRoutes);
@@ -149,6 +155,15 @@ mongoose
     server.listen(port, () => {
       // eslint-disable-next-line no-console
       console.log(`listening on port ${port}`);
+
+      if (process.env.ENABLE_PAYOUT_CRON !== "false") {
+        // Mon & Thu 09:00 UTC — bi-weekly rhythm for seller Connect payouts.
+        cron.schedule("0 9 * * 1,4", () => {
+          void initiatePayout();
+        });
+        // eslint-disable-next-line no-console
+        console.log("[cron] Seller payout job scheduled (Mon/Thu 09:00 UTC)");
+      }
     });
   })
   .catch((err) => {

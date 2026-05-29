@@ -98,7 +98,12 @@ export interface Listing {
     bidStatus: "pending" | "accepted" | "rejected";
   }[];
 
+  /** Number of users following this listing. Intended for auctions only.*/
+  auctionFollowers?: mongoose.Types.ObjectId[];
+
   isPrivateListing?: boolean;
+  /** Set after the $4.99 private add-on is charged (create or edit). */
+  privateListingFeePaid?: boolean;
   approvedUsersList?: string[] | null;
   pendingPrivateListingRequests?: {
     _id?: mongoose.Types.ObjectId;
@@ -219,6 +224,7 @@ const ListingSchema = new mongoose.Schema<Listing>(
         "draft",
         "pending_review",
         "live",
+        "reserved",
         "paused",
         "rejected",
         "sold",
@@ -271,6 +277,7 @@ const ListingSchema = new mongoose.Schema<Listing>(
       max: 5,
     },
     isPrivateListing: { type: Boolean, required: false, default: false },
+    privateListingFeePaid: { type: Boolean, required: false, default: false },
     approvedUsersList: { type: [String], required: false, default: null },
     pendingPrivateListingRequests: {
       type: [
@@ -291,6 +298,12 @@ const ListingSchema = new mongoose.Schema<Listing>(
           resolvedAt: { type: Date, required: false, default: null },
         },
       ],
+      required: false,
+      default: [],
+    },
+    auctionFollowers: {
+      type: [mongoose.Schema.Types.ObjectId],
+      ref: "User",
       required: false,
       default: [],
     },

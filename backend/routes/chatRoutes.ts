@@ -1,6 +1,7 @@
 import express from "express";
 
 import { authenticate } from "../middleware/auth";
+import { enforceAccountStanding } from "../middleware/account-standing";
 import { createChat } from "../controllers/chats/create-chat";
 import { createSupportChat } from "../controllers/chats/create-support-chat";
 import { getChatMessages } from "../controllers/chats/get-chat-messages";
@@ -12,6 +13,7 @@ import { sendChatMessage } from "../controllers/chats/send-chat-message";
 const router = express.Router();
 
 router.use(authenticate);
+router.use(enforceAccountStanding);
 
 router.get("/mine", getChats);
 router.get("/unread-count", getUnreadCount);

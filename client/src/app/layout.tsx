@@ -13,17 +13,19 @@ import Toaster from "@/components/Toaster/Toaster";
 import Footer from "@/components/Footer/Footer";
 import Copyright from "@/components/Footer/Copyright";
 import StripeCheckoutProvider from "@/components/StripeProvider/StripeCheckoutProvider";
+import { AccountAccessGate } from "@/components/Auth/AccountAccessGate";
+import { EmailVerificationGate } from "@/components/Auth/EmailVerificationGate";
 import { LiveChatWidget } from "@/components/SupportChat/LiveChatWidget";
 import { LiveChatProvider } from "@/context/live-chat-context";
 import { AppThemeProvider } from "@/theme/app-theme";
 import { APP_DOMAIN } from "@/brand";
 import Typography from "@mui/material/Typography";
 
-const SITE_OG_IMAGE = "/3.png";
+const SITE_OG_IMAGE = "homepage_pack/3.png";
 
 export const metadata: Metadata = {
   metadataBase: new URL(`https://${APP_DOMAIN}`),
-  title: "Dap & Flip — Discover & Sell Apps | Dapandflip.com",
+  title: "Dap & Flip - Discover & Sell Apps | Dapandflip.com",
   description:
     "Dapandflip.com is the marketplace to discover, buy, and sell indie apps. List your app on Dap & Flip or find your next flip — secure checkout and seller payouts built in.",
   applicationName: "Dap & Flip",
@@ -67,6 +69,8 @@ export default function RootLayout({
             <SnackbarProvider>
               <StripeCheckoutProvider>
                 <AuthProvider>
+                  <AccountAccessGate>
+                  <EmailVerificationGate>
                   <SocketProvider>
                     <LiveChatProvider>
                       <PageContainer>
@@ -94,6 +98,8 @@ export default function RootLayout({
                       <Toaster />
                     </LiveChatProvider>
                   </SocketProvider>
+                  </EmailVerificationGate>
+                  </AccountAccessGate>
                 </AuthProvider>
               </StripeCheckoutProvider>
             </SnackbarProvider>

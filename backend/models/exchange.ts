@@ -19,7 +19,7 @@ export interface ListingExchange {
   buyerConfirmedAt?: Date | null;
   sellerCapturedPayment?: boolean;
   paymentCaptureExpiration?: Date | null;
-  paymentStatus?: 'succeeded' | 'failed' | 'canceled' | 'pending';
+  paymentStatus?: 'succeeded' | 'failed' | 'canceled' | 'pending' | 'disputed';
 }
 
 const DeliverableSchema = new mongoose.Schema(
@@ -59,7 +59,7 @@ const ListingExchangeSchema = new mongoose.Schema<ListingExchange>(
     paymentCaptureExpiration: { type: Date, default: null },
     paymentStatus: {
       type: String,
-      enum: ["pending", "succeeded", "canceled", "failed", "captured", "cancelled"],
+      enum: ["pending", "succeeded", "canceled", "failed", "captured", "cancelled", "disputed"],
       default: "pending",
     },
   },

@@ -33,6 +33,7 @@ export type ListingStatus =
     | "draft"
     | "pending_review"
     | "live"
+    | "reserved"
     | "paused"
     | "rejected"
     | "sold"
