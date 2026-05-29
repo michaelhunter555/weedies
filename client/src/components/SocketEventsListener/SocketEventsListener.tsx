@@ -79,9 +79,6 @@ export default function SocketEventsListener() {
         invalidateQuery("my-marketplace-orders"),
         invalidateQuery("listing"),
         invalidateQuery("listing-exchange"),
-        ...(lid != null
-          ? [invalidateQuery(["listing-exchange", lid])]
-          : []),
         invalidateQuery("stripe-wallet"),
         // Profile counters (totalSales, totalListingsSold) bumped server-side.
         syncUserFromServer().catch(() => null),
@@ -107,7 +104,7 @@ export default function SocketEventsListener() {
         severity: "info",
       });
       if (lid != null) {
-        await invalidateQuery(["listing-exchange", lid]);
+        await invalidateQuery("listing-exchange");
       }
     };
 
@@ -453,6 +450,7 @@ export default function SocketEventsListener() {
     };
 
     const resolutionPath = (disputeId?: string) => {
+      if (!uid) return undefined;
       const base = `/my-settings/${encodeURIComponent(uid)}/resolution-center`;
       return disputeId ? `${base}/${encodeURIComponent(String(disputeId))}` : base;
     };
@@ -467,7 +465,7 @@ export default function SocketEventsListener() {
       });
       await invalidateQuery("disputes");
       if (data?.listingId) {
-        await invalidateQuery(["listing-exchange", String(data.listingId)]);
+        await invalidateQuery("listing-exchange");
       }
     };
 
@@ -481,7 +479,7 @@ export default function SocketEventsListener() {
       });
       await invalidateQuery("disputes");
       if (data?.disputeId) {
-        await invalidateQuery(["dispute", String(data.disputeId)]);
+        await invalidateQuery("dispute");
       }
     };
 
