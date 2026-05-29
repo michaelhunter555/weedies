@@ -203,7 +203,7 @@ export default function DashboardPage() {
         limit: DASHBOARD_LISTING_PREVIEW,
         status: "sold",
       }),
-    enabled: Boolean(hydrated && user?.id && (activeListingsPage?.meta.totalSold ?? 0) > 0),
+    enabled: Boolean(hydrated && user?.id && (activeListingsPage?.meta?.totalSold ?? 0) > 0),
     staleTime: 30_000,
   });
 

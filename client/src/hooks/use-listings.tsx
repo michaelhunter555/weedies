@@ -44,6 +44,63 @@ export type ListingFeed = {
   limit: number;
 };
 
+const EMPTY_MY_LISTINGS_META = {
+  totalActive: 0,
+  totalSold: 0,
+  pendingPrivateAccessTotal: 0,
+} as const;
+
+function normalizeMyListingsPayload(
+  raw: MyListingsPayload | Listing[] | null | undefined,
+  params: MyListingsParams,
+): MyListingsPayload {
+  const limit = params.limit ?? 20;
+  const page = params.page ?? 1;
+  const empty: MyListingsPayload = {
+    items: [],
+    page: 1,
+    limit,
+    total: 0,
+    totalPages: 1,
+    meta: { ...EMPTY_MY_LISTINGS_META },
+  };
+  if (!raw) return empty;
+
+  if (Array.isArray(raw)) {
+    const totalActive = raw.filter(
+      (l) => l.status !== "sold" && l.status !== "removed",
+    ).length;
+    const totalSold = raw.filter((l) => l.status === "sold").length;
+    const status = params.status ?? "active";
+    const pool =
+      status === "sold"
+        ? raw.filter((l) => l.status === "sold")
+        : status === "all"
+          ? raw
+          : raw.filter((l) => l.status !== "sold" && l.status !== "removed");
+    const total = pool.length;
+    return {
+      items: pool.slice((page - 1) * limit, page * limit),
+      page,
+      limit,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / limit) || 1),
+      meta: { totalActive, totalSold, pendingPrivateAccessTotal: 0 },
+    };
+  }
+
+  return {
+    ...empty,
+    ...raw,
+    items: raw.items ?? [],
+    page: raw.page ?? page,
+    limit: raw.limit ?? limit,
+    total: raw.total ?? 0,
+    totalPages: raw.totalPages ?? 1,
+    meta: raw.meta ?? { ...EMPTY_MY_LISTINGS_META },
+  };
+}
+
 export const useListings = () => {
   const { apiFetch } = useApiFetchOrThrow();
 
@@ -55,17 +112,8 @@ export const useListings = () => {
       if (params.limit) qs.set("limit", String(params.limit));
       if (params.status) qs.set("status", params.status);
       const path = qs.toString() ? `/listings/me/mine?${qs}` : "/listings/me/mine";
-      const data = await apiFetch<MyListingsPayload>(path, "GET");
-      return (
-        data ?? {
-          items: [],
-          page: 1,
-          limit: 20,
-          total: 0,
-          totalPages: 1,
-          meta: { totalActive: 0, totalSold: 0, pendingPrivateAccessTotal: 0 },
-        }
-      );
+      const data = await apiFetch<MyListingsPayload | Listing[]>(path, "GET");
+      return normalizeMyListingsPayload(data, params);
     },
     [apiFetch],
   );
