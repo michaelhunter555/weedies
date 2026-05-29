@@ -1,6 +1,6 @@
 "use client";
 
-import { useContext, useEffect } from "react";
+import { useContext, useEffect, useRef } from "react";
 import { usePathname, useRouter } from "next/navigation";
 
 import { AuthContext } from "@/context/auth-context";
@@ -10,19 +10,32 @@ import {
 } from "@/lib/email-verification";
 
 /**
- * Redirects email/password users who have not verified their inbox yet.
- * Waits for `sessionReady` so we do not act on a stale localStorage profile.
+ * Sends unverified users to `/verify-email` once per session after profile sync.
  */
 export function EmailVerificationGate({ children }: { children: React.ReactNode }) {
-  const { hydrated, sessionReady, isLoggedIn, user } = useContext(AuthContext);
+  const { hydrated, sessionReady, isLoggedIn, user, syncUserFromServer } =
+    useContext(AuthContext);
   const pathname = usePathname();
   const router = useRouter();
+  const checkedRef = useRef(false);
 
   useEffect(() => {
-    if (!hydrated || !sessionReady || !isLoggedIn || !user) return;
-    if (!shouldRedirectToVerifyEmail(user, pathname)) return;
-    router.replace(VERIFY_EMAIL_PATH);
-  }, [hydrated, sessionReady, isLoggedIn, user, pathname, router]);
+    if (!hydrated || !sessionReady) return;
+    if (!isLoggedIn) {
+      checkedRef.current = false;
+      return;
+    }
+    if (checkedRef.current) return;
+    checkedRef.current = true;
+
+    void (async () => {
+      const fresh = await syncUserFromServer();
+      const profile = fresh ?? user;
+      if (!profile) return;
+      if (!shouldRedirectToVerifyEmail(profile, pathname)) return;
+      router.replace(VERIFY_EMAIL_PATH);
+    })();
+  }, [hydrated, sessionReady, isLoggedIn, pathname, router, syncUserFromServer, user]);
 
   return <>{children}</>;
 }

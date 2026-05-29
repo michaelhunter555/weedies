@@ -126,8 +126,8 @@ export default function MyListingsPage() {
 
   const tabCounts = useMemo(
     () => ({
-      active: listingsQuery.data?.meta.totalActive ?? 0,
-      sold: listingsQuery.data?.meta.totalSold ?? 0,
+      active: listingsQuery.data?.meta?.totalActive ?? 0,
+      sold: listingsQuery.data?.meta?.totalSold ?? 0,
     }),
     [listingsQuery.data?.meta],
   );

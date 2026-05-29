@@ -23,8 +23,11 @@ import {
   useRef,
   useState,
 } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { signOut } from "firebase/auth";
 
 import { type UserObject } from "../../types";
+import { auth as firebaseAuth } from "@/lib/firebase";
 import { readBrowserLocalePreferences } from "@/utils/user-locale";
 
 type AuthProviderType = "firebase" | "google";
@@ -246,6 +249,7 @@ const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     readFromStorage
   );
   const [sessionReady, setSessionReady] = useState(false);
+  const queryClient = useQueryClient();
 
   const apiBase = useMemo(() => getApiBase(), []);
 
@@ -366,16 +370,30 @@ const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const logout = useCallback(async () => {
     try {
       if (apiBase) {
+        const storedRefresh = readStoredRefreshToken();
         await fetch(`${apiBase}/user/logout`, {
           method: "POST",
           credentials: "include",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(
+            storedRefresh ? { refreshToken: storedRefresh } : {},
+          ),
         });
       }
+    } catch {
+      // Still clear local session if the API call fails.
     } finally {
+      try {
+        await signOut(firebaseAuth);
+      } catch {
+        // ignore Firebase sign-out errors
+      }
+      queryClient.clear();
       dispatch({ type: "LOGOUT" });
       writeToStorage(null, null);
+      setSessionReady(false);
     }
-  }, [apiBase]);
+  }, [apiBase, queryClient]);
 
   const update = useCallback((user: UserObject) => {
     dispatch({ type: "SET_USER", user });

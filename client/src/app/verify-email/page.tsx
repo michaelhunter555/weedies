@@ -1,6 +1,6 @@
 "use client";
 
-import { useContext, useEffect, useRef, useState } from "react";
+import { useContext, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   reload,
@@ -22,61 +22,98 @@ import { AuthContext, buildApiBase } from "@/context/auth-context";
 import { auth as firebaseAuth } from "@/lib/firebase";
 import { isFirebaseGoogleSignIn } from "@/lib/firebase-auth-providers";
 import { needsEmailVerification } from "@/lib/email-verification";
+import type { UserObject } from "../../../types";
 import { APP_NAME } from "@/brand";
 import {
   BRAND_PALETTE,
   brandContainedButtonSx,
 } from "@/theme/brand-palette";
 
-function isServerGoogleAccount(
-  user: { authProvider?: string } | null | undefined,
-): boolean {
-  return user?.authProvider === "google";
+type Phase = "boot" | "form";
+
+async function confirmWithFirebase(
+  fbUser: FirebaseUser,
+  accessToken: string,
+  update: (user: UserObject) => void,
+  syncUserFromServer: () => Promise<UserObject | null>,
+) {
+  const apiBase = buildApiBase();
+  if (!apiBase) throw new Error("Missing API configuration");
+
+  const idToken = await fbUser.getIdToken(true);
+  const resp = await fetch(`${apiBase}/user/confirm-email-verified`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${accessToken}`,
+    },
+    credentials: "include",
+    body: JSON.stringify({ idToken }),
+  });
+
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok) {
+    throw new Error(
+      (data?.message as string) || "Could not update your account.",
+    );
+  }
+
+  if (data?.user) {
+    update(data.user as UserObject);
+  }
+  await syncUserFromServer();
 }
 
 export default function VerifyEmailPage() {
   const router = useRouter();
-  const authCtx = useContext(AuthContext);
-  const bootstrapStarted = useRef(false);
+  const auth = useContext(AuthContext);
+  const [phase, setPhase] = useState<Phase>("boot");
   const [checking, setChecking] = useState(false);
   const [resending, setResending] = useState(false);
-  const [resolving, setResolving] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
-  const [isGoogleSession, setIsGoogleSession] = useState(false);
 
-  const email = authCtx.user?.email ?? "";
+  const email = auth.user?.email ?? "";
+  const isGoogleSession =
+    auth.user?.authProvider === "google" ||
+    isFirebaseGoogleSignIn(firebaseAuth.currentUser);
 
-  const syncFromFirebaseToken = async (fbUser: FirebaseUser) => {
-    const apiBase = buildApiBase();
-    if (!apiBase) throw new Error("Missing API configuration");
-
-    const idToken = await fbUser.getIdToken(true);
-    const accessToken = authCtx.accessToken;
-    if (!accessToken) throw new Error("Sign in again to continue.");
-
-    const resp = await fetch(`${apiBase}/user/confirm-email-verified`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${accessToken}`,
-      },
-      credentials: "include",
-      body: JSON.stringify({ idToken }),
-    });
-
-    const data = await resp.json().catch(() => ({}));
-    if (!resp.ok) {
-      throw new Error(
-        (data?.message as string) || "Could not update your account.",
-      );
+  // Boot once when auth is ready — no user object in the dependency list.
+  useEffect(() => {
+    if (!auth.hydrated) return;
+    if (!auth.isLoggedIn) {
+      router.replace("/signup");
+      return;
     }
+    if (!auth.sessionReady) return;
 
-    if (data?.user) {
-      authCtx.update(data.user);
-    }
-    await authCtx.syncUserFromServer();
-  };
+    let cancelled = false;
+
+    void (async () => {
+      const fresh = await auth.syncUserFromServer();
+      if (cancelled) return;
+
+      const profile = fresh ?? auth.user;
+      if (!profile?.id) {
+        setError("Could not load your profile. Sign out and sign in again.");
+        setPhase("form");
+        return;
+      }
+
+      if (!needsEmailVerification(profile)) {
+        router.replace("/");
+        return;
+      }
+
+      setPhase("form");
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [auth.hydrated, auth.sessionReady, auth.isLoggedIn, router]);
+
+  const goHome = () => router.replace("/");
 
   const handleResend = async () => {
     setError(null);
@@ -94,15 +131,10 @@ export default function VerifyEmailPage() {
       await sendEmailVerification(fbUser);
       setInfo("Verification email sent. Check your inbox and spam folder.");
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Could not resend email";
-      setError(msg);
+      setError(e instanceof Error ? e.message : "Could not resend email");
     } finally {
       setResending(false);
     }
-  };
-
-  const finishAndGoHome = () => {
-    router.replace("/");
   };
 
   const handleContinue = async () => {
@@ -110,9 +142,20 @@ export default function VerifyEmailPage() {
     setInfo(null);
     setChecking(true);
     try {
-      const user = authCtx.user;
-      if (isServerGoogleAccount(user)) {
-        finishAndGoHome();
+      const fresh = await auth.syncUserFromServer();
+      const profile = fresh ?? auth.user;
+
+      if (!profile?.id) {
+        throw new Error("Could not load your profile. Sign out and sign in again.");
+      }
+
+      if (!needsEmailVerification(profile)) {
+        goHome();
+        return;
+      }
+
+      if (profile.authProvider === "google") {
+        goHome();
         return;
       }
 
@@ -121,16 +164,19 @@ export default function VerifyEmailPage() {
         throw new Error("Sign in again, then return to this page.");
       }
 
-      const google = isFirebaseGoogleSignIn(fbUser);
-
-      if (google) {
-        await syncFromFirebaseToken(fbUser);
-        finishAndGoHome();
+      if (isFirebaseGoogleSignIn(fbUser)) {
+        if (!auth.accessToken) throw new Error("Sign in again to continue.");
+        await confirmWithFirebase(
+          fbUser,
+          auth.accessToken,
+          auth.update,
+          auth.syncUserFromServer,
+        );
+        goHome();
         return;
       }
 
       await reload(fbUser);
-
       if (!fbUser.emailVerified) {
         setError(
           "We still do not see a verified email. Open the link Firebase sent you, then try again.",
@@ -138,83 +184,22 @@ export default function VerifyEmailPage() {
         return;
       }
 
-      await syncFromFirebaseToken(fbUser);
-      finishAndGoHome();
+      if (!auth.accessToken) throw new Error("Sign in again to continue.");
+      await confirmWithFirebase(
+        fbUser,
+        auth.accessToken,
+        auth.update,
+        auth.syncUserFromServer,
+      );
+      goHome();
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Could not continue";
-      setError(msg);
+      setError(e instanceof Error ? e.message : "Could not continue");
     } finally {
       setChecking(false);
     }
   };
 
-  useEffect(() => {
-    if (!authCtx.hydrated) return;
-    if (!authCtx.isLoggedIn) {
-      router.replace("/signup");
-      return;
-    }
-    if (!authCtx.sessionReady) return;
-    if (bootstrapStarted.current) return;
-    bootstrapStarted.current = true;
-
-    let cancelled = false;
-
-    void (async () => {
-      setResolving(true);
-      try {
-        const synced = await authCtx.syncUserFromServer();
-        const user = synced ?? authCtx.user;
-        if (!user || cancelled) return;
-
-        if (!needsEmailVerification(user)) {
-          router.replace("/");
-          return;
-        }
-
-        const serverGoogle = isServerGoogleAccount(user);
-        const fbUser = firebaseAuth.currentUser;
-        const firebaseGoogle = isFirebaseGoogleSignIn(fbUser);
-        const google = serverGoogle || firebaseGoogle;
-        if (!cancelled) setIsGoogleSession(google);
-
-        if (serverGoogle) {
-          if (firebaseGoogle && fbUser) {
-            await syncFromFirebaseToken(fbUser);
-          }
-          if (!cancelled) router.replace("/");
-          return;
-        }
-
-        if (firebaseGoogle && fbUser) {
-          await syncFromFirebaseToken(fbUser);
-          if (!cancelled) router.replace("/");
-        }
-      } catch {
-        // User can still press Continue manually.
-      } finally {
-        if (!cancelled) setResolving(false);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    authCtx.hydrated,
-    authCtx.sessionReady,
-    authCtx.isLoggedIn,
-    authCtx.syncUserFromServer,
-    authCtx.update,
-    router,
-  ]);
-
-  const showBootstrapSpinner =
-    authCtx.hydrated &&
-    authCtx.isLoggedIn &&
-    (!authCtx.sessionReady || resolving);
-
-  if (showBootstrapSpinner) {
+  if (phase === "boot") {
     return (
       <Box sx={{ py: 8, textAlign: "center" }}>
         <Typography color="text.secondary">Checking your account…</Typography>
@@ -297,7 +282,7 @@ export default function VerifyEmailPage() {
             variant="contained"
             size="large"
             fullWidth
-            disabled={checking || !authCtx.isLoggedIn}
+            disabled={checking || !auth.isLoggedIn}
             onClick={() => void handleContinue()}
             sx={{ borderRadius: 2, ...brandContainedButtonSx }}
           >
@@ -330,7 +315,7 @@ export default function VerifyEmailPage() {
             variant="text"
             size="small"
             color="inherit"
-            onClick={() => void authCtx.logout().then(() => router.replace("/signup"))}
+            onClick={() => void auth.logout().then(() => router.replace("/signup"))}
             sx={{ textTransform: "none" }}
           >
             Sign out and use a different account
