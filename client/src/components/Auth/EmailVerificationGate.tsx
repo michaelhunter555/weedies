@@ -11,17 +11,18 @@ import {
 
 /**
  * Redirects email/password users who have not verified their inbox yet.
+ * Waits for `sessionReady` so we do not act on a stale localStorage profile.
  */
 export function EmailVerificationGate({ children }: { children: React.ReactNode }) {
-  const { hydrated, isLoggedIn, user } = useContext(AuthContext);
+  const { hydrated, sessionReady, isLoggedIn, user } = useContext(AuthContext);
   const pathname = usePathname();
   const router = useRouter();
 
   useEffect(() => {
-    if (!hydrated || !isLoggedIn || !user) return;
+    if (!hydrated || !sessionReady || !isLoggedIn || !user) return;
     if (!shouldRedirectToVerifyEmail(user, pathname)) return;
     router.replace(VERIFY_EMAIL_PATH);
-  }, [hydrated, isLoggedIn, user, pathname, router]);
+  }, [hydrated, sessionReady, isLoggedIn, user, pathname, router]);
 
   return <>{children}</>;
 }

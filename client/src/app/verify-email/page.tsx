@@ -1,6 +1,6 @@
 "use client";
 
-import { useContext, useEffect, useState } from "react";
+import { useContext, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   reload,
@@ -28,9 +28,16 @@ import {
   brandContainedButtonSx,
 } from "@/theme/brand-palette";
 
+function isServerGoogleAccount(
+  user: { authProvider?: string } | null | undefined,
+): boolean {
+  return user?.authProvider === "google";
+}
+
 export default function VerifyEmailPage() {
   const router = useRouter();
   const authCtx = useContext(AuthContext);
+  const bootstrapStarted = useRef(false);
   const [checking, setChecking] = useState(false);
   const [resending, setResending] = useState(false);
   const [resolving, setResolving] = useState(true);
@@ -103,6 +110,12 @@ export default function VerifyEmailPage() {
     setInfo(null);
     setChecking(true);
     try {
+      const user = authCtx.user;
+      if (isServerGoogleAccount(user)) {
+        finishAndGoHome();
+        return;
+      }
+
       const fbUser = firebaseAuth.currentUser;
       if (!fbUser) {
         throw new Error("Sign in again, then return to this page.");
@@ -141,6 +154,9 @@ export default function VerifyEmailPage() {
       router.replace("/signup");
       return;
     }
+    if (!authCtx.sessionReady) return;
+    if (bootstrapStarted.current) return;
+    bootstrapStarted.current = true;
 
     let cancelled = false;
 
@@ -149,16 +165,28 @@ export default function VerifyEmailPage() {
       try {
         const synced = await authCtx.syncUserFromServer();
         const user = synced ?? authCtx.user;
+        if (!user || cancelled) return;
+
         if (!needsEmailVerification(user)) {
+          router.replace("/");
+          return;
+        }
+
+        const serverGoogle = isServerGoogleAccount(user);
+        const fbUser = firebaseAuth.currentUser;
+        const firebaseGoogle = isFirebaseGoogleSignIn(fbUser);
+        const google = serverGoogle || firebaseGoogle;
+        if (!cancelled) setIsGoogleSession(google);
+
+        if (serverGoogle) {
+          if (firebaseGoogle && fbUser) {
+            await syncFromFirebaseToken(fbUser);
+          }
           if (!cancelled) router.replace("/");
           return;
         }
 
-        const fbUser = firebaseAuth.currentUser;
-        const google = isFirebaseGoogleSignIn(fbUser);
-        if (!cancelled) setIsGoogleSession(google);
-
-        if (google && fbUser) {
+        if (firebaseGoogle && fbUser) {
           await syncFromFirebaseToken(fbUser);
           if (!cancelled) router.replace("/");
         }
@@ -174,14 +202,19 @@ export default function VerifyEmailPage() {
     };
   }, [
     authCtx.hydrated,
+    authCtx.sessionReady,
     authCtx.isLoggedIn,
-    authCtx.user,
     authCtx.syncUserFromServer,
     authCtx.update,
     router,
   ]);
 
-  if (resolving && authCtx.hydrated && authCtx.isLoggedIn) {
+  const showBootstrapSpinner =
+    authCtx.hydrated &&
+    authCtx.isLoggedIn &&
+    (!authCtx.sessionReady || resolving);
+
+  if (showBootstrapSpinner) {
     return (
       <Box sx={{ py: 8, textAlign: "center" }}>
         <Typography color="text.secondary">Checking your account…</Typography>

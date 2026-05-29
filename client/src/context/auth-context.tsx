@@ -21,6 +21,7 @@ import {
   useMemo,
   useReducer,
   useRef,
+  useState,
 } from "react";
 
 import { type UserObject } from "../../types";
@@ -198,6 +199,8 @@ function normalizeUser(backendUser: any): UserObject {
 
 export type AuthContextProps = {
   hydrated: boolean;
+  /** True after the one-shot refresh + `/user/me` sync on mount (avoids stale LS profile). */
+  sessionReady: boolean;
   isLoggedIn: boolean;
   user: UserObject | null;
   accessToken: string | null;
@@ -218,6 +221,7 @@ export type AuthContextProps = {
 
 export const AuthContext = createContext<AuthContextProps>({
   hydrated: false,
+  sessionReady: false,
   isLoggedIn: false,
   user: null,
   accessToken: null,
@@ -241,6 +245,7 @@ const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     undefined,
     readFromStorage
   );
+  const [sessionReady, setSessionReady] = useState(false);
 
   const apiBase = useMemo(() => getApiBase(), []);
 
@@ -282,6 +287,7 @@ const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
       dispatch({ type: "LOGIN", user, accessToken });
       writeToStorage(user, accessToken, refreshToken);
+      setSessionReady(true);
 
       return { isNewUser: Boolean(data?.isNewUser), user };
     },
@@ -389,12 +395,14 @@ const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     didInitRef.current = true;
     void refreshSession()
       .then(() => syncUserFromServer())
-      .catch(() => undefined);
+      .catch(() => undefined)
+      .finally(() => setSessionReady(true));
   }, [refreshSession, syncUserFromServer]);
 
   const value = useMemo<AuthContextProps>(
     () => ({
       hydrated: state.hydrated,
+      sessionReady,
       isLoggedIn: state.isLoggedIn,
       user: state.user,
       accessToken: state.accessToken,
@@ -407,6 +415,7 @@ const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }),
     [
       state.hydrated,
+      sessionReady,
       state.isLoggedIn,
       state.user,
       state.accessToken,
