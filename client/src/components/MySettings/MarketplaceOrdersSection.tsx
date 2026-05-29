@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
+import { useAuth } from "@/context/auth-context";
 import { useListings } from "@/hooks/use-listings";
 import { brandContainedButtonSx } from "@/theme/brand-palette";
 import OpenInNewRoundedIcon from "@mui/icons-material/OpenInNewRounded";
@@ -264,6 +265,7 @@ export function MarketplaceOrdersSection({
   variant = "full",
   ordersPageHref,
 }: MarketplaceOrdersSectionProps) {
+  const { hydrated, accessToken } = useAuth();
   const { getMyMarketplaceOrders } = useListings();
   const limit = variant === "compact" ? COMPACT_LIMIT : FULL_PAGE_LIMIT;
   const [purchasePage, setPurchasePage] = useState(1);
@@ -284,7 +286,7 @@ export function MarketplaceOrdersSection({
         salePage: variant === "full" ? salePage : 1,
         limit,
       }),
-    enabled: Boolean(enabled && userId),
+    enabled: Boolean(enabled && userId && hydrated && accessToken),
     staleTime: 15_000,
   });
 

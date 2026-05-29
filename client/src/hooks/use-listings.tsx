@@ -9,9 +9,11 @@ import type {
   ListingCategory,
   ListingExchangeBuyerReview,
   ListingExchangePayload,
+  MarketplaceOrderRow,
   MyAuctionBidRow,
   MyListingsPayload,
   MyMarketplaceOrdersPayload,
+  Paginated,
   SellerListingEditMeta,
 } from "../../types";
 
@@ -101,6 +103,70 @@ function normalizeMyListingsPayload(
   };
 }
 
+/** Pre-pagination API returned `purchases` / `sales` as bare arrays. */
+type LegacyMarketplaceOrdersPayload = {
+  purchases?: MarketplaceOrderRow[] | Paginated<MarketplaceOrderRow>;
+  sales?: MarketplaceOrderRow[] | Paginated<MarketplaceOrderRow>;
+};
+
+function normalizeOrderSide(
+  raw: MarketplaceOrderRow[] | Paginated<MarketplaceOrderRow> | null | undefined,
+  page: number,
+  limit: number,
+): Paginated<MarketplaceOrderRow> {
+  const empty: Paginated<MarketplaceOrderRow> = {
+    items: [],
+    page,
+    limit,
+    total: 0,
+    totalPages: 1,
+  };
+  if (!raw) return empty;
+
+  if (Array.isArray(raw)) {
+    const total = raw.length;
+    return {
+      items: raw.slice((page - 1) * limit, page * limit),
+      page,
+      limit,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / limit) || 1),
+    };
+  }
+
+  const items = raw.items ?? [];
+  const total = typeof raw.total === "number" ? raw.total : items.length;
+  return {
+    items,
+    page: raw.page ?? page,
+    limit: raw.limit ?? limit,
+    total,
+    totalPages:
+      raw.totalPages ?? Math.max(1, Math.ceil(total / (raw.limit ?? limit)) || 1),
+  };
+}
+
+function normalizeMarketplaceOrdersPayload(
+  raw: LegacyMarketplaceOrdersPayload | null | undefined,
+  params: MyMarketplaceOrdersParams,
+): MyMarketplaceOrdersPayload {
+  const limit = params.limit ?? 20;
+  const purchasePage = params.purchasePage ?? 1;
+  const salePage = params.salePage ?? 1;
+
+  if (!raw) {
+    return {
+      purchases: normalizeOrderSide(undefined, purchasePage, limit),
+      sales: normalizeOrderSide(undefined, salePage, limit),
+    };
+  }
+
+  return {
+    purchases: normalizeOrderSide(raw.purchases, purchasePage, limit),
+    sales: normalizeOrderSide(raw.sales, salePage, limit),
+  };
+}
+
 export const useListings = () => {
   const { apiFetch } = useApiFetchOrThrow();
 
@@ -128,9 +194,8 @@ export const useListings = () => {
       const path = qs.toString()
         ? `/listings/me/marketplace-orders?${qs}`
         : "/listings/me/marketplace-orders";
-      const data = await apiFetch<MyMarketplaceOrdersPayload>(path, "GET");
-      const emptyPage = { items: [], page: 1, limit: 20, total: 0, totalPages: 1 };
-      return data ?? { purchases: emptyPage, sales: emptyPage };
+      const data = await apiFetch<LegacyMarketplaceOrdersPayload>(path, "GET");
+      return normalizeMarketplaceOrdersPayload(data, params);
     },
     [apiFetch],
   );
