@@ -23,7 +23,7 @@ import {
   formatDisputeMoney,
 } from "@/lib/dispute-labels";
 import { BRAND_PALETTE } from "@/theme/brand-palette";
-import type { DisputeRecord } from "../../../../types";
+import type { DisputeRecord } from "../../../../../types";
 
 function statusChipColor(
   status: DisputeRecord["disputeStatus"],
