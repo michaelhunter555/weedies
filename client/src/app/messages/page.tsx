@@ -11,6 +11,11 @@ import {
   Chip,
   CircularProgress,
   Container,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
   IconButton,
   InputBase,
   Pagination,
@@ -18,7 +23,10 @@ import {
   Stack,
   Tooltip,
   Typography,
+  useMediaQuery,
+  useTheme,
 } from "@mui/material";
+import ArrowBackRoundedIcon from "@mui/icons-material/ArrowBackRounded";
 import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
 import OpenInNewRoundedIcon from "@mui/icons-material/OpenInNewRounded";
 import PersonRoundedIcon from "@mui/icons-material/PersonRounded";
@@ -31,6 +39,7 @@ import { useListings } from "@/hooks/use-listings";
 import { BRAND_PALETTE } from "@/theme/brand-palette";
 
 const LIST_LIMIT = 10;
+const DEFAULT_MAX_ACTIVE_CHATS = 10;
 
 type ViewerCounterpart = {
   id: string | null;
@@ -64,7 +73,16 @@ type GetChatsResponse = {
   totalPages: number;
   totalChats: number;
   limit: number;
+  activeChatCount?: number;
+  maxActiveChats?: number;
   ok?: boolean;
+};
+
+type CloseChatResponse = {
+  ok?: boolean;
+  activeChatCount?: number;
+  maxActiveChats?: number;
+  message?: string;
 };
 
 type ApiMessageRow = {
@@ -75,11 +93,13 @@ type ApiMessageRow = {
   fromMe: boolean;
   senderLabel: string;
   senderId: string;
+  isSystem?: boolean;
 };
 
 type GetMessagesResponse = {
   chatPreview?: ApiChatRow;
   chatMessages: ApiMessageRow[];
+  otherParticipantLeft?: boolean;
   ok?: boolean;
 };
 
@@ -99,6 +119,7 @@ type ChatMessage = {
   at: Date;
   fromMe: boolean;
   senderLabel: string;
+  isSystem?: boolean;
 };
 
 const fmtConversationDate = (d: Date) =>
@@ -169,6 +190,7 @@ function mapApiMessages(rows: ApiMessageRow[]): ChatMessage[] {
     at: m.createdAt ? new Date(m.createdAt) : new Date(),
     fromMe: m.fromMe,
     senderLabel: m.senderLabel,
+    isSystem: Boolean(m.isSystem),
   }));
 }
 
@@ -297,6 +319,28 @@ function ConversationRow({
 }
 
 function MessageBubble({ m }: { m: ChatMessage }) {
+  if (m.isSystem) {
+    return (
+      <Stack direction="row" justifyContent="center" sx={{ my: 0.5 }}>
+        <Box
+          sx={{
+            px: 1.5,
+            py: 0.75,
+            borderRadius: 999,
+            bgcolor: "#f3f4f6",
+            color: "text.secondary",
+            maxWidth: "90%",
+            textAlign: "center",
+          }}
+        >
+          <Typography variant="caption" sx={{ fontWeight: 600, lineHeight: 1.35 }}>
+            {m.body}
+          </Typography>
+        </Box>
+      </Stack>
+    );
+  }
+
   if (m.fromMe) {
     return (
       <Stack direction="row" justifyContent="flex-end">
@@ -380,16 +424,23 @@ function MessagesPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const chatFromUrl = searchParams.get("chat")?.trim() ?? "";
+  const theme = useTheme();
+  /** Side-by-side list + thread from md up; stacked navigation below (phones, iPad portrait). */
+  const isSplitLayout = useMediaQuery(theme.breakpoints.up("md"));
   const { user, hydrated } = useAuth();
   const { apiFetch } = useApiFetchOrThrow();
   const { createChat } = useListings();
   const queryClient = useQueryClient();
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  /** On narrow screens: list vs active thread (separate from selectedId for list highlight). */
+  const [mobileShowList, setMobileShowList] = useState(true);
   const [listPage, setListPage] = useState(1);
   const [draft, setDraft] = useState("");
   const [composeIntent, setComposeIntent] = useState<ComposeIntent | null>(null);
   const [composeError, setComposeError] = useState<string | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
 
   const chatsQuery = useQuery({
     queryKey: ["chats", "mine", listPage, LIST_LIMIT],
@@ -409,6 +460,7 @@ function MessagesPageContent() {
       setComposeIntent(null);
       setComposeError(null);
       setSelectedId(chatFromUrl);
+      setMobileShowList(false);
       return;
     }
 
@@ -475,6 +527,7 @@ function MessagesPageContent() {
         fromExchange,
         counterpartyRole: fromExchange ? counterpartyRole : undefined,
       });
+      setMobileShowList(false);
       if (prefill) setDraft(prefill);
       return;
     }
@@ -487,6 +540,7 @@ function MessagesPageContent() {
         fromExchange,
         counterpartyRole: fromExchange ? counterpartyRole : undefined,
       });
+      setMobileShowList(false);
       if (prefill) setDraft(prefill);
     }
   }, [hydrated, user?.id, chatFromUrl]);
@@ -498,6 +552,7 @@ function MessagesPageContent() {
 
   useEffect(() => {
     if (!hydrated || !user?.id) return;
+    if (!isSplitLayout) return;
     if (chatFromUrl && isMongoObjectId(chatFromUrl)) {
       return;
     }
@@ -512,6 +567,7 @@ function MessagesPageContent() {
   }, [
     hydrated,
     user?.id,
+    isSplitLayout,
     chatFromUrl,
     chatsQuery.data,
     chatsQuery.data?.chats,
@@ -544,6 +600,31 @@ function MessagesPageContent() {
     if (!selectedId || !messagesQuery.data?.chatMessages) return [];
     return mapApiMessages(messagesQuery.data.chatMessages);
   }, [selectedId, messagesQuery.data?.chatMessages]);
+
+  const maxActiveChats =
+    chatsQuery.data?.maxActiveChats ?? DEFAULT_MAX_ACTIVE_CHATS;
+  const activeChatCount =
+    chatsQuery.data?.activeChatCount ?? chatsQuery.data?.totalChats ?? 0;
+
+  const closeChatMutation = useMutation({
+    mutationFn: (chatId: string) =>
+      apiFetch<CloseChatResponse>(
+        `/chats/${encodeURIComponent(chatId)}`,
+        "DELETE",
+      ),
+    onSuccess: async () => {
+      setDeleteDialogOpen(false);
+      setDeleteTargetId(null);
+      setSelectedId(null);
+      setMobileShowList(true);
+      setDraft("");
+      router.replace("/messages", { scroll: false });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["chats"] }),
+        queryClient.invalidateQueries({ queryKey: ["chats", "unread-count"] }),
+      ]);
+    },
+  });
 
   const sendMutation = useMutation({
     mutationFn: async (text: string) => {
@@ -578,6 +659,7 @@ function MessagesPageContent() {
       setDraft("");
       if (chatId) {
         setSelectedId(chatId);
+        setMobileShowList(false);
         router.replace(`/messages?chat=${encodeURIComponent(chatId)}`, { scroll: false });
       } else {
         router.replace("/messages", { scroll: false });
@@ -592,17 +674,43 @@ function MessagesPageContent() {
     el.scrollTop = el.scrollHeight;
   }, [selectedId, selectedMessages.length, messagesQuery.isFetching]);
 
-  const handleCloseChat = () => {
-    setSelectedId(null);
+  const showConversationList = isSplitLayout || mobileShowList;
+  const showActiveThread =
+    isSplitLayout || (!mobileShowList && Boolean(selectedId || composeIntent));
+
+  const handleBackToList = () => {
+    setMobileShowList(true);
     setComposeIntent(null);
     setComposeError(null);
     router.replace("/messages", { scroll: false });
+  };
+
+  const handleCloseCompose = () => {
+    if (!isSplitLayout) {
+      handleBackToList();
+      return;
+    }
+    setComposeIntent(null);
+    setComposeError(null);
+    router.replace("/messages", { scroll: false });
+  };
+
+  const handleRequestRemoveChat = (chatId: string) => {
+    setDeleteTargetId(chatId);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleConfirmRemoveChat = () => {
+    const id = deleteTargetId ?? selectedId;
+    if (!id || closeChatMutation.isPending) return;
+    closeChatMutation.mutate(id);
   };
 
   const handleSelectConversation = (id: string) => {
     setComposeIntent(null);
     setComposeError(null);
     setSelectedId(id);
+    if (!isSplitLayout) setMobileShowList(false);
     router.replace(`/messages?chat=${encodeURIComponent(id)}`, { scroll: false });
   };
 
@@ -645,6 +753,7 @@ function MessagesPageContent() {
   }, [selectedId, conversations, messagesQuery.data?.chatPreview]);
 
   const totalListPages = Math.max(1, chatsQuery.data?.totalPages ?? 1);
+  const otherParticipantLeft = Boolean(messagesQuery.data?.otherParticipantLeft);
 
   if (!hydrated) {
     return (
@@ -685,8 +794,8 @@ function MessagesPageContent() {
           </Typography>
           {chatsQuery.data?.totalChats != null ? (
             <Typography variant="body2" color="text.secondary">
-              {chatsQuery.data.totalChats} conversation
-              {chatsQuery.data.totalChats === 1 ? "" : "s"}
+              {activeChatCount} of {maxActiveChats} active
+              {activeChatCount >= maxActiveChats ? " (limit reached)" : ""}
             </Typography>
           ) : null}
         </Stack>
@@ -695,15 +804,56 @@ function MessagesPageContent() {
       {(chatsQuery.isError ||
         messagesQuery.isError ||
         sendMutation.isError ||
-        createChatMutation.isError) && (
+        createChatMutation.isError ||
+        closeChatMutation.isError) && (
         <Alert severity="error" sx={{ mb: 2 }}>
           {(chatsQuery.error as Error)?.message ||
             (messagesQuery.error as Error)?.message ||
             (sendMutation.error as Error)?.message ||
             (createChatMutation.error as Error)?.message ||
+            (closeChatMutation.error as Error)?.message ||
             "Something went wrong."}
         </Alert>
       )}
+
+      <Dialog
+        open={deleteDialogOpen}
+        onClose={() => {
+          if (closeChatMutation.isPending) return;
+          setDeleteDialogOpen(false);
+          setDeleteTargetId(null);
+        }}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle sx={{ fontWeight: 800 }}>Remove this chat?</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            This conversation will be removed from your inbox and will no longer
+            count toward your limit of {maxActiveChats} active chats. The other
+            person can still see the thread until they remove it too.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button
+            onClick={() => {
+              setDeleteDialogOpen(false);
+              setDeleteTargetId(null);
+            }}
+            disabled={closeChatMutation.isPending}
+          >
+            Cancel
+          </Button>
+          <Button
+            color="error"
+            variant="contained"
+            onClick={handleConfirmRemoveChat}
+            disabled={closeChatMutation.isPending}
+          >
+            {closeChatMutation.isPending ? "Removing…" : "Delete"}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {composeError ? (
         <Alert severity="warning" sx={{ mb: 2 }} onClose={() => setComposeError(null)}>
@@ -725,17 +875,20 @@ function MessagesPageContent() {
             borderRadius: 4,
             borderColor: "#ececec",
             overflow: "hidden",
-            display: {
-              xs: selectedId || composeIntent ? "none" : "flex",
-              md: "flex",
-            },
+            display: showConversationList ? "flex" : "none",
             flexDirection: "column",
+            minHeight: { xs: showConversationList ? 480 : 0, md: "auto" },
           }}
         >
           <Box sx={{ px: 2.5, py: 2, borderBottom: "1px solid #ececec" }}>
             <Typography variant="h6" sx={{ fontWeight: 800 }}>
               Conversations
             </Typography>
+            {!isSplitLayout ? (
+              <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.5 }}>
+                Tap a conversation to open it.
+              </Typography>
+            ) : null}
           </Box>
 
           <Stack
@@ -793,12 +946,9 @@ function MessagesPageContent() {
             borderRadius: 4,
             borderColor: "#ececec",
             overflow: "hidden",
-            display: {
-              xs: selectedId || composeIntent ? "flex" : "none",
-              md: "flex",
-            },
+            display: showActiveThread ? "flex" : "none",
             flexDirection: "column",
-            minHeight: { xs: 520, md: "auto" },
+            minHeight: { xs: showActiveThread ? 520 : 0, md: "auto" },
           }}
         >
           {composeIntent && !selectedId ? (
@@ -814,25 +964,39 @@ function MessagesPageContent() {
                   bgcolor: "#fff",
                 }}
               >
-                <Typography variant="h6" sx={{ fontWeight: 800 }}>
-                  {composeIntent.fromExchange
-                    ? composeIntent.counterpartyRole === "buyer"
-                      ? "Message buyer"
-                      : composeIntent.counterpartyRole === "seller"
-                        ? "Message seller"
-                        : "Message"
-                    : "Message seller"}
-                </Typography>
-                <Tooltip title="Cancel">
-                  <IconButton
-                    aria-label="Cancel new message"
-                    size="small"
-                    onClick={handleCloseChat}
-                    sx={{ color: "#ef4444" }}
-                  >
-                    <CloseRoundedIcon />
-                  </IconButton>
-                </Tooltip>
+                <Stack direction="row" spacing={1} alignItems="center" sx={{ minWidth: 0 }}>
+                  {!isSplitLayout ? (
+                    <IconButton
+                      aria-label="Back to conversations"
+                      size="small"
+                      onClick={handleBackToList}
+                      sx={{ color: "text.primary", flexShrink: 0 }}
+                    >
+                      <ArrowBackRoundedIcon />
+                    </IconButton>
+                  ) : null}
+                  <Typography variant="h6" sx={{ fontWeight: 800 }}>
+                    {composeIntent.fromExchange
+                      ? composeIntent.counterpartyRole === "buyer"
+                        ? "Message buyer"
+                        : composeIntent.counterpartyRole === "seller"
+                          ? "Message seller"
+                          : "Message"
+                      : "Message seller"}
+                  </Typography>
+                </Stack>
+                {isSplitLayout ? (
+                  <Tooltip title="Cancel">
+                    <IconButton
+                      aria-label="Cancel new message"
+                      size="small"
+                      onClick={handleCloseCompose}
+                      sx={{ color: "#ef4444" }}
+                    >
+                      <CloseRoundedIcon />
+                    </IconButton>
+                  </Tooltip>
+                ) : null}
               </Stack>
 
               <Box sx={{ px: { xs: 2, md: 3 }, py: 2, bgcolor: "#fafafa", borderBottom: "1px solid #ececec" }}>
@@ -986,7 +1150,24 @@ function MessagesPageContent() {
                   bgcolor: "#fff",
                 }}
               >
-                <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap" useFlexGap>
+                <Stack
+                  direction="row"
+                  spacing={1}
+                  alignItems="center"
+                  flexWrap="wrap"
+                  useFlexGap
+                  sx={{ minWidth: 0, flex: 1 }}
+                >
+                  {!isSplitLayout ? (
+                    <IconButton
+                      aria-label="Back to conversations"
+                      size="small"
+                      onClick={handleBackToList}
+                      sx={{ color: "text.primary", flexShrink: 0 }}
+                    >
+                      <ArrowBackRoundedIcon />
+                    </IconButton>
+                  ) : null}
                   <Avatar
                     src={selectedConversation.avatarUrl || undefined}
                     sx={{
@@ -1018,21 +1199,26 @@ function MessagesPageContent() {
                   ) : null}
                 </Stack>
 
-                <Stack direction="row" spacing={0.5} alignItems="center">
-                  <Tooltip title="View profile">
+                <Stack direction="row" spacing={0.5} alignItems="center" sx={{ flexShrink: 0 }}>
+                  {isSplitLayout ? (
+                    <Tooltip title="View profile">
+                      <IconButton
+                        aria-label="View profile"
+                        size="small"
+                        sx={{ color: "text.secondary" }}
+                      >
+                        <PersonRoundedIcon />
+                      </IconButton>
+                    </Tooltip>
+                  ) : null}
+                  <Tooltip title="Remove chat from inbox">
                     <IconButton
-                      aria-label="View profile"
+                      aria-label="Remove chat from inbox"
                       size="small"
-                      sx={{ color: "text.secondary" }}
-                    >
-                      <PersonRoundedIcon />
-                    </IconButton>
-                  </Tooltip>
-                  <Tooltip title="Close chat">
-                    <IconButton
-                      aria-label="Close chat"
-                      size="small"
-                      onClick={handleCloseChat}
+                      onClick={() =>
+                        selectedId && handleRequestRemoveChat(selectedId)
+                      }
+                      disabled={!selectedId || closeChatMutation.isPending}
                       sx={{ color: "#ef4444" }}
                     >
                       <CloseRoundedIcon />
@@ -1100,6 +1286,13 @@ function MessagesPageContent() {
                 )}
               </Box>
 
+              {otherParticipantLeft ? (
+                <Alert severity="warning" sx={{ mx: 2, mt: 1, borderRadius: 2 }}>
+                  The other person left this chat. New messages will not reach them until
+                  they open the conversation again.
+                </Alert>
+              ) : null}
+
               <Box
                 component="form"
                 onSubmit={handleSend}
@@ -1119,6 +1312,7 @@ function MessagesPageContent() {
                       px: 2,
                       py: 0.5,
                       borderColor: "#e5e7eb",
+                      opacity: otherParticipantLeft ? 0.65 : 1,
                       "&:focus-within": {
                         borderColor: BRAND_PALETTE.seafoam,
                         boxShadow: `0 0 0 3px ${BRAND_PALETTE.mint}`,
@@ -1128,15 +1322,23 @@ function MessagesPageContent() {
                     <InputBase
                       value={draft}
                       onChange={(e) => setDraft(e.target.value)}
-                      placeholder="Type a message..."
+                      placeholder={
+                        otherParticipantLeft
+                          ? "The other person left this chat"
+                          : "Type a message..."
+                      }
                       fullWidth
-                      disabled={sendMutation.isPending}
+                      disabled={sendMutation.isPending || otherParticipantLeft}
                       inputProps={{ "aria-label": "Message" }}
                     />
                   </Paper>
                   <IconButton
                     type="submit"
-                    disabled={!draft.trim() || sendMutation.isPending}
+                    disabled={
+                      !draft.trim() ||
+                      sendMutation.isPending ||
+                      otherParticipantLeft
+                    }
                     aria-label="Send message"
                     sx={{
                       width: 44,

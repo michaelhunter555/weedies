@@ -9,7 +9,11 @@ import {
   escrowWebTransactionUrl,
   LISTING_PURCHASE_BILLING_REASONS,
 } from "../../lib/listing-purchase-billing";
-import { reconcileEscrowPaymentFromApi } from "../../lib/escrow-reconcile";
+import { getEscrowTransaction, isEscrowApiConfigured } from "../../lib/escrow-api";
+import {
+  escrowProgressFromApi,
+  reconcileEscrowPaymentFromApi,
+} from "../../lib/escrow-reconcile";
 
 function listingOwnerIdString(listing: { sellerId?: unknown }): string {
   const sid = listing.sellerId;
@@ -110,6 +114,9 @@ export async function getListingExchange(req: Request, res: Response) {
       amountPaid?: number;
       paymentType?: "stripe" | "escrow";
       escrowTransactionId?: string;
+      escrowLastEvent?: string;
+      escrowFundsSecured?: boolean;
+      escrowEvents?: { event: string; at: Date }[];
       createdAt?: Date;
     };
 
@@ -120,7 +127,7 @@ export async function getListingExchange(req: Request, res: Response) {
     })
       .sort({ createdAt: -1 })
       .select(
-        "_id customerId sellerId hasDispute disputeId paymentStatus amountPaid paymentType escrowTransactionId createdAt",
+        "_id customerId sellerId hasDispute disputeId paymentStatus amountPaid paymentType escrowTransactionId escrowLastEvent escrowFundsSecured escrowEvents createdAt",
       )
       .lean()) as SaleTxLean | null;
 
@@ -138,7 +145,7 @@ export async function getListingExchange(req: Request, res: Response) {
         })
           .sort({ createdAt: -1 })
           .select(
-            "_id customerId sellerId hasDispute disputeId paymentStatus amountPaid paymentType escrowTransactionId createdAt",
+            "_id customerId sellerId hasDispute disputeId paymentStatus amountPaid paymentType escrowTransactionId escrowLastEvent escrowFundsSecured escrowEvents createdAt",
           )
           .lean()) as SaleTxLean | null;
         if (listing.status !== "sold") {
@@ -239,20 +246,31 @@ export async function getListingExchange(req: Request, res: Response) {
         paymentStatus: { $in: ["succeeded", "pending"] },
       })
         .sort({ createdAt: -1 })
-        .select("createdAt")
-        .lean()) as { createdAt?: Date } | null;
+        .select("createdAt paymentType paymentStatus escrowFundsSecured")
+        .lean()) as {
+        createdAt?: Date;
+        paymentType?: string;
+        paymentStatus?: string;
+        escrowFundsSecured?: boolean;
+      } | null;
+
+      const escrowAwaitingPayment =
+        tx?.paymentType === "escrow" &&
+        tx.paymentStatus === "pending" &&
+        !tx.escrowFundsSecured;
 
       const created = await ListingExchange.create({
         listingId: listing._id,
         sellerId: new mongoose.Types.ObjectId(sellerId),
         buyerId: new mongoose.Types.ObjectId(buyerId),
-        paymentReceivedAt: tx?.createdAt ? new Date(tx.createdAt) : null,
+        paymentReceivedAt:
+          escrowAwaitingPayment || !tx?.createdAt ? null : new Date(tx.createdAt),
         deliverables: [],
         sellerCapturedPayment: false,
         paymentStatus: "pending",
-        paymentCaptureExpiration: captureHoldFromTxCreated(
-          tx?.createdAt ? new Date(tx.createdAt) : null,
-        ),
+        paymentCaptureExpiration: escrowAwaitingPayment
+          ? null
+          : captureHoldFromTxCreated(tx?.createdAt ? new Date(tx.createdAt) : null),
       });
       ex = created.toObject() as ExchangeLean;
     } else if (!ex.paymentReceivedAt) {
@@ -262,9 +280,20 @@ export async function getListingExchange(req: Request, res: Response) {
         paymentStatus: { $in: ["succeeded", "pending"] },
       })
         .sort({ createdAt: -1 })
-        .select("createdAt")
-        .lean()) as { createdAt?: Date } | null;
-      if (tx?.createdAt) {
+        .select("createdAt paymentType paymentStatus escrowFundsSecured")
+        .lean()) as {
+        createdAt?: Date;
+        paymentType?: string;
+        paymentStatus?: string;
+        escrowFundsSecured?: boolean;
+      } | null;
+
+      const escrowAwaitingPayment =
+        tx?.paymentType === "escrow" &&
+        tx.paymentStatus === "pending" &&
+        !tx.escrowFundsSecured;
+
+      if (tx?.createdAt && !escrowAwaitingPayment) {
         const payAt = new Date(tx.createdAt);
         const patch: Record<string, unknown> = { paymentReceivedAt: payAt };
         if (!ex.paymentCaptureExpiration) {
@@ -287,6 +316,20 @@ export async function getListingExchange(req: Request, res: Response) {
     const role = userId === buyerId ? "buyer" : "seller";
     const phase = computePhase(ex);
     const paymentStatusJson = normalizeExchangePaymentStatus(ex.paymentStatus ?? undefined);
+
+    let escrowProgress: ReturnType<typeof escrowProgressFromApi> | null = null;
+    if (
+      saleTx?.paymentType === "escrow" &&
+      saleTx.escrowTransactionId &&
+      isEscrowApiConfigured()
+    ) {
+      try {
+        const escrowTx = await getEscrowTransaction(String(saleTx.escrowTransactionId));
+        escrowProgress = escrowProgressFromApi(escrowTx);
+      } catch (err) {
+        console.warn("getListingExchange escrow progress:", err);
+      }
+    }
 
     let buyerReview: {
       _id: string;
@@ -323,6 +366,7 @@ export async function getListingExchange(req: Request, res: Response) {
       role,
       phase,
       escrowAwaitingFunds,
+      escrowProgress,
       buyerReview,
       transaction: saleTx
         ? {
@@ -339,6 +383,12 @@ export async function getListingExchange(req: Request, res: Response) {
               saleTx.paymentType === "escrow" && saleTx.escrowTransactionId
                 ? escrowWebTransactionUrl(String(saleTx.escrowTransactionId))
                 : null,
+            escrowLastEvent: saleTx.escrowLastEvent ?? null,
+            escrowFundsSecured: Boolean(saleTx.escrowFundsSecured),
+            escrowEvents: (saleTx.escrowEvents ?? []).map((e) => ({
+              event: e.event,
+              at: e.at instanceof Date ? e.at.toISOString() : String(e.at),
+            })),
           }
         : null,
       exchange: {

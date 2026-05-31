@@ -13,6 +13,7 @@ import type {
   MyAuctionBidRow,
   MyListingsPayload,
   MyMarketplaceOrdersPayload,
+  MyTransactionHistoryPayload,
   Paginated,
   SellerListingEditMeta,
 } from "../../types";
@@ -26,6 +27,11 @@ export type MyListingsParams = {
 export type MyMarketplaceOrdersParams = {
   purchasePage?: number;
   salePage?: number;
+  limit?: number;
+};
+
+export type MyTransactionsParams = {
+  page?: number;
   limit?: number;
 };
 
@@ -196,6 +202,29 @@ export const useListings = () => {
         : "/listings/me/marketplace-orders";
       const data = await apiFetch<LegacyMarketplaceOrdersPayload>(path, "GET");
       return normalizeMarketplaceOrdersPayload(data, params);
+    },
+    [apiFetch],
+  );
+
+  /** Full transaction ledger (buyer or seller on any charge). */
+  const getMyTransactions = useCallback(
+    async (params: MyTransactionsParams = {}): Promise<MyTransactionHistoryPayload> => {
+      const qs = new URLSearchParams();
+      if (params.page) qs.set("page", String(params.page));
+      if (params.limit) qs.set("limit", String(params.limit));
+      const path = qs.toString()
+        ? `/listings/me/transactions?${qs}`
+        : "/listings/me/transactions";
+      const data = await apiFetch<MyTransactionHistoryPayload>(path, "GET");
+      return (
+        data ?? {
+          items: [],
+          page: 1,
+          limit: 25,
+          total: 0,
+          totalPages: 1,
+        }
+      );
     },
     [apiFetch],
   );
@@ -452,6 +481,7 @@ export const useListings = () => {
   return {
     getMyListings,
     getMyMarketplaceOrders,
+    getMyTransactions,
     getMyAuctionBids,
     getAllListings,
     uploadPhotos,

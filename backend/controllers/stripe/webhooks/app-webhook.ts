@@ -8,6 +8,7 @@ import Listing from "../../../models/listing";
 import ListingExchange from "../../../models/exchange";
 import Transaction from "../../../models/transactions";
 import User from "../../../models/user";
+import { finalizeDisputeRefund } from "../../../lib/finalize-dispute-refund";
 import Disputes from "../../../models/disputes";
 import ProcessedWebhookEvent from "../../../models/proccessedWebhookEvents";
 import { userSaleNotificationEmail } from "../../../lib/email-notifications";
@@ -826,9 +827,8 @@ export default async function appWebhook(req: Request, res: Response) {
               decision: "settled",
               action: partialRefund ? "partial_refund" : "refund",
             });
-          }
-
-          if (transactionId) {
+            await finalizeDisputeRefund(disputeId, partialRefund);
+          } else if (transactionId) {
             await Transaction.findByIdAndUpdate(transactionId, {
               hasDispute: false,
             });

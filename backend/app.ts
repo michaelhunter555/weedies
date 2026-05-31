@@ -17,6 +17,9 @@ import { Server, type Socket } from "socket.io";
 import { verifyAccessToken } from "./lib/jwt";
 import cron from "node-cron";
 import initiatePayout from "./controllers/cron/payouts";
+import purgeChats from "./controllers/cron/purge-chats";
+import runAuctionCronJobs from "./controllers/cron/auctions";
+import { ensureChatIndexes } from "./lib/ensure-chat-indexes";
 
 dotenv.config();
 
@@ -149,9 +152,10 @@ if (!MONGODB_URI) {
 
 mongoose
   .connect(MONGODB_URI)
-  .then(() => {
+  .then(async () => {
     // eslint-disable-next-line no-console
     console.log("Connected to MongoDB");
+    await ensureChatIndexes();
     server.listen(port, () => {
       // eslint-disable-next-line no-console
       console.log(`listening on port ${port}`);
@@ -163,6 +167,24 @@ mongoose
         });
         // eslint-disable-next-line no-console
         console.log("[cron] Seller payout job scheduled (Mon/Thu 09:00 UTC)");
+      }
+
+      if (process.env.ENABLE_CHAT_PURGE_CRON !== "false") {
+        // Daily 04:00 UTC — remove inactive or fully-closed chats.
+        cron.schedule("0 4 * * *", () => {
+          void purgeChats();
+        });
+        // eslint-disable-next-line no-console
+        console.log("[cron] Chat purge job scheduled (daily 04:00 UTC)");
+      }
+
+      if (process.env.ENABLE_AUCTION_CRON !== "false") {
+        // Every 15 minutes — finalize ended auctions + 24h ending-soon emails.
+        cron.schedule("*/15 * * * *", () => {
+          void runAuctionCronJobs();
+        });
+        // eslint-disable-next-line no-console
+        console.log("[cron] Auction jobs scheduled (every 15 min UTC)");
       }
     });
   })

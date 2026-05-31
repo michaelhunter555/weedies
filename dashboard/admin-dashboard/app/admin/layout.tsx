@@ -10,6 +10,7 @@ import ListItemIcon from "@mui/material/ListItemIcon";
 import ListItemText from "@mui/material/ListItemText";
 import Typography from "@mui/material/Typography";
 import ViewListIcon from "@mui/icons-material/ViewList";
+import GavelIcon from "@mui/icons-material/Gavel";
 import { AdminAuthProvider } from "@/context/admin-auth-context";
 import { SidebarAuthFooter } from "@/components/admin/SidebarAuthFooter";
 
@@ -60,6 +61,16 @@ export default function AdminLayout({
                 <ViewListIcon fontSize="small" />
               </ListItemIcon>
               <ListItemText primary="Listings" primaryTypographyProps={{ fontWeight: 500 }} />
+            </ListItemButton>
+            <ListItemButton
+              component={Link}
+              href="/admin/disputes"
+              selected={pathname.startsWith("/admin/disputes")}
+            >
+              <ListItemIcon sx={{ minWidth: 40 }}>
+                <GavelIcon fontSize="small" />
+              </ListItemIcon>
+              <ListItemText primary="Disputes" primaryTypographyProps={{ fontWeight: 500 }} />
             </ListItemButton>
           </List>
 

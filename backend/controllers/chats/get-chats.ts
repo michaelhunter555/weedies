@@ -1,6 +1,11 @@
 import type { Request, Response } from "express";
 import mongoose from "mongoose";
 
+import {
+  MAX_ACTIVE_CHATS_PER_USER,
+  activeChatFilterForUser,
+  countActiveChatsForUser,
+} from "../../lib/chat-active";
 import { serializeChatForViewer } from "../../lib/chat-view-serialization";
 import Chat from "../../models/conversations";
 import Listing from "../../models/listing";
@@ -33,17 +38,16 @@ export async function getChats(req: Request, res: Response) {
   const orderNum = req.query.order === "1" ? 1 : -1;
 
   try {
-    const filter = {
-      participants: { $in: [userId] },
-    };
+    const filter = activeChatFilterForUser(userId);
 
-    const [chats, totalChats] = await Promise.all([
+    const [chats, totalChats, activeChatCount] = await Promise.all([
       Chat.find(filter)
         .skip((pageNum - 1) * limitNum)
         .limit(limitNum)
         .sort({ updatedAt: orderNum })
         .lean(),
       Chat.countDocuments(filter),
+      countActiveChatsForUser(userId),
     ]);
 
     const raw = chats as ChatLean[];
@@ -104,6 +108,8 @@ export async function getChats(req: Request, res: Response) {
       totalChats,
       totalPages,
       limit: limitNum,
+      activeChatCount,
+      maxActiveChats: MAX_ACTIVE_CHATS_PER_USER,
       ok: true,
     });
   } catch (err) {

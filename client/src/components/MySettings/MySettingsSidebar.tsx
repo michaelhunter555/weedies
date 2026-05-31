@@ -20,13 +20,15 @@ import {
   ListItemText,
   Paper,
   Typography,
+  Chip,
+  Stack,
 } from "@mui/material";
 
 import {
   BRAND_PALETTE,
   brandNavIconActiveColor,
-  brandSelectedNavSx,
 } from "@/theme/brand-palette";
+import { useDeviceCheck } from "@/hooks/device-hook";
 
 export type MySettingsSidebarProps = {
   userId: string;
@@ -46,6 +48,7 @@ export function MySettingsSidebar({ userId, mode }: MySettingsSidebarProps) {
   const pathname = usePathname() || "";
   const base = `/my-settings/${encodeURIComponent(userId)}`;
   const showSelling = mode !== "customer";
+  const { isMobile } = useDeviceCheck();
 
   const items: Array<{
     key: string;
@@ -123,7 +126,9 @@ export function MySettingsSidebar({ userId, mode }: MySettingsSidebarProps) {
     // },
   ];
 
-  return (
+  const visibleItems = items.filter((i) => !i.hidden);
+
+  return !isMobile ? (
     <Paper
       variant="outlined"
       sx={{
@@ -146,9 +151,7 @@ export function MySettingsSidebar({ userId, mode }: MySettingsSidebarProps) {
         </Typography>
       </Box>
       <List dense disablePadding sx={{ py: 0.5 }}>
-        {items
-          .filter((i) => !i.hidden)
-          .map((item, idx, arr) => {
+        {visibleItems.map((item, idx, arr) => {
             const active = item.isActive(pathname);
             const showDivider = idx < arr.length - 1;
             return (
@@ -189,5 +192,65 @@ export function MySettingsSidebar({ userId, mode }: MySettingsSidebarProps) {
           })}
       </List>
     </Paper>
+  ) : (
+    <Box
+      sx={{
+        width: "100%",
+        maxWidth: "100%",
+        minWidth: 0,
+        overflowX: "auto",
+        overflowY: "hidden",
+        WebkitOverflowScrolling: "touch",
+        scrollbarWidth: "thin",
+        scrollbarColor: `${BRAND_PALETTE.borderSubtle} transparent`,
+        "&::-webkit-scrollbar": { height: 6 },
+        "&::-webkit-scrollbar-thumb": {
+          borderRadius: 999,
+          backgroundColor: BRAND_PALETTE.borderSubtle,
+        },
+        pb: 0.5,
+        pt: 3,
+      }}
+    >
+      <Stack
+        direction="row"
+        spacing={1}
+        alignItems="center"
+        sx={{
+          flexWrap: "nowrap",
+          width: "max-content",
+          py: 0.25,
+          px: 0.25,
+        }}
+      >
+        {visibleItems.map((item) => {
+          const active = item.isActive(pathname);
+          return (
+            <Chip
+              key={item.key}
+              component={Link}
+              href={item.href}
+              clickable
+              icon={item.icon as React.ReactElement}
+              label={item.label}
+              variant={active ? "filled" : "outlined"}
+              sx={{
+                flexShrink: 0,
+                fontWeight: active ? 700 : 600,
+                borderColor: active ? undefined : BRAND_PALETTE.borderSubtle,
+                bgcolor: active ? BRAND_PALETTE.charcoal : "#fff",
+                color: active ? BRAND_PALETTE.onPrimary : "text.primary",
+                "& .MuiChip-icon": {
+                  color: active ? BRAND_PALETTE.onPrimary : "text.secondary",
+                },
+                "&:hover": {
+                  bgcolor: active ? BRAND_PALETTE.charcoalHover : BRAND_PALETTE.mint,
+                },
+              }}
+            />
+          );
+        })}
+      </Stack>
+    </Box>
   );
 }

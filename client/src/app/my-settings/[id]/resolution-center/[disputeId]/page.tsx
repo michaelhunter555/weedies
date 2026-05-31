@@ -238,8 +238,8 @@ export default function DisputeDetailPage() {
             Seller actions
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Accept the buyer refund request to send this to platform review for processing,
-            or add a written response and escalate for admin decision.
+            Accept to issue the requested refund through Stripe immediately. Escalate only
+            if you disagree — that sends the case to platform review.
           </Typography>
           <TextField
             label="Your response (required to escalate)"
@@ -262,7 +262,7 @@ export default function DisputeDetailPage() {
               onClick={() => respondMutation.mutate("accept")}
               sx={{ textTransform: "none", fontWeight: 700, ...brandContainedButtonSx }}
             >
-              Accept refund request
+              Accept and refund
             </Button>
             <Button
               variant="outlined"

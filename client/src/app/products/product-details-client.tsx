@@ -221,6 +221,7 @@ export function ProductDetailsClient({ fetchBy }: ProductDetailsClientProps) {
   const messageSellerDisabled =
     !hydrated ||
     !isLoggedIn ||
+    isListingOwner ||
     (listing?.isPrivateListing && listing?.privateAccess?.canView === false);
 
   const walletHref =
@@ -398,7 +399,7 @@ export function ProductDetailsClient({ fetchBy }: ProductDetailsClientProps) {
   };
 
   const handleMessageSeller = () => {
-    if (!hydrated || !isLoggedIn) return;
+    if (!hydrated || !isLoggedIn || isListingOwner) return;
     const q = new URLSearchParams();
     if (seller.id) q.set("sellerId", seller.id);
     if (listing?._id) q.set("listingId", String(listing._id));
@@ -454,11 +455,13 @@ export function ProductDetailsClient({ fetchBy }: ProductDetailsClientProps) {
 
   const messageSellerTooltip = !hydrated
     ? "One moment…"
-    : !isLoggedIn
-      ? "Sign in to message the seller."
-      : listing.isPrivateListing && listing.privateAccess?.canView === false
-        ? "Request access first."
-      : "";
+    : isListingOwner
+      ? "You cannot message yourself."
+      : !isLoggedIn
+        ? "Sign in to message the seller."
+        : listing.isPrivateListing && listing.privateAccess?.canView === false
+          ? "Request access first."
+          : "";
 
   const buyerIdStr = listing.buyerId ? String(listing.buyerId) : "";
   const isPurchasingBuyer = Boolean(

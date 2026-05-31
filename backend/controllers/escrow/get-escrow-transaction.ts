@@ -4,11 +4,11 @@ import {
   EscrowApiError,
   getEscrowTransaction as getEscrowTransactionApi,
   isEscrowApiConfigured,
-  resolveBuyerEscrowAgreeUrl,
 } from "../../lib/escrow-api";
 import {
   canCancelEscrowTransaction,
   escrowFundsSecured,
+  escrowProgressFromApi,
   escrowTransactionBuyerSeller,
 } from "../../lib/escrow-reconcile";
 import Transaction, { type ITransaction } from "../../models/transactions";
@@ -61,36 +61,40 @@ export async function getEscrowTransactionStatus(req: Request, res: Response) {
   }
 
   try {
-    let agreeUrl: string | null = null;
-    if (String(localTx.customerId) === uid) {
-      const buyerUser = await User.findById(localTx.customerId)
-        .select("email")
-        .lean<{ email: string }>();
-      const buyerEmail = buyerUser?.email?.trim().toLowerCase();
-      if (buyerEmail) {
-        agreeUrl = await resolveBuyerEscrowAgreeUrl(escrowTransactionId, buyerEmail);
-      }
-    }
-
     const escrowTx = await getEscrowTransactionApi(escrowTransactionId);
     const { buyer, seller } = escrowTransactionBuyerSeller(escrowTx);
-    const fundsSecured = escrowFundsSecured(escrowTx);
+    const progress = escrowProgressFromApi(escrowTx);
+    const fundsSecured = progress.fundsSecured;
     const isCancelled = escrowTx.is_cancelled === true;
     const canCancel =
       localTx.paymentStatus === "pending" &&
       !isCancelled &&
       canCancelEscrowTransaction(escrowTx);
 
+    const escrowEvents = (localTx.escrowEvents ?? []).map((e) => ({
+      event: e.event,
+      at: e.at instanceof Date ? e.at.toISOString() : String(e.at),
+    }));
+
     return void res.status(200).json({
       ok: true,
       escrowTransactionId,
       listingId: String(localTx.ListingId),
       paymentStatus: localTx.paymentStatus,
-      agreeUrl,
+      escrowLastEvent: localTx.escrowLastEvent ?? null,
+      escrowLastEventAt:
+        localTx.escrowLastEventAt instanceof Date
+          ? localTx.escrowLastEventAt.toISOString()
+          : null,
+      escrowFundsSecured: Boolean(localTx.escrowFundsSecured),
+      escrowEvents,
       is_cancelled: isCancelled,
       close_date: escrowTx.close_date ?? null,
       creation_date: escrowTx.creation_date ?? null,
       fundsSecured,
+      itemShipped: progress.shipped,
+      itemReceived: progress.received,
+      itemAccepted: progress.accepted,
       canCancel,
       buyer: partyJson(buyer),
       seller: partyJson(seller),

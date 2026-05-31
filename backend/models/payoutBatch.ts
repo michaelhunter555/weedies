@@ -20,4 +20,6 @@ const PayoutBatchSchema = new mongoose.Schema<IPayoutBatch>({
     currency: { type: String, required: false, default: null },
 }, { timestamps: true });
 
+PayoutBatchSchema.index({ sellerId: 1, createdAt: -1 });
+
 export default mongoose.models.PayoutBatch || mongoose.model<IPayoutBatch>("PayoutBatch", PayoutBatchSchema);

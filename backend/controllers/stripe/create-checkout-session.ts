@@ -6,6 +6,7 @@ import stripe from "../../utils/stripe";
 import User from "../../models/user";
 import Listing from "../../models/listing";
 import { isEscrowRequiredPrice } from "../../lib/escrow-eligible";
+import { listingAuctionPurchasePriceDollars } from "../../lib/listing-auction-price";
 import {
   listingBuyItNowPriceDollars,
   platformApplicationFeeCents,
@@ -50,16 +51,27 @@ export default async function createCheckoutSession(req: Request, res: Response)
     }
 
     const listing = await Listing.findById(listingId).select(
-      "_id appName tagline slug photos coverIndex status saleType sellerId buyItNowPrice startingPrice currency",
+      "_id appName tagline slug photos coverIndex status saleType sellerId buyItNowPrice startingPrice currency buyerId auctionBids auctionWinningAmount",
     );
     if (!listing) {
       return void res.status(404).json({ message: "Listing not found" });
     }
-    if (listing.status !== "live") {
-      return void res.status(409).json({ message: "This listing is not available for purchase." });
+
+    const isAuctionWinnerCheckout =
+      listing.saleType === "auction" &&
+      listing.status === "reserved" &&
+      listing.buyerId &&
+      String(listing.buyerId) === buyerUserId;
+
+    if (listing.saleType === "auction" && !isAuctionWinnerCheckout) {
+      return void res.status(400).json({
+        message:
+          "Auction checkout opens after you win. Place bids while the auction is live.",
+      });
     }
-    if (listing.saleType === "auction") {
-      return void res.status(400).json({ message: "Use the auction flow for this listing." });
+
+    if (!isAuctionWinnerCheckout && listing.status !== "live") {
+      return void res.status(409).json({ message: "This listing is not available for purchase." });
     }
 
     const sellerIdStr = String(listing.sellerId);
@@ -75,7 +87,9 @@ export default async function createCheckoutSession(req: Request, res: Response)
       });
     }
 
-    const priceDollars = listingBuyItNowPriceDollars(listing);
+    const priceDollars = isAuctionWinnerCheckout
+      ? listingAuctionPurchasePriceDollars(listing)
+      : listingBuyItNowPriceDollars(listing);
     if (!Number.isFinite(priceDollars) || priceDollars < 0.5) {
       return void res.status(400).json({ message: "Invalid or too small purchase amount." });
     }

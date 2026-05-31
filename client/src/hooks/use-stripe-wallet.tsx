@@ -37,6 +37,28 @@ export type SellerOnboardingStartResult = {
 
 export type BillingHistoryResponse = BillingHistoryPayload;
 
+export type PayoutBatchListItem = {
+  _id: string;
+  status: "pending" | "paid" | "failed" | "canceled";
+  amount: number;
+  amountCents: number;
+  currency: string;
+  stripePayoutId: string | null;
+  payoutDate: string | null;
+  transactionCount: number;
+  createdAt: string | null;
+  updatedAt: string | null;
+};
+
+export type PayoutBatchesResponse = {
+  ok?: boolean;
+  items: PayoutBatchListItem[];
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+};
+
 export type ConnectBalanceResponse = {
   ok?: boolean;
   connected: boolean;
@@ -46,6 +68,22 @@ export type ConnectBalanceResponse = {
   pending: number;
   reserved: number;
   instantAvailable: number;
+  /** Stripe Connect available + pending (major units). */
+  stripeConnectTotal?: number;
+  /** Dashboard headline only: Stripe balance + funded Escrow seller net. */
+  salesRevenueTotal?: number;
+  /** Stripe Connect available + pending — use on Wallet payouts tab, not Escrow. */
+  total?: number;
+  escrow?: {
+    secured: number;
+    inProgress: number;
+    securedSaleCount: number;
+    inProgressSaleCount: number;
+  };
+  /** ISO timestamp — next Mon/Thu platform payout batch (UTC). */
+  nextEstimatedPayoutAt?: string;
+  isLikelyFirstPayout?: boolean;
+  payoutTimingNote?: string;
   isOnboarded?: boolean;
 };
 
@@ -161,6 +199,16 @@ export const useStripeWallet = () => {
     [apiFetch],
   );
 
+  /** Seller payout batches (platform cron → Stripe), paginated. */
+  const getPayoutBatches = useCallback(
+    async (page = 1, limit = 10): Promise<PayoutBatchesResponse> =>
+      apiFetch<PayoutBatchesResponse>(
+        `/stripe/payout-batches?page=${encodeURIComponent(String(page))}&limit=${encodeURIComponent(String(limit))}`,
+        "GET",
+      ),
+    [apiFetch],
+  );
+
   /** Charges on this user's Stripe customer (listing fees, purchases, etc.). */
   const getBillingHistory = useCallback(
     async (limit = 50): Promise<BillingHistoryResponse> =>
@@ -180,6 +228,7 @@ export const useStripeWallet = () => {
     createCheckoutSession,
     managePaymentCapture,
     getConnectBalance,
+    getPayoutBatches,
     getBillingHistory,
   };
 };

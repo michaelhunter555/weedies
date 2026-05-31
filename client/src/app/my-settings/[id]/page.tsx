@@ -386,42 +386,61 @@ export default function DashboardPage() {
   );
   const balanceData = sellerBalanceQuery.data;
   const balanceCurrency = balanceData?.currency || "USD";
-  const liveBalance = balanceData
-    ? Number(balanceData.available ?? 0) + Number(balanceData.pending ?? 0)
-    : 0;
-  const formattedBalance = (() => {
+  const formatMoneyMajor = (amount: number) => {
     try {
       return new Intl.NumberFormat(undefined, {
         style: "currency",
         currency: balanceCurrency.toUpperCase(),
         maximumFractionDigits: 0,
-      }).format(liveBalance);
+      }).format(amount);
     } catch {
-      return `$${liveBalance.toFixed(0)}`;
+      return `$${amount.toFixed(0)}`;
     }
-  })();
+  };
+  const stripeConnectTotal = balanceData
+    ? Number(
+        balanceData.stripeConnectTotal ??
+          Number(balanceData.available ?? 0) + Number(balanceData.pending ?? 0),
+      )
+    : 0;
+  const escrowSecured = Number(balanceData?.escrow?.secured ?? 0);
+  const escrowInProgress = Number(balanceData?.escrow?.inProgress ?? 0);
+  const salesRevenueTotal = balanceData
+    ? Number(
+        balanceData.salesRevenueTotal ??
+          balanceData.total ??
+          stripeConnectTotal + escrowSecured,
+      )
+    : 0;
   const salesValue =
-    !balanceData || !balanceData.connected
-      ? salesCount > 0
-        ? `${salesCount} sold`
-        : "—"
-      : formattedBalance;
+    sellerBalanceQuery.isLoading
+      ? "…"
+      : salesRevenueTotal > 0
+        ? formatMoneyMajor(salesRevenueTotal)
+        : salesCount > 0
+          ? `${salesCount} sold`
+          : "—";
   const salesDelta = (() => {
     if (sellerBalanceQuery.isLoading) return "Loading balance…";
-    if (!balanceData || !balanceData.connected) {
-      return salesCount > 0
-        ? "Connect Stripe to track revenue"
-        : "Your first sale is on its way";
+    const parts: string[] = [];
+    if (balanceData?.connected && stripeConnectTotal > 0) {
+      parts.push(`${formatMoneyMajor(stripeConnectTotal)} in Stripe`);
+    } else if (!balanceData?.connected && salesCount > 0 && escrowSecured <= 0) {
+      return "Connect Stripe to track card-checkout revenue";
     }
-    const pendingPart =
-      balanceData.pending > 0
-        ? ` · ${new Intl.NumberFormat(undefined, {
-            style: "currency",
-            currency: balanceCurrency.toUpperCase(),
-            maximumFractionDigits: 0,
-          }).format(balanceData.pending)} pending`
-        : "";
-    return `${salesCount} lifetime sale${salesCount === 1 ? "" : "s"}${pendingPart}`;
+    if (escrowSecured > 0) {
+      parts.push(`${formatMoneyMajor(escrowSecured)} via Escrow`);
+    }
+    if (escrowInProgress > 0) {
+      parts.push(`${formatMoneyMajor(escrowInProgress)} Escrow in progress`);
+    }
+    if (parts.length > 0) {
+      return `${salesCount} lifetime sale${salesCount === 1 ? "" : "s"} · ${parts.join(" · ")}`;
+    }
+    if (salesCount > 0) {
+      return `${salesCount} lifetime sale${salesCount === 1 ? "" : "s"}`;
+    }
+    return "Your first sale is on its way";
   })();
 
   const stats = useMemo(
@@ -554,7 +573,14 @@ export default function DashboardPage() {
             </Box>
           </Stack>
 
-          <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap">
+          <Stack 
+          direction={{ xs: "column", sm: "row" }} 
+          justifyContent={{ xs: "center", sm: "flex-end" }} 
+          spacing={1.5} 
+          alignItems="center" 
+          flexWrap="wrap"
+          sx={{ width: { xs: "100%", sm: "auto" } }}
+          >
             <Button
               component={Link}
               href="/support"
@@ -569,7 +595,7 @@ export default function DashboardPage() {
                 "&:hover": { borderColor: "#cbd5e1", bgcolor: "#f8fafc" },
               }}
             >
-              Contact support
+              Get Support
             </Button>
 
             {isStripeConnected ? (
@@ -934,9 +960,9 @@ export default function DashboardPage() {
       {/* Row 3 - Active listings */}
       <Stack
         id="my-listings"
-        direction="row"
-        alignItems="center"
-        justifyContent="space-between"
+        direction={{xs:"column", sm:"row"}}
+        alignItems={{xs:"flex-start", sm:"center"}}
+        justifyContent={{xs:"center", sm:"space-between"}}
         sx={{ mb: 1.5, mt: 1 }}
       >
         <Box>
@@ -1390,9 +1416,9 @@ export default function DashboardPage() {
       {totalSoldListings > 0 ? (
         <>
           <Stack
-            direction="row"
-            alignItems="center"
-            justifyContent="space-between"
+            direction={{xs:"column", sm:"row"}}
+            alignItems={{xs:"flex-start", sm:"center"}}
+            justifyContent={{xs:"center", sm:"space-between"}}
             sx={{ mb: 1.5, mt: 2 }}
           >
             <Box>

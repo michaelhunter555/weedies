@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import mongoose from "mongoose";
 
+import { activeChatFilterForUser } from "../../lib/chat-active";
 import Chat from "../../models/conversations";
 import Message from "../../models/messages";
 
@@ -18,7 +19,7 @@ export async function getUnreadCount(req: Request, res: Response) {
   }
 
   try {
-    const myChats = (await Chat.find({ participants: { $in: [userId] } })
+    const myChats = (await Chat.find(activeChatFilterForUser(userId))
       .select("_id")
       .lean()) as ChatIdRow[];
     const chatIds = myChats.map((c) => String(c._id));

@@ -77,6 +77,7 @@ export default function SocketEventsListener() {
         invalidateQuery("my-listings"),
         invalidateQuery("my-purchases"),
         invalidateQuery("my-marketplace-orders"),
+        invalidateQuery("my-transactions"),
         invalidateQuery("listing"),
         invalidateQuery("listing-exchange"),
         invalidateQuery("stripe-wallet"),
@@ -116,7 +117,11 @@ export default function SocketEventsListener() {
         path: settingsPath(uid),
         actionLabel: "Dashboard",
       });
-      await Promise.all([invalidateQuery("my-purchases"), invalidateQuery("my-marketplace-orders")]);
+      await Promise.all([
+        invalidateQuery("my-purchases"),
+        invalidateQuery("my-marketplace-orders"),
+        invalidateQuery("my-transactions"),
+      ]);
     };
 
     const onRefundCompleted = async (data: AnyData) => {
@@ -130,6 +135,7 @@ export default function SocketEventsListener() {
       await Promise.all([
         invalidateQuery("my-purchases"),
         invalidateQuery("my-marketplace-orders"),
+        invalidateQuery("my-transactions"),
         invalidateQuery("my-listings"),
       ]);
     };
@@ -276,6 +282,7 @@ export default function SocketEventsListener() {
         invalidateQuery("listing-exchange"),
         invalidateQuery("my-listings"),
         invalidateQuery("my-marketplace-orders"),
+        invalidateQuery("my-transactions"),
         invalidateQuery("stripe-wallet"),
       ]);
     };
@@ -342,6 +349,23 @@ export default function SocketEventsListener() {
         message: data?.message || "New message",
         description:
           typeof data?.preview === "string" ? (data.preview as string) : undefined,
+        severity: "info",
+        path: "/messages",
+        actionLabel: "Open inbox",
+      });
+      await Promise.all([
+        invalidateQuery("chats"),
+        invalidateQuery("chat"),
+      ]);
+    };
+
+    const onChatParticipantLeft = async (data: AnyData) => {
+      showSnackbar({
+        title: "Messages",
+        message:
+          typeof data?.message === "string"
+            ? data.message
+            : "The other person left this chat.",
         severity: "info",
         path: "/messages",
         actionLabel: "Open inbox",
@@ -424,6 +448,24 @@ export default function SocketEventsListener() {
       ]);
     };
 
+    const onAuctionEnded = async (data: AnyData) => {
+      const lid = listingIdFromData(data);
+      const won = data?.outcome === "reserved";
+      showSnackbar({
+        title: "Auctions",
+        message: data?.message || "Auction ended",
+        severity: won ? "success" : "info",
+        path: won && lid ? `/checkout/${encodeURIComponent(lid)}` : lid ? `/products/${encodeURIComponent(lid)}` : settingsPath(uid, "/bids"),
+        actionLabel: won ? "Pay now" : lid ? "View listing" : "My bids",
+      });
+      await Promise.all([
+        invalidateQuery("my-auction-bids"),
+        invalidateQuery("my-listings"),
+        invalidateQuery("listing"),
+        invalidateQuery("listing-exchange"),
+      ]);
+    };
+
     const onNewReview = async (data: AnyData) => {
       const lid = listingIdFromData(data);
       showSnackbar({
@@ -463,7 +505,11 @@ export default function SocketEventsListener() {
         path: resolutionPath(data?.disputeId as string | undefined),
         actionLabel: "View dispute",
       });
-      await invalidateQuery("disputes");
+      await Promise.all([
+        invalidateQuery("disputes"),
+        invalidateQuery("my-marketplace-orders"),
+        invalidateQuery("my-transactions"),
+      ]);
       if (data?.listingId) {
         await invalidateQuery("listing-exchange");
       }
@@ -477,7 +523,11 @@ export default function SocketEventsListener() {
         path: resolutionPath(data?.disputeId as string | undefined),
         actionLabel: "View dispute",
       });
-      await invalidateQuery("disputes");
+      await Promise.all([
+        invalidateQuery("disputes"),
+        invalidateQuery("my-marketplace-orders"),
+        invalidateQuery("my-transactions"),
+      ]);
       if (data?.disputeId) {
         await invalidateQuery("dispute");
       }
@@ -491,7 +541,11 @@ export default function SocketEventsListener() {
         path: resolutionPath(data?.disputeId as string | undefined),
         actionLabel: "View dispute",
       });
-      await invalidateQuery("disputes");
+      await Promise.all([
+        invalidateQuery("disputes"),
+        invalidateQuery("my-marketplace-orders"),
+        invalidateQuery("my-transactions"),
+      ]);
     };
 
     socket.on(Notifications.CARD_ADDED, onCardAdded);
@@ -520,9 +574,11 @@ export default function SocketEventsListener() {
       onPrivateListingRequestResolved,
     );
     socket.on(Notifications.NEW_MESSAGE, onNewMessage);
+    socket.on(Notifications.CHAT_PARTICIPANT_LEFT, onChatParticipantLeft);
     socket.on("chat:message", onChatMessageLive);
     socket.on(Notifications.AUCTION_BID_PLACED, onAuctionBidPlaced);
     socket.on(Notifications.AUCTION_BID_RESOLVED, onAuctionBidResolved);
+    socket.on(Notifications.AUCTION_ENDED, onAuctionEnded);
     socket.on(Notifications.NEW_REVIEW, onNewReview);
     socket.on(Notifications.DISPUTE_OPENED, onDisputeOpened);
     socket.on(Notifications.DISPUTE_UPDATED, onDisputeUpdated);
@@ -555,9 +611,11 @@ export default function SocketEventsListener() {
         onPrivateListingRequestResolved,
       );
       socket.off(Notifications.NEW_MESSAGE, onNewMessage);
+      socket.off(Notifications.CHAT_PARTICIPANT_LEFT, onChatParticipantLeft);
       socket.off("chat:message", onChatMessageLive);
       socket.off(Notifications.AUCTION_BID_PLACED, onAuctionBidPlaced);
       socket.off(Notifications.AUCTION_BID_RESOLVED, onAuctionBidResolved);
+      socket.off(Notifications.AUCTION_ENDED, onAuctionEnded);
       socket.off(Notifications.NEW_REVIEW, onNewReview);
       socket.off(Notifications.DISPUTE_OPENED, onDisputeOpened);
       socket.off(Notifications.DISPUTE_UPDATED, onDisputeUpdated);

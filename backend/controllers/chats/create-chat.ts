@@ -1,6 +1,11 @@
 import type { Request, Response } from "express";
 import mongoose from "mongoose";
 
+import {
+  MAX_ACTIVE_CHATS_PER_USER,
+  countActiveChatsForUser,
+  userObjectId,
+} from "../../lib/chat-active";
 import { displayImage, participantRoleForListing } from "../../lib/chat-helpers";
 import { notifyChatRecipient } from "../../lib/chat-notifications";
 import Chat from "../../models/conversations";
@@ -20,6 +25,15 @@ type UserLean = {
   mode?: string;
   email?: string;
 };
+
+function listingFilter(lid: string | null) {
+  if (lid) {
+    return { listingId: new mongoose.Types.ObjectId(lid) };
+  }
+  return {
+    $or: [{ listingId: { $exists: false } }, { listingId: null }],
+  };
+}
 
 /**
  * Start a 1:1 chat between the authenticated user and `recipientId`.
@@ -71,6 +85,62 @@ export async function createChat(req: Request, res: Response) {
       return void res.status(404).json({ message: "User not found." });
     }
 
+    const senderOid = userObjectId(senderId);
+    const recipientOid = userObjectId(rid);
+
+    const existing = await Chat.findOne({
+      participants: { $all: [senderOid, recipientOid] },
+      ...listingFilter(lid),
+    });
+
+    if (existing) {
+      const senderLeft = (existing.userLeftChat ?? []).some(
+        (id: mongoose.Types.ObjectId) => String(id) === senderId,
+      );
+      if (senderLeft) {
+        existing.userLeftChat = (existing.userLeftChat ?? []).filter(
+          (id: mongoose.Types.ObjectId) => String(id) !== senderId,
+        );
+      }
+
+      existing.lastMessage = text;
+      existing.lastMessageTime = new Date();
+      await existing.save();
+
+      await Message.create({
+        chatId: existing._id,
+        senderId: senderOid,
+        text,
+        read: false,
+      });
+
+      await notifyChatRecipient({
+        chat: existing,
+        senderUserId: senderId,
+        senderRealName: String(sender.name ?? "User"),
+        text,
+        isNewChat: false,
+        listingId: lid,
+      });
+
+      const activeChatCount = await countActiveChatsForUser(senderId);
+      return void res.status(200).json({
+        chat: existing,
+        reopened: true,
+        activeChatCount,
+        maxActiveChats: MAX_ACTIVE_CHATS_PER_USER,
+      });
+    }
+
+    const activeChatCount = await countActiveChatsForUser(senderId);
+    if (activeChatCount >= MAX_ACTIVE_CHATS_PER_USER) {
+      return void res.status(403).json({
+        message: `You can have at most ${MAX_ACTIVE_CHATS_PER_USER} active conversations. Remove one from your inbox to start a new chat.`,
+        activeChatCount,
+        maxActiveChats: MAX_ACTIVE_CHATS_PER_USER,
+      });
+    }
+
     const senderRole = participantRoleForListing(
       senderId,
       listingSellerId,
@@ -83,20 +153,17 @@ export async function createChat(req: Request, res: Response) {
     );
 
     const chat = await Chat.create({
-      participants: [
-        new mongoose.Types.ObjectId(senderId),
-        new mongoose.Types.ObjectId(rid),
-      ],
+      participants: [senderOid, recipientOid],
       participantInfo: [
         {
-          id: new mongoose.Types.ObjectId(senderId),
+          id: senderOid,
           name: String(sender.name ?? "User"),
           image: displayImage(sender.image),
           role: senderRole,
           email: String(sender.email ?? "").trim(),
         },
         {
-          id: new mongoose.Types.ObjectId(rid),
+          id: recipientOid,
           name: String(recipient.name ?? "User"),
           image: displayImage(recipient.image),
           role: recipientRole,
@@ -106,13 +173,14 @@ export async function createChat(req: Request, res: Response) {
       lastMessage: text,
       lastMessageTime: new Date(),
       chatIsComplete: false,
+      userLeftChat: [],
       listingId: lid ? new mongoose.Types.ObjectId(lid) : undefined,
-      initiatedBy: new mongoose.Types.ObjectId(senderId),
+      initiatedBy: senderOid,
     });
 
     await Message.create({
       chatId: chat._id,
-      senderId: new mongoose.Types.ObjectId(senderId),
+      senderId: senderOid,
       text,
       read: false,
     });
@@ -126,7 +194,11 @@ export async function createChat(req: Request, res: Response) {
       listingId: lid,
     });
 
-    return void res.status(201).json({ chat });
+    return void res.status(201).json({
+      chat,
+      activeChatCount: activeChatCount + 1,
+      maxActiveChats: MAX_ACTIVE_CHATS_PER_USER,
+    });
   } catch (err) {
     console.error("createChat:", err);
     return void res.status(500).json({ message: "Failed to create chat." });

@@ -66,10 +66,18 @@ export function ExchangeDisputeSection({
       fd.append("desiredAction", desiredAction);
       if (desiredAction === "partial_refund") {
         const dollars = Number(partialDollars);
-        if (!Number.isFinite(dollars) || dollars <= 0) {
-          throw new Error("Enter a valid partial refund amount.");
+        if (
+          !Number.isFinite(dollars) ||
+          dollars <= 0 ||
+          !Number.isInteger(dollars)
+        ) {
+          throw new Error("Enter a whole-dollar partial refund amount.");
         }
-        fd.append("requestedRefundAmount", String(Math.round(dollars * 100)));
+        const maxWhole = Math.floor(maxDollars);
+        if (dollars > maxWhole) {
+          throw new Error(`Amount cannot exceed $${maxWhole}.`);
+        }
+        fd.append("requestedRefundAmount", String(dollars * 100));
       }
       const f1 = fileOneRef.current?.files?.[0];
       const f2 = fileTwoRef.current?.files?.[0];
@@ -188,13 +196,14 @@ export function ExchangeDisputeSection({
 
         {desiredAction === "partial_refund" && (
           <TextField
-            label="Refund amount (USD)"
+            label="Refund amount (whole USD)"
             type="number"
-            inputProps={{ min: 0.01, max: maxDollars, step: 0.01 }}
+            inputProps={{ min: 1, max: Math.floor(maxDollars), step: 1 }}
             value={partialDollars}
-            onChange={(e) => setPartialDollars(e.target.value)}
+            onChange={(e) => setPartialDollars(e.target.value.replace(/\D/g, ""))}
             fullWidth
             size="small"
+            helperText={`Whole dollars only, up to $${Math.floor(maxDollars)}`}
           />
         )}
 

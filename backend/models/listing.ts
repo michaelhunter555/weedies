@@ -36,6 +36,12 @@ export interface Listing {
   buyItNowPrice?: number;
   auctionStartDate?: Date;
   auctionEndDate?: Date;
+  /** Set when cron finalizes an ended auction (winner reserved or no sale). */
+  auctionFinalizedAt?: Date;
+  /** One-shot flag so ending-soon emails are not duplicated. */
+  auctionEndingSoonNotifiedAt?: Date;
+  /** High bid in dollars when status moves to `reserved` after auction end. */
+  auctionWinningAmount?: number;
   currency: string;
 
   // Media & supporting links
@@ -169,6 +175,9 @@ const ListingSchema = new mongoose.Schema<Listing>(
     buyItNowPrice: { type: Number, required: false, min: 0 },
     auctionStartDate: { type: Date, required: false },
     auctionEndDate: { type: Date, required: false },
+    auctionFinalizedAt: { type: Date, required: false },
+    auctionEndingSoonNotifiedAt: { type: Date, required: false },
+    auctionWinningAmount: { type: Number, required: false, min: 0 },
     currency: { type: String, required: true, default: "USD", uppercase: true },
 
     photos: { type: [String], required: true, default: [] },

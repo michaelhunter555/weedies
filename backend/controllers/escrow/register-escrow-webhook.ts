@@ -8,10 +8,10 @@ import {
   registerEscrowWebhook,
 } from "../../lib/escrow-api";
 
-function defaultWebhookUrl(): string | null {
-  const explicit = process.env.ESCROW_WEBHOOK_PUBLIC_URL?.trim();
-  if (explicit) return explicit;
-
+function defaultWebhookUrl(): string {
+  if (process.env.NODE_ENV === "production") {
+    return "https://dapandflip.com/api/escrow/webhook";
+  }
   const port = process.env.PORT?.trim() || "5001";
   return `http://localhost:${port}/api/escrow/webhook`;
 }

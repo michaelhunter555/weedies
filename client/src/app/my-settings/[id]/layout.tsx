@@ -4,6 +4,7 @@ import { useParams } from "next/navigation";
 
 import { Box, Stack } from "@mui/material";
 
+import { CloseAccountSection } from "@/components/MySettings/CloseAccountSection";
 import { MySettingsSidebar } from "@/components/MySettings/MySettingsSidebar";
 import { BRAND_PALETTE } from "@/theme/brand-palette";
 import { useAuth } from "@/context/auth-context";
@@ -41,10 +42,11 @@ export default function MySettingsLayout({
         borderRadius: { md: 4 },
       }}
     >
-      <Stack direction={{ xs: "column", md: "row" }} spacing={3} alignItems="flex-start">
+      <Stack direction={{ xs: "column", md: "row" }} spacing={{ xs: 1, md: 3 }} alignItems="flex-start">
         <MySettingsSidebar userId={sessionUserId} mode={user?.mode} />
         <Box component="main" sx={{ flex: 1, minWidth: 0, width: "100%" }}>
           {children}
+          <CloseAccountSection />
         </Box>
       </Stack>
     </Box>

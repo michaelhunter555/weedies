@@ -41,7 +41,7 @@ export default function PrivacyPolicyPage() {
         title="1. Information we collect"
         paragraphs={[
           "Account information: name, email address, profile details, and authentication identifiers when you sign up or sign in (including third-party sign-in providers).",
-          "Seller and payout information: Stripe Connect account status, country, and payment-related metadata processed by Stripe (we do not store full card numbers).",
+          "Seller and payout information: Stripe Connect account status, country, and payment-related metadata processed by Stripe (we do not store card numbers).",
           "Buyer payment information: payment methods and billing details are handled by Stripe; we receive tokens and transaction references, not full card data.",
           "Listing and marketplace activity: listings you create, bids, purchases, messages, reviews, and exchange-room activity.",
           "Technical data: IP address, browser type, device information, cookies, and usage logs used for security, analytics, and performance.",

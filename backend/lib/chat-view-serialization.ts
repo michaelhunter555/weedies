@@ -148,6 +148,7 @@ export async function serializeMessagesForViewer(
     senderId: unknown;
     text: string;
     read?: boolean;
+    isSystem?: boolean;
     createdAt?: Date;
     updatedAt?: Date;
   }>,
@@ -162,6 +163,7 @@ export async function serializeMessagesForViewer(
     fromMe: boolean;
     senderLabel: string;
     senderId: string;
+    isSystem: boolean;
   }>
 > {
   const listingId = chat.listingId != null ? String(chat.listingId) : "";
@@ -202,15 +204,18 @@ export async function serializeMessagesForViewer(
   const nameById = new Map(senders.map((u) => [String(u._id), String(u.name ?? "User")]));
 
   return messages.map((m) => {
+    const isSystem = Boolean(m.isSystem);
     const sid = String(m.senderId);
-    const fromMe = sid === viewerId;
+    const fromMe = !isSystem && sid === viewerId;
     const fromInitiator = initiatedBy && sid === initiatedBy;
-    const useMask = maskInitiatorToViewer && fromInitiator && !fromMe;
-    const senderLabel = fromMe
-      ? "You"
-      : useMask
-        ? maskLabel
-        : nameById.get(sid) ?? "User";
+    const useMask = !isSystem && maskInitiatorToViewer && fromInitiator && !fromMe;
+    const senderLabel = isSystem
+      ? ""
+      : fromMe
+        ? "You"
+        : useMask
+          ? maskLabel
+          : nameById.get(sid) ?? "User";
 
     return {
       _id: String(m._id),
@@ -221,6 +226,7 @@ export async function serializeMessagesForViewer(
       fromMe,
       senderLabel,
       senderId: sid,
+      isSystem,
     };
   }).reverse();
 }

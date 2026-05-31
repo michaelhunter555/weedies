@@ -20,6 +20,8 @@ export interface IChat extends mongoose.Document {
   lastMessageTime?: Date;
   listingId?: mongoose.Types.ObjectId;
   chatIsComplete?: boolean;
+  /** User ids who removed this thread from their inbox (per-user, not a global delete). */
+  userLeftChat?: mongoose.Types.ObjectId[];
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -51,8 +53,16 @@ const ChatSchema = new mongoose.Schema<IChat>(
     lastMessageTime: { type: Date },
     listingId: { type: mongoose.Schema.Types.ObjectId, ref: "Listing", required: false },
     chatIsComplete: { type: Boolean, required: false, default: false },
+    userLeftChat: [
+      { type: mongoose.Schema.Types.ObjectId, ref: "User", required: false, default: undefined },
+    ],
   },
   { timestamps: true },
 );
+
+/** `participants` only — MongoDB cannot compound-index two array fields. */
+ChatSchema.index({ participants: 1 });
+ChatSchema.index({ updatedAt: 1 });
+ChatSchema.index({ lastMessageTime: 1 });
 
 export default mongoose.models.Chat || mongoose.model<IChat>("Chat", ChatSchema);

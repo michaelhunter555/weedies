@@ -38,7 +38,9 @@ export const Notifications = {
   AUCTION_BID_PLACED: "auction.bid.placed",
   /** Seller accepted/rejected a bid — notify bidder (and seller for UI sync). */
   AUCTION_BID_RESOLVED: "auction.bid.resolved",
+  AUCTION_ENDED: "auction.ended",
   NEW_MESSAGE: "chat.message.new",
+  CHAT_PARTICIPANT_LEFT: "chat.participant.left",
   NEW_REVIEW: "review.submitted",
   DISPUTE_OPENED: "dispute.opened",
   DISPUTE_UPDATED: "dispute.updated",

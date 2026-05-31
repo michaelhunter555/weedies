@@ -183,13 +183,37 @@ export const userSaleNotificationEmail = async (
     }
 };
 
-// user dispute notification
+function clientOriginForEmail(): string {
+    const raw = process.env.CLIENT_ORIGIN?.trim();
+    if (raw) {
+        const first = raw.split(",")[0]?.trim();
+        if (first) return first.replace(/\/$/, "");
+    }
+    return "https://dapandflip.com";
+}
+
+// user dispute notification (seller or other non-initiator)
 export const userDisputeNotificationEmail = async (
-    userEmail: string, 
+    userEmail: string,
     userName: string,
-    disputeAmount: number,
+    userId: string,
+    disputeId: string,
+    amountPaidCents: number,
+    requestedRefundCents: number,
+    desiredAction: "full_refund" | "partial_refund",
     disputeDate: Date,
+    disputeCategory: string,
+    appName?: string,
 ) => {
+    const origin = clientOriginForEmail();
+    const amountPaid = (amountPaidCents / 100).toFixed(2);
+    const requested = (requestedRefundCents / 100).toFixed(2);
+    const refundRequestLine =
+        desiredAction === "full_refund"
+            ? `Full refund requested (<b>$${requested}</b> of $${amountPaid} paid).`
+            : `Partial refund requested: <b>$${requested}</b> of $${amountPaid} paid.`;
+    const resolutionUrl = `${origin}/my-settings/${encodeURIComponent(userId)}/resolution-center/${encodeURIComponent(disputeId)}`;
+
     const payload = {
         sender: {
             name: "User Dispute Notification[Dap & Flip]",
@@ -197,20 +221,26 @@ export const userDisputeNotificationEmail = async (
         },
         to: [
             {
-                name: 'User Dispute Notification',
-                email: userEmail, //info@elevatedappgroup.com
+                name: userName || "User Dispute Notification",
+                email: userEmail,
             }
         ],
-        subject: `${userName} has a dispute`,
+        subject: `Post-sale dispute action required`,
         htmlContent: `
         <html>
         <body>
-        <p>User Email: ${userEmail}</p>
-        <br />
-        dispute amount: ${disputeAmount}
-        <br />
-        dispute date: ${disputeDate}
-        <br />
+
+        <p>Hi ${userName},</p>
+        <p>A dispute was opened on Dap &amp; Flip regarding <b>${appName ?? "your listing"}</b>. The buyer reported: <code>${disputeCategory}</code>.</p>
+        <p>${refundRequestLine}</p>
+        <p>Opened: <b>${disputeDate.toLocaleString()}</b></p>
+        <p>Please visit the <a href="${resolutionUrl}">Resolution Center</a> to review the case.</p>
+        <ol>
+        <li><b>Accept</b> the refund request to issue the refund through Stripe.</li>
+        <li><b>Escalate</b> if you disagree, platform review will decide.</li>
+        <li>You have 3 days to respond or the dispute may be resolved in the buyer's favor.</li>
+        <li>Message the buyer in the exchange room to resolve faster when possible.</li>
+        </ol>
         </body>
         </html>
         `
@@ -236,54 +266,238 @@ export const userDisputeNotificationEmail = async (
     }
 };
 
-// auction ending soon notification
-export const auctionEndingSoonNotificationEmail = async (
-    userEmail: string, 
-    userName: string,
-    auctionEndDate: Date,
+const ADMIN_INBOX = "info@elevatedappgroup.com";
+
+// dispute requires review email (seller escalated or charge dispute).
+export const disputeRequiresReviewEmail = async (
+    disputeId: string,
+    listingAppName: string,
+    category: string,
+    initiatorName: string,
+    amountPaidCents: number,
+    requestedRefundCents: number,
+    desiredAction: "full_refund" | "partial_refund",
+    sellerResponse?: string,
 ) => {
+    const amountPaid = (amountPaidCents / 100).toFixed(2);
+    const requested = (requestedRefundCents / 100).toFixed(2);
+    const refundLine =
+        desiredAction === "full_refund"
+            ? `Full refund ($${requested})`
+            : `Partial refund ($${requested} of $${amountPaid})`;
+
     const payload = {
         sender: {
-            name: "Auction Ending Soon Notification[Dap & Flip]",
-            email: 'no-reply@elevatedappgroup.com', //
+            name: "Dispute Review[Dap & Flip]",
+            email: "no-reply@elevatedappgroup.com",
         },
-        to: [
-            {
-                name: 'Auction Ending Soon Notification',
-                email: userEmail, //info@elevatedappgroup.com
-            }
-        ],
-        subject: `${userName} has an auction ending soon`,
+        to: [{ name: "Dap & Flip Support", email: ADMIN_INBOX }],
+        subject: `Dispute needs review: ${listingAppName}`,
         htmlContent: `
-        <html>
-        <body>  
-        <p>User Email: ${userEmail}</p>
-        <br />
-        auction end date: ${auctionEndDate}
-        <br />
-        </body>
-        </html>
-        `
-    }
+        <html><body>
+        <p>A dispute requires platform review.</p>
+        <ul>
+        <li>Dispute ID: <code>${disputeId}</code></li>
+        <li>Listing: <b>${listingAppName}</b></li>
+        <li>Category: <code>${category}</code></li>
+        <li>Opened by: ${initiatorName}</li>
+        <li>Requested: ${refundLine}</li>
+        ${sellerResponse ? `<li>Seller response: ${sellerResponse}</li>` : ""}
+        </ul>
+        <p>Review in admin tools or contact parties as needed.</p>
+        </body></html>
+        `,
+    };
+
+    await sendBrevoPayload(payload);
+};
+
+// Admin dispute decision email (buyer + seller).
+export const adminDisputeDecisionEmail = async (
+    userEmail: string,
+    userName: string,
+    userId: string,
+    disputeId: string,
+    listingAppName: string,
+    decisionSummary: string,
+    action: "refund" | "partial_refund" | "none",
+    platformResponse: string,
+) => {
+    const origin = clientOriginForEmail();
+    const resolutionUrl = `${origin}/my-settings/${encodeURIComponent(userId)}/resolution-center/${encodeURIComponent(disputeId)}`;
+    const actionLabel =
+        action === "refund"
+            ? "Full refund"
+            : action === "partial_refund"
+              ? "Partial refund"
+              : "No refund";
+
+    const payload = {
+        sender: {
+            name: "Dispute Decision[Dap & Flip]",
+            email: "no-reply@elevatedappgroup.com",
+        },
+        to: [{ name: userName || "User", email: userEmail }],
+        subject: `Dispute resolved: ${listingAppName}`,
+        htmlContent: `
+        <html><body>
+        <p>Hi ${userName},</p>
+        <p>Platform review for <b>${listingAppName}</b> is complete.</p>
+        <p><b>Outcome:</b> ${decisionSummary} (${actionLabel})</p>
+        <p>${platformResponse}</p>
+        <p><a href="${resolutionUrl}">View in Resolution Center</a></p>
+        </body></html>
+        `,
+    };
+
+    await sendBrevoPayload(payload);
+};
+
+async function sendBrevoPayload(payload: Record<string, unknown>): Promise<void> {
     try {
         const res = await fetch(`https://api.brevo.com/v3/smtp/email`, {
             method: "POST",
             headers: {
-                "accept": "application/json",
+                accept: "application/json",
                 "Content-Type": "application/json",
                 "api-key": String(brevoAPIKey),
             },
-            body: JSON.stringify(payload)   
-        })
-        if(!res.ok) {
+            body: JSON.stringify(payload),
+        });
+        if (!res.ok) {
             const err = await res.text();
-            console.error("brevo error",err)
+            console.error("brevo error", err);
         } else {
             console.log("brevo email sent successfully");
         }
-    } catch(err) {
-        console.log("POST error",err);
+    } catch (err) {
+        console.log("POST error", err);
     }
+}
+
+// auction ending soon notification
+export const auctionEndingSoonNotificationEmail = async (
+    userEmail: string,
+    userName: string,
+    appName: string,
+    listingId: string,
+    auctionEndDate: Date,
+    listingUrl?: string,
+) => {
+    const origin = clientOriginForEmail();
+    const url =
+        listingUrl ??
+        `${origin}/products/${encodeURIComponent(listingId)}`;
+
+    const payload = {
+        sender: {
+            name: "Auction Ending Soon[Dap & Flip]",
+            email: "no-reply@elevatedappgroup.com",
+        },
+        to: [{ name: userName || "Bidder", email: userEmail }],
+        subject: `Auction ending soon: ${appName}`,
+        htmlContent: `
+        <html><body>
+        <p>Hi ${userName},</p>
+        <p>The auction for <b>${appName}</b> ends <b>${auctionEndDate.toLocaleString()}</b>.</p>
+        <p><a href="${url}">View listing</a></p>
+        </body></html>
+        `,
+    };
+
+    await sendBrevoPayload(payload);
+};
+
+export const auctionWinnerBuyerEmail = async (
+    userEmail: string,
+    userName: string,
+    userId: string,
+    appName: string,
+    listingId: string,
+    winAmount: number,
+    checkoutUrl: string,
+    exchangeUrl: string,
+) => {
+    const payload = {
+        sender: {
+            name: "Auction Won[Dap & Flip]",
+            email: "no-reply@elevatedappgroup.com",
+        },
+        to: [{ name: userName || "Buyer", email: userEmail }],
+        subject: `You won the auction: ${appName}`,
+        htmlContent: `
+        <html><body>
+        <p>Hi ${userName},</p>
+        <p>Congratulations! You won <b>${appName}</b> for <b>$${winAmount.toFixed(2)}</b>.</p>
+        <p>Complete payment to secure the sale:</p>
+        <ol>
+        <li><a href="${checkoutUrl}">Checkout</a></li>
+        <li>Then use the <a href="${exchangeUrl}">Exchange room</a> for handover.</li>
+        </ol>
+        </body></html>
+        `,
+    };
+    await sendBrevoPayload(payload);
+};
+
+export const auctionWinnerSellerEmail = async (
+    userEmail: string,
+    userName: string,
+    userId: string,
+    appName: string,
+    listingId: string,
+    winAmount: number,
+    buyerName: string,
+    exchangeUrl: string,
+) => {
+    const payload = {
+        sender: {
+            name: "Auction Ended[Dap & Flip]",
+            email: "no-reply@elevatedappgroup.com",
+        },
+        to: [{ name: userName || "Seller", email: userEmail }],
+        subject: `Auction ended: ${appName}`,
+        htmlContent: `
+        <html><body>
+        <p>Hi ${userName},</p>
+        <p>Your auction for <b>${appName}</b> ended. High bid: <b>$${winAmount.toFixed(2)}</b> from ${buyerName}.</p>
+        <p>The listing is reserved until they pay. You will be notified when checkout completes.</p>
+        <p><a href="${exchangeUrl}">Open Exchange room</a></p>
+        </body></html>
+        `,
+    };
+    await sendBrevoPayload(payload);
+};
+
+export const auctionEndedNoWinnerSellerEmail = async (
+    userEmail: string,
+    userName: string,
+    appName: string,
+    listingId: string,
+    slug?: string,
+    note?: string,
+) => {
+    const origin = clientOriginForEmail();
+    const slugPart = slug ? `/${encodeURIComponent(slug)}` : "";
+    const url = `${origin}/products/${encodeURIComponent(listingId)}${slugPart}`;
+
+    const payload = {
+        sender: {
+            name: "Auction Ended[Dap & Flip]",
+            email: "no-reply@elevatedappgroup.com",
+        },
+        to: [{ name: userName || "Seller", email: userEmail }],
+        subject: `Auction ended: ${appName}`,
+        htmlContent: `
+        <html><body>
+        <p>Hi ${userName},</p>
+        <p>Your auction for <b>${appName}</b> has ended with no payable winning bid.</p>
+        ${note ? `<p>${note}</p>` : ""}
+        <p><a href="${url}">View listing</a></p>
+        </body></html>
+        `,
+    };
+    await sendBrevoPayload(payload);
 };
 
 // payment expiring notification
@@ -430,25 +644,25 @@ export const payoutsNotificationEmail = async (
         { subject: string; headline: string; detail: string }
     > = {
         created: {
-            subject: `Payout initiated — ${amountLabel}`,
+            subject: `Payout initiated: ${amountLabel}`,
             headline: "Your payout is on the way",
             detail:
                 "We started a transfer from your Dap & Flip balance to your connected bank account. You'll get another email when it completes.",
         },
         paid: {
-            subject: `Payout deposited — ${amountLabel}`,
+            subject: `Payout deposited: ${amountLabel}`,
             headline: "Your payout was deposited",
             detail:
                 "Stripe marked this payout as paid. Funds should appear on your bank timeline per your financial institution.",
         },
         failed: {
-            subject: `Payout failed — ${amountLabel}`,
+            subject: `Payout failed: ${amountLabel}`,
             headline: "Your payout could not be completed",
             detail:
                 "Please sign in to Dap & Flip and verify your Stripe Connect payout details, then contact support if you need help.",
         },
         canceled: {
-            subject: `Payout canceled — ${amountLabel}`,
+            subject: `Payout canceled: ${amountLabel}`,
             headline: "Your payout was canceled",
             detail:
                 "This transfer was canceled before completion. Sign in to review your seller dashboard or contact support with questions.",

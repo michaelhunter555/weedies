@@ -10,6 +10,7 @@ import { brandContainedButtonSx } from "@/theme/brand-palette";
 import OpenInNewRoundedIcon from "@mui/icons-material/OpenInNewRounded";
 import ReceiptLongRoundedIcon from "@mui/icons-material/ReceiptLongRounded";
 import StorefrontRoundedIcon from "@mui/icons-material/StorefrontRounded";
+import ErrorOutlineRoundedIcon from "@mui/icons-material/ErrorOutlineRounded";
 import {
   Box,
   Button,
@@ -24,6 +25,7 @@ import {
   TableCell,
   TableHead,
   TableRow,
+  Tooltip,
   Typography,
 } from "@mui/material";
 
@@ -55,8 +57,9 @@ function exchangeHref(listingId: string): string {
   return `/exchange/${encodeURIComponent(listingId)}`;
 }
 
-function paymentChip(status: string | undefined) {
+function paymentChip(status: string | undefined, hasDispute?: boolean) {
   const s = status ?? "pending";
+  const label = hasDispute ? `${s}*` : s;
   const color =
     s === "succeeded"
       ? ("success" as const)
@@ -65,7 +68,18 @@ function paymentChip(status: string | undefined) {
         : s === "failed" || s === "canceled"
           ? ("error" as const)
           : ("default" as const);
-  return <Chip size="small" label={s} color={color} variant="outlined" sx={{ fontWeight: 700 }} />;
+  const chip = (
+    <Chip size="small" label={label} color={color} variant="outlined" sx={{ fontWeight: 700 }} />
+  );
+  if (!hasDispute) return chip;
+  return (
+    <Tooltip title="This transaction is in dispute — payment status may change after resolution">
+      <Stack direction="row" spacing={0.25} alignItems="center" component="span">
+        {chip}
+        <ErrorOutlineRoundedIcon color="warning" sx={{ fontSize: 16 }} />
+      </Stack>
+    </Tooltip>
+  );
 }
 
 function OrderMobileCard({ row }: { row: MarketplaceOrderRow }) {
@@ -111,7 +125,7 @@ function OrderMobileCard({ row }: { row: MarketplaceOrderRow }) {
                 color: row.role === "buyer" ? "primary.main" : "secondary.main",
               }}
             />
-            {paymentChip(row.paymentStatus)}
+            {paymentChip(row.paymentStatus, row.hasDispute)}
             {row.listingStatus === "sold" ? (
               <Chip size="small" label="Sold" sx={{ height: 22, fontSize: 11 }} />
             ) : null}
@@ -201,7 +215,7 @@ function OrderMiniRow({
               color: row.role === "buyer" ? "primary.main" : "secondary.main",
             }}
           />
-          {paymentChip(row.paymentStatus)}
+          {paymentChip(row.paymentStatus, row.hasDispute)}
           {row.listingStatus === "sold" ? (
             <Chip size="small" label="Sold" sx={{ height: 22, fontSize: 11 }} />
           ) : null}

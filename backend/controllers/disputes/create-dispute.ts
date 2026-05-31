@@ -7,12 +7,16 @@ import { initialDisputeStatus } from "../../lib/dispute-status";
 import { serializeDispute } from "../../lib/serialize-dispute";
 import { SocketEvents } from "../../lib/socket-events";
 import Dispute from "../../models/disputes";
+import Listing from "../../models/listing";
 import ListingExchange from "../../models/exchange";
 import Transaction from "../../models/transactions";
 import User from "../../models/user";
 import stripe from "../../utils/stripe";
 import { isListingPurchaseBillingReason } from "../../lib/listing-purchase-billing";
-
+import {
+  disputeRequiresReviewEmail,
+  userDisputeNotificationEmail,
+} from "../../lib/email-notifications";
 const VALID_CATEGORIES = [
   "no_show",
   "service_not_provided",
@@ -82,6 +86,10 @@ export async function createDispute(req: Request, res: Response) {
       });
     }
 
+    if(transaction.paymentType === 'escrow' && transaction.escrowTransactionId) {
+      return void res.status(400).json({ message: "Post sale disputes are not available for escrow transactions. Please contact support.", ok: false });
+    }
+
     if (String(transaction.customerId) !== uid) {
       return void res.status(403).json({ message: "Forbidden.", ok: false });
     }
@@ -100,8 +108,9 @@ export async function createDispute(req: Request, res: Response) {
       return void res.status(404).json({ message: "Seller not found.", ok: false });
     }
 
-    const buyer = (await User.findById(uid).select("name").lean()) as {
+    const buyer = (await User.findById(uid).select("name email").lean()) as {
       name?: string;
+      email?: string;
     } | null;
 
     const files = req.files as { [field: string]: Express.Multer.File[] } | undefined;
@@ -133,14 +142,21 @@ export async function createDispute(req: Request, res: Response) {
       if (
         !Number.isFinite(requestedRefundAmount) ||
         requestedRefundAmount <= 0 ||
-        requestedRefundAmount > amountPaidCents
+        requestedRefundAmount > amountPaidCents ||
+        requestedRefundAmount % 100 !== 0
       ) {
         return void res.status(400).json({
-          message: "requestedRefundAmount must be between 1 cent and the amount paid.",
+          message:
+            "Partial refund must be a whole-dollar amount between $1 and the amount paid.",
           ok: false,
         });
       }
     }
+
+    const listing = (await Listing.findById(transaction.ListingId)
+      .select("appName")
+      .lean()) as { appName?: string } | null;
+    const listingAppName = listing?.appName?.trim() || "Listing";
 
     const disputeStatus = initialDisputeStatus(
       category as (typeof VALID_CATEGORIES)[number],
@@ -154,8 +170,8 @@ export async function createDispute(req: Request, res: Response) {
       transactionId: transaction._id,
       disputeExplanation,
       disputeDate: new Date(),
-      initiator: "user",
-      initiatorName: String(buyer?.name ?? "Buyer"),
+      initiator: uid === transaction.sellerId ? "seller" : "user", // user or seller
+      initiatorName: uid === transaction.sellerId ? String(seller.name ?? "Seller") : String(buyer?.name ?? "Buyer"), // could be seller too (no show?)
       amountPaid: amountPaidCents,
       stripePaymentIntentId: transaction.stripePaymentIntentId,
       sellerName: String(seller.name ?? "Seller"),
@@ -208,7 +224,42 @@ export async function createDispute(req: Request, res: Response) {
         disputeId: String(dispute._id),
         listingId: String(transaction.ListingId),
       });
+
+      const sellerIsInitiator = uid === String(transaction.sellerId);
+      const notifyEmail = sellerIsInitiator
+        ? String(buyer?.email ?? "")
+        : String(seller.email ?? "");
+      const notifyName = sellerIsInitiator
+        ? String(buyer?.name ?? "Buyer")
+        : String(seller.name ?? "Seller");
+      const notifyUserId = sellerIsInitiator
+        ? String(transaction.customerId)
+        : String(transaction.sellerId);
+
+      await userDisputeNotificationEmail(
+        notifyEmail,
+        notifyName,
+        notifyUserId,
+        String(dispute._id),
+        amountPaidCents,
+        requestedRefundAmount,
+        desiredAction as "full_refund" | "partial_refund",
+        dispute.disputeDate,
+        category,
+        listingAppName,
+      );
+    } else {
+      await disputeRequiresReviewEmail(
+        String(dispute._id),
+        listingAppName,
+        category,
+        dispute.initiatorName,
+        amountPaidCents,
+        requestedRefundAmount,
+        desiredAction as "full_refund" | "partial_refund",
+      );
     }
+
 
     return void res.status(201).json({
       ok: true,

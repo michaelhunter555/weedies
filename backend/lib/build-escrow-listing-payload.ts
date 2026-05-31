@@ -1,4 +1,8 @@
-import type { CreateEscrowTransactionRequest } from "./escrow-api";
+import type {
+  CreateEscrowTransactionRequest,
+  EscrowFeeScheduleInput,
+} from "./escrow-api";
+import { isEscrowRequiredPrice } from "./escrow-eligible";
 import { EscrowApplicationFee } from "./listing-asset-sale-fee";
 
 type ListingLean = {
@@ -21,11 +25,29 @@ function clientOrigin(): string {
 }
 
 /**
- * Build Escrow.com `POST /transaction` body for a marketplace listing purchase.
+ * Escrow.com service fee (type `escrow`) — not the platform broker line item.
+ * @see https://www.escrow.com/api/docs/create-transaction (fees / split)
  *
- * Broker fee visibility follows Escrow docs: `broker_fee.visibility.hidden_from`
- * must match on all fee items, and parties listed there need `visibility` on the
- * party object (see brokered transaction example — seller when hiding from buyer).
+ * - ≥ $4,000 (required Escrow): buyer and seller each pay 50% (splits sum to 1.0).
+ * - $1,000–$3,999.99 (optional Escrow): buyer pays 100%.
+ */
+function escrowServiceFeeSchedule(
+  buyerEmail: string,
+  sellerEmail: string,
+  priceDollars: number,
+): EscrowFeeScheduleInput[] {
+  if (isEscrowRequiredPrice(priceDollars)) {
+    return [
+      { payer_customer: buyerEmail, type: "escrow", split: 0.5 },
+      { payer_customer: sellerEmail, type: "escrow", split: 0.5 },
+    ];
+  }
+
+  return [{ payer_customer: buyerEmail, type: "escrow", split: 1 }];
+}
+
+/**
+ * Build Escrow.com `POST /transaction` body for a marketplace listing purchase.
  */
 export function buildEscrowListingPurchasePayload(
   listing: ListingLean,
@@ -52,16 +74,17 @@ export function buildEscrowListingPurchasePayload(
     process.env.ESCROW_INSPECTION_PERIOD_SECONDS ?? 259200,
   );
 
-  const brokerFeeHiddenFrom = [buyerEmail, sellerEmail];
+  const escrowFees = escrowServiceFeeSchedule(
+    buyerEmail,
+    sellerEmail,
+    priceDollars,
+  );
 
   return {
     parties: [
       { role: "broker", customer: "me" },
       { role: "buyer", customer: buyerEmail },
-      {
-        role: "seller",
-        customer: sellerEmail,
-      },
+      { role: "seller", customer: sellerEmail },
     ],
     currency: "usd",
     description: `Purchase of ${listing.appName ?? "listing"} on Dap & Flip`,
@@ -74,6 +97,7 @@ export function buildEscrowListingPurchasePayload(
         shipping_type: "no_shipping",
         inspection_period: inspectionPeriod,
         quantity: 1,
+        fees: escrowFees,
         schedule: [
           {
             amount: priceDollars,
@@ -91,6 +115,7 @@ export function buildEscrowListingPurchasePayload(
       {
         type: "broker_fee",
         description: "Platform broker fee",
+        fees: escrowFees,
         schedule: [
           {
             amount: platformFee,

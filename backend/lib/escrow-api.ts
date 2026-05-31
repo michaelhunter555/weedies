@@ -54,8 +54,11 @@ export interface EscrowSchedule {
 export interface EscrowFeeScheduleInput {
   payer_customer: EscrowCustomerRef;
   type: EscrowFeeType;
-  /** Only on create for type `escrow`; splits must sum to 1.0 across fee rows. */
-  split?: number;
+  /**
+   * Only on create for type `escrow` (do not pass `amount`). Splits across fee rows
+   * must sum to 1.0. Valid values: 0.5 (50%) or 1 (100%).
+   */
+  split?: 0.5 | 1;
 }
 
 export interface EscrowItemExtraAttributes {
@@ -112,11 +115,6 @@ export interface ApproveEscrowPaymentInRequest {
   method: EscrowPaymentInMethod;
   /** Decimal string, e.g. `"406.00"` */
   amount: string;
-}
-
-/** GET .../web_link/agree response */
-export interface EscrowAgreeWebLinkResponse {
-  landing_page: string;
 }
 
 export interface EscrowWebhookRegistration {
@@ -381,98 +379,6 @@ export async function cancelEscrowTransaction(
       body: JSON.stringify(body),
     },
   );
-}
-
-export type EscrowAgreeWebLinkOptions = {
-  /**
-   * Party email for brokered transactions — required for buyer/seller agree links.
-   * @see https://www.escrow.com/api/docs/basics (As-Customer header)
-   */
-  asCustomer?: string;
-};
-
-/**
- * Generate a web link where a party can agree (useful when acting on behalf of another customer).
- * GET /transaction/:transactionId/web_link/agree
- */
-export async function getEscrowAgreeWebLink(
-  transactionId: number | string,
-  config: EscrowApiConfig = getEscrowConfig(),
-  options?: EscrowAgreeWebLinkOptions,
-): Promise<EscrowAgreeWebLinkResponse> {
-  const extraHeaders: Record<string, string> = {};
-  const asCustomer = options?.asCustomer?.trim();
-  if (asCustomer) {
-    extraHeaders["As-Customer"] = asCustomer;
-  }
-
-  return escrowRequest<EscrowAgreeWebLinkResponse>(
-    `${apiBase(config)}/transaction/${transactionId}/web_link/agree`,
-    {
-      method: "GET",
-      email: config.email,
-      authSecret: config.apiKey,
-      extraHeaders,
-    },
-  );
-}
-
-/**
- * Buyer agree link when available. Returns null if Escrow has no link yet (broker already agreed).
- * Does not throw on 404.
- */
-export async function tryGetEscrowAgreeWebLink(
-  transactionId: number | string,
-  options?: EscrowAgreeWebLinkOptions,
-  config: EscrowApiConfig = getEscrowConfig(),
-): Promise<string | null> {
-  try {
-    const res = await getEscrowAgreeWebLink(transactionId, config, options);
-    return res.landing_page?.trim() || null;
-  } catch (err) {
-    if (err instanceof EscrowApiError) {
-      // No link yet, wrong party, or partner cannot use As-Customer — checkout still succeeds via Escrow email.
-      if (err.status === 404 || err.status === 403 || err.status === 401) {
-        console.warn(
-          `[escrow] agree web link unavailable for tx=${transactionId} (${err.status})`,
-        );
-        return null;
-      }
-    }
-    console.warn(`[escrow] agree web link error for tx=${transactionId}:`, err);
-    return null;
-  }
-}
-
-const BUYER_AGREE_RETRY_MS = [0, 500, 1200];
-
-/**
- * Poll briefly for a buyer agree URL — Escrow may not expose the link immediately after create.
- */
-/**
- * Optional buyer redirect after create. Never throws — Escrow email is the fallback.
- */
-export async function resolveBuyerEscrowAgreeUrl(
-  transactionId: number | string,
-  buyerEmail: string,
-): Promise<string | null> {
-  const email = buyerEmail.trim().toLowerCase();
-  if (!email) return null;
-
-  try {
-    for (const delayMs of BUYER_AGREE_RETRY_MS) {
-      if (delayMs > 0) {
-        await new Promise((resolve) => setTimeout(resolve, delayMs));
-      }
-      const url = await tryGetEscrowAgreeWebLink(transactionId, {
-        asCustomer: email,
-      });
-      if (url) return url;
-    }
-  } catch (err) {
-    console.warn(`[escrow] resolveBuyerEscrowAgreeUrl tx=${transactionId}:`, err);
-  }
-  return null;
 }
 
 /**

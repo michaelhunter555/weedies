@@ -196,3 +196,118 @@ export async function fetchActiveListings(
   }
   return data as ListingFeedResponse;
 }
+
+export async function fetchAdminListingById(
+  listingId: string,
+): Promise<{ ok: boolean; listing: Record<string, unknown> }> {
+  const url = `${getApiBase()}/admin/listings/${encodeURIComponent(listingId)}`;
+  const res = await fetchWithAdminAuth(url);
+  const data = await parseJson(res);
+  if (!res.ok) {
+    throw new Error(
+      typeof data.message === "string" ? data.message : "Request failed",
+    );
+  }
+  return data as { ok: boolean; listing: Record<string, unknown> };
+}
+
+export type AdminDisputeRow = {
+  id: string;
+  listingId: string;
+  listingAppName: string;
+  category: string;
+  disputeStatus: string;
+  initiatorName: string;
+  amountPaid: number;
+  requestedRefundAmount: number;
+  desiredAction?: string;
+  disputeDate: string;
+  createdAt?: string;
+};
+
+export type DisputesFeedResponse = {
+  ok: boolean;
+  items: AdminDisputeRow[];
+  total: number;
+  page: number;
+  limit: number;
+};
+
+export async function fetchAdminDisputes(params?: {
+  page?: number;
+  limit?: number;
+  status?: string;
+  q?: string;
+}): Promise<DisputesFeedResponse> {
+  const q = new URLSearchParams();
+  if (params?.page) q.set("page", String(params.page));
+  if (params?.limit) q.set("limit", String(params.limit));
+  if (params?.status) q.set("status", params.status);
+  if (params?.q) q.set("q", params.q);
+  const qs = q.toString();
+  const url = `${getApiBase()}/admin/disputes${qs ? `?${qs}` : ""}`;
+  const res = await fetchWithAdminAuth(url);
+  const data = await parseJson(res);
+  if (!res.ok) {
+    throw new Error(
+      typeof data.message === "string" ? data.message : "Request failed",
+    );
+  }
+  return data as DisputesFeedResponse;
+}
+
+export type AdminDisputeDetail = {
+  ok: boolean;
+  dispute: Record<string, unknown>;
+  listing: {
+    id: string;
+    appName: string;
+    slug: string;
+    status: string;
+    photos: string[];
+    coverIndex: number;
+    saleType: string;
+  } | null;
+  buyer: { id: string; name: string; email: string } | null;
+  seller: { id: string; name: string; email: string } | null;
+};
+
+export async function fetchAdminDisputeById(
+  disputeId: string,
+): Promise<AdminDisputeDetail> {
+  const url = `${getApiBase()}/admin/disputes/${encodeURIComponent(disputeId)}`;
+  const res = await fetchWithAdminAuth(url);
+  const data = await parseJson(res);
+  if (!res.ok) {
+    throw new Error(
+      typeof data.message === "string" ? data.message : "Request failed",
+    );
+  }
+  return data as AdminDisputeDetail;
+}
+
+export type AdminDisputeDecision = "in_favor_user" | "in_favor_seller";
+
+export async function patchAdminDisputeDecision(
+  disputeId: string,
+  body: {
+    decision: AdminDisputeDecision;
+    platformResponse: string;
+    /** Whole-dollar refund in cents when resolving for the buyer. */
+    refundAmountCents?: number;
+  },
+): Promise<{ ok: boolean; message?: string }> {
+  const url = `${getApiBase()}/admin/disputes/${encodeURIComponent(disputeId)}/decision`;
+  const res = await fetchWithAdminAuth(url, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const data = await parseJson(res);
+  if (!res.ok) {
+    throw new Error(
+      typeof data.message === "string" ? data.message : "Decision failed",
+    );
+  }
+  return data as { ok: boolean; message?: string };
+}

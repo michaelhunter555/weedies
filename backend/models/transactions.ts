@@ -23,7 +23,19 @@ export interface ITransaction extends mongoose.Document {
   refundId?: string;
   escrowTransactionId?: string;
   paymentType?: 'stripe' | 'escrow';
+  /** Latest Escrow.com webhook event name */
+  escrowLastEvent?: string;
+  escrowLastEventAt?: Date;
+  /** Rolling log of Escrow webhook events (newest last, capped in app code) */
+  escrowEvents?: EscrowEventLogEntry[];
+  /** Cached from Escrow API: buyer schedule row secured */
+  escrowFundsSecured?: boolean;
 }
+
+export type EscrowEventLogEntry = {
+  event: string;
+  at: Date;
+};
 
 const TransactionSchema = new mongoose.Schema<ITransaction>({
   ListingId: { type: mongoose.Schema.Types.ObjectId, ref: "Listing", required: true },
@@ -45,6 +57,19 @@ const TransactionSchema = new mongoose.Schema<ITransaction>({
   payoutDate: { type: Date, required: false,},
   escrowTransactionId: { type: String, required: false, },
   paymentType: { type: String, enum: ['stripe', 'escrow'], required: false, default: 'stripe' },
+  escrowLastEvent: { type: String, required: false },
+  escrowLastEventAt: { type: Date, required: false },
+  escrowEvents: {
+    type: [
+      {
+        event: { type: String, required: true },
+        at: { type: Date, required: true },
+      },
+    ],
+    required: false,
+    default: undefined,
+  },
+  escrowFundsSecured: { type: Boolean, required: false, default: false },
 }, { timestamps: true });
 
 TransactionSchema.index(

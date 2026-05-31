@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import mongoose from "mongoose";
 
+import { otherParticipantId, userHasLeftChat } from "../../lib/chat-active";
 import { notifyChatRecipient } from "../../lib/chat-notifications";
 import Chat from "../../models/conversations";
 import Message from "../../models/messages";
@@ -54,6 +55,22 @@ export async function sendChatMessage(req: Request, res: Response) {
     );
     if (!participantIds.includes(userId)) {
       return void res.status(403).json({ message: "Forbidden." });
+    }
+
+    if (userHasLeftChat(chat.userLeftChat, userId)) {
+      return void res.status(404).json({
+        message: "This chat was removed from your inbox. Start a new conversation to message again.",
+      });
+    }
+
+    const recipientId = otherParticipantId(chat.participants ?? [], userId);
+    if (recipientId && userHasLeftChat(chat.userLeftChat, recipientId)) {
+      return void res.status(409).json({
+        ok: false,
+        code: "RECIPIENT_LEFT_CHAT",
+        message:
+          "The other person left this chat. They will not see new messages until they open the conversation again.",
+      });
     }
 
     chat.lastMessage = text;

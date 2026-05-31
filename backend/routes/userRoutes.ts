@@ -14,6 +14,7 @@ import { enforceAccountStanding } from "../middleware/account-standing";
 import { getMe } from "../controllers/customers/get-me";
 import { patchMePreferences } from "../controllers/customers/patch-me-preferences";
 import { confirmEmailVerified } from "../controllers/customers/confirm-email-verified";
+import { deleteUserAccount } from "../controllers/customers/delete-user-account";
 
 const router = express.Router();
 
@@ -26,6 +27,7 @@ router.post("/logout", logout);
 // users - protected routes
 router.use(authenticate);
 router.get("/me", getMe);
+router.delete("/me", deleteUserAccount);
 router.post("/confirm-email-verified", confirmEmailVerified);
 router.use(enforceAccountStanding);
 router.patch("/me/preferences", patchMePreferences);

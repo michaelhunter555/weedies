@@ -1,5 +1,11 @@
 import type { Request, Response } from "express";
 
+import {
+  FIRST_CONNECT_PAYOUT_HOLD_DAYS,
+  getNextPlatformPayoutDate,
+  isWithinFirstPayoutHold,
+} from "../../lib/next-platform-payout-date";
+import { getSellerEscrowRevenueSummary } from "../../lib/seller-escrow-revenue";
 import stripe from "../../utils/stripe";
 import User from "../../models/user";
 
@@ -50,7 +56,13 @@ export async function getConnectBalance(req: Request, res: Response) {
       return void res.status(404).json({ message: "User not found" });
     }
 
+    const nextEstimatedPayoutAt = getNextPlatformPayoutDate().toISOString();
+    const escrow = await getSellerEscrowRevenueSummary(userId);
+    const escrowSecuredMajor = escrow.securedCents / 100;
+    const escrowInProgressMajor = escrow.inProgressCents / 100;
+
     if (!user.stripeConnectAccountId) {
+      const salesRevenueTotal = escrowSecuredMajor;
       return void res.status(200).json({
         ok: true,
         connected: false,
@@ -59,12 +71,32 @@ export async function getConnectBalance(req: Request, res: Response) {
         pending: 0,
         reserved: 0,
         instantAvailable: 0,
+        /** Stripe Connect only (0 when not connected). */
+        total: 0,
+        stripeConnectTotal: 0,
+        salesRevenueTotal,
+        escrow: {
+          secured: escrowSecuredMajor,
+          inProgress: escrowInProgressMajor,
+          securedSaleCount: escrow.securedSaleCount,
+          inProgressSaleCount: escrow.inProgressSaleCount,
+        },
+        nextEstimatedPayoutAt,
+        isLikelyFirstPayout: true,
+        payoutTimingNote:
+          "Your first payout may take up to 7 days while Stripe completes risk assessment. After that, bank transfers usually arrive within about 2 business days.",
       });
     }
 
-    const balance = await stripe.balance.retrieve({
-      stripeAccount: String(user.stripeConnectAccountId),
-    });
+    const connectId = String(user.stripeConnectAccountId);
+
+    const [balance, account, paidPayouts] = await Promise.all([
+      stripe.balance.retrieve({ stripeAccount: connectId }),
+      stripe.accounts.retrieve(connectId),
+      stripe.payouts
+        .list({ limit: 1, status: "paid" }, { stripeAccount: connectId })
+        .catch(() => ({ data: [] })),
+    ]);
 
     const available = sumByCurrency(balance.available as StripeBalanceBucket[]);
     const pending = sumByCurrency(balance.pending as StripeBalanceBucket[]);
@@ -82,15 +114,47 @@ export async function getConnectBalance(req: Request, res: Response) {
     const pick = (rows: Sum[]) =>
       rows.find((r) => r.currency === currency)?.amount ?? 0;
 
+    const availableMajor = pick(available) / 100;
+    const pendingMajor = pick(pending) / 100;
+    const reservedMajor = pick(reserved) / 100;
+    const instantMajor = pick(instant) / 100;
+    const stripeTotal = availableMajor + pendingMajor;
+    const salesRevenueTotal = stripeTotal + escrowSecuredMajor;
+
+    const hasPaidPayoutBefore = (paidPayouts.data?.length ?? 0) > 0;
+    const accountCreated =
+      typeof account.created === "number" ? account.created : undefined;
+    const isLikelyFirstPayout =
+      !hasPaidPayoutBefore &&
+      isWithinFirstPayoutHold(accountCreated);
+
+    const payoutTimingNote = isLikelyFirstPayout
+      ? `Your first payout may take up to ${FIRST_CONNECT_PAYOUT_HOLD_DAYS} days while Stripe completes risk assessment. After that, transfers to your bank usually arrive within about 2 business days.`
+      : "After funds are released to your Connect balance, transfers to your bank usually arrive within about 2 business days. Platform payout batches run Monday and Thursday (UTC).";
+
     return void res.status(200).json({
       ok: true,
       connected: true,
       currency: currency.toUpperCase(),
       /** Major units. */
-      available: pick(available) / 100,
-      pending: pick(pending) / 100,
-      reserved: pick(reserved) / 100,
-      instantAvailable: pick(instant) / 100,
+      available: availableMajor,
+      pending: pendingMajor,
+      reserved: reservedMajor,
+      instantAvailable: instantMajor,
+      /** Stripe Connect available + pending (major units). */
+      total: stripeTotal,
+      stripeConnectTotal: stripeTotal,
+      /** Dashboard headline: Stripe balance + funded Escrow seller net. */
+      salesRevenueTotal,
+      escrow: {
+        secured: escrowSecuredMajor,
+        inProgress: escrowInProgressMajor,
+        securedSaleCount: escrow.securedSaleCount,
+        inProgressSaleCount: escrow.inProgressSaleCount,
+      },
+      nextEstimatedPayoutAt,
+      isLikelyFirstPayout,
+      payoutTimingNote,
       isOnboarded: Boolean(user.isOnboarded),
     });
   } catch (err) {

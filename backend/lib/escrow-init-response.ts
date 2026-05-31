@@ -5,9 +5,7 @@ export type EscrowInitPayload = {
   ok: true;
   escrowTransactionId: string;
   transactionId: string;
-  agreeUrl: string | null;
-  /** True when the buyer should continue on Escrow.com via email (no in-app redirect). */
-  continueViaEmail: boolean;
+  continueViaEmail: true;
   message: string;
   reused: boolean;
 };
@@ -15,19 +13,14 @@ export type EscrowInitPayload = {
 export function buildEscrowInitResponse(input: {
   escrowTransactionId: string;
   transactionId: string;
-  agreeUrl: string | null;
   reused: boolean;
 }): EscrowInitPayload {
-  const agreeUrl = input.agreeUrl?.trim() || null;
   return {
     ok: true,
     escrowTransactionId: input.escrowTransactionId,
     transactionId: input.transactionId,
-    agreeUrl,
-    continueViaEmail: !agreeUrl,
-    message: agreeUrl
-      ? "Continue on Escrow.com to agree and pay."
-      : ESCROW_EMAIL_MESSAGE,
+    continueViaEmail: true,
+    message: ESCROW_EMAIL_MESSAGE,
     reused: input.reused,
   };
 }

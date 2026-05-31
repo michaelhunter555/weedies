@@ -121,6 +121,7 @@ export async function getMyMarketplaceOrders(req: Request, res: Response) {
         amountCents: t.amountCharged,
         currency: (t.currency as string | undefined) ?? "usd",
         paymentStatus: (t.paymentStatus as string | undefined) ?? "pending",
+        hasDispute: Boolean(t.hasDispute),
         listingStatus: listing?.status as string | undefined,
         purchasedAt: createdAt,
       };

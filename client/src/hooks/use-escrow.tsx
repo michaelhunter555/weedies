@@ -8,7 +8,6 @@ export type InitEscrowTransactionResponse = {
   ok: boolean;
   escrowTransactionId: string;
   transactionId: string;
-  agreeUrl: string | null;
   continueViaEmail: boolean;
   message: string;
   reused?: boolean;
@@ -25,7 +24,13 @@ export type EscrowTransactionStatusResponse = {
   escrowTransactionId: string;
   listingId: string;
   paymentStatus: string;
-  agreeUrl: string | null;
+  escrowLastEvent?: string | null;
+  escrowLastEventAt?: string | null;
+  escrowFundsSecured?: boolean;
+  escrowEvents?: { event: string; at: string }[];
+  itemShipped?: boolean;
+  itemReceived?: boolean;
+  itemAccepted?: boolean;
   is_cancelled: boolean;
   close_date: string | null;
   creation_date: string | null;

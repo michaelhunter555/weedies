@@ -437,6 +437,9 @@ export type ListingExchangeTransactionSnapshot = {
   paymentType?: "stripe" | "escrow";
   escrowTransactionId?: string | null;
   escrowTransactionUrl?: string | null;
+  escrowLastEvent?: string | null;
+  escrowFundsSecured?: boolean;
+  escrowEvents?: { event: string; at: string }[];
 };
 
 /** Buyer-only snapshot from `GET /listings/exchange/:id` (null for seller). */
@@ -452,6 +455,15 @@ export type ListingExchangePayload = {
   phase: ListingExchangePhase;
   /** Escrow checkout started but listing not sold until payment webhooks. */
   escrowAwaitingFunds?: boolean;
+  /** Live Escrow.com delivery / inspection flags (when paymentType is escrow). */
+  escrowProgress?: {
+    fundsSecured: boolean;
+    shipped: boolean;
+    received: boolean;
+    accepted: boolean;
+    isCancelled: boolean;
+    closeDate: string | null;
+  } | null;
   /** Present when `role === "buyer"`; omitted or null for seller. */
   buyerReview?: ListingExchangeBuyerReview | null;
   transaction?: ListingExchangeTransactionSnapshot | null;
@@ -481,9 +493,33 @@ export type MarketplaceOrderRow = {
   amountCents: number;
   currency: string;
   paymentStatus?: "succeeded" | "failed" | "canceled" | "pending";
+  hasDispute?: boolean;
   listingStatus?: string;
   purchasedAt: string;
 };
+
+/** Row from `GET /listings/me/transactions` (full transaction ledger). */
+export type MyTransactionHistoryRow = {
+  transactionId: string;
+  role: "buyer" | "seller";
+  listingId: string;
+  appName: string;
+  slug: string;
+  billingReason: string;
+  paymentType: "stripe" | "escrow" | string;
+  paymentStatus: "succeeded" | "failed" | "canceled" | "pending";
+  serviceFee: number;
+  amountPaid: number;
+  amountCharged: number;
+  paidOut: boolean;
+  hasDispute: boolean;
+  escrowLastEvent?: string | null;
+  escrowFundsSecured?: boolean;
+  currency: string;
+  createdAt: string;
+};
+
+export type MyTransactionHistoryPayload = Paginated<MyTransactionHistoryRow>;
 
 export type Paginated<T> = {
   items: T[];

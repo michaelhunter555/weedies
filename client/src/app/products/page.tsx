@@ -1190,7 +1190,7 @@ export default function ProductsPage() {
             </FormControl>
 
             {/* Difficulty / level of management */}
-            <FormControl>
+            <FormControl sx={{ width: "100%", minWidth: 0 }}>
               <FormLabel sx={{ mb: 1, fontWeight: 600 }}>
                 Level of difficulty
               </FormLabel>
@@ -1203,6 +1203,7 @@ export default function ProductsPage() {
                 onChange={(e) =>
                   inputHandler("difficulty", e.target.value, true)
                 }
+                sx={{ width: "100%", minWidth: 0, mx: 0 }}
               >
                 <Stack spacing={1}>
                   {DIFFICULTY_OPTIONS.map((opt) => {
@@ -1218,6 +1219,10 @@ export default function ProductsPage() {
                           p: 1.5,
                           borderRadius: 2,
                           cursor: "pointer",
+                          width: "100%",
+                          maxWidth: "100%",
+                          boxSizing: "border-box",
+                          overflow: "hidden",
                           borderColor: selected
                             ? "rgba(124,58,237,0.7)"
                             : "#ececec",
@@ -1228,14 +1233,15 @@ export default function ProductsPage() {
                       >
                         <Stack
                           direction="row"
-                          spacing={1.5}
+                          spacing={1}
                           alignItems="flex-start"
+                          sx={{ minWidth: 0 }}
                         >
                           <Radio
                             checked={selected}
                             value={opt.value}
                             size="small"
-                            sx={{ mt: -0.5 }}
+                            sx={{ mt: -0.5, flexShrink: 0, p: 0.5 }}
                           />
                           <Box
                             sx={{
@@ -1252,26 +1258,45 @@ export default function ProductsPage() {
                           >
                             {opt.icon}
                           </Box>
-                          <Stack sx={{ flex: 1 }}>
+                          <Stack sx={{ flex: 1, minWidth: 0 }}>
                             <Stack
                               direction="row"
                               alignItems="center"
                               spacing={1}
+                              flexWrap="wrap"
+                              useFlexGap
+                              sx={{ rowGap: 0.5 }}
                             >
-                              <Typography fontWeight={700}>
+                              <Typography
+                                fontWeight={700}
+                                sx={{ lineHeight: 1.3 }}
+                              >
                                 {opt.label}
                               </Typography>
                               <Chip
                                 size="small"
                                 variant="outlined"
                                 label={opt.summary}
-                                sx={{ height: 20, fontSize: 10 }}
+                                sx={{
+                                  height: "auto",
+                                  maxWidth: "100%",
+                                  fontSize: 10,
+                                  "& .MuiChip-label": {
+                                    whiteSpace: "normal",
+                                    lineHeight: 1.3,
+                                    py: 0.25,
+                                  },
+                                }}
                               />
                             </Stack>
                             <Typography
                               variant="body2"
                               color="text.secondary"
-                              sx={{ mt: 0.25 }}
+                              sx={{
+                                mt: 0.25,
+                                wordBreak: "break-word",
+                                overflowWrap: "anywhere",
+                              }}
                             >
                               {opt.details}
                             </Typography>
@@ -1295,7 +1320,7 @@ export default function ProductsPage() {
               flexWrap="wrap"
             >
               <Typography variant="subtitle2" color="text.secondary">
-                Add up to {MAX_PHOTOS} screenshots
+                Add up to {MAX_PHOTOS} screenshots (1000 x 1000 recommended)
               </Typography>
               <Typography variant="caption" color="text.secondary">
                 {photoCount}/{MAX_PHOTOS} selected
@@ -1605,7 +1630,7 @@ export default function ProductsPage() {
               <>
             <Typography variant="caption" color="text.secondary">
               By submitting you agree to Dap & Flip&apos;s creator terms. You keep
-              90% of revenue on listings priced $1,000+.
+              
             </Typography>
 
             <Stack direction="row" spacing={1} alignItems="center">
@@ -1783,10 +1808,10 @@ export default function ProductsPage() {
             </Stack>
 
             <Stack
-              direction="row"
+              direction={{ xs: "column", sm: "row" }}
               spacing={1}
-              alignItems="center"
-              justifyContent="flex-end"
+              alignItems={{ xs: "normal", sm: "center" }}
+              justifyContent={{ xs: "normal", sm: "flex-end" }}
             >
               {!publishedEdit && (
               <Button

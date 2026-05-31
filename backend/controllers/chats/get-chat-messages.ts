@@ -6,6 +6,7 @@ import {
   serializeMessagesForViewer,
   type ListingMetaForChat,
 } from "../../lib/chat-view-serialization";
+import { otherParticipantId, userHasLeftChat } from "../../lib/chat-active";
 import Chat from "../../models/conversations";
 import Listing from "../../models/listing";
 import Message from "../../models/messages";
@@ -19,6 +20,7 @@ type ChatDocLean = {
   lastMessage?: string;
   lastMessageTime?: Date;
   chatIsComplete?: boolean;
+  userLeftChat?: unknown[];
   createdAt?: Date;
   updatedAt?: Date;
 };
@@ -43,7 +45,7 @@ export async function getChatMessages(req: Request, res: Response) {
   try {
     const chatDoc = (await Chat.findById(chatId)
       .select(
-        "participants listingId initiatedBy participantInfo lastMessage lastMessageTime chatIsComplete createdAt updatedAt",
+        "participants closedBy listingId initiatedBy participantInfo lastMessage lastMessageTime chatIsComplete createdAt updatedAt",
       )
       .lean()) as ChatDocLean | null;
     if (!chatDoc) {
@@ -53,6 +55,16 @@ export async function getChatMessages(req: Request, res: Response) {
     const participantIds = (chatDoc.participants ?? []).map((p: unknown) => String(p));
     if (!participantIds.includes(userId)) {
       return void res.status(403).json({ ok: false, message: "Forbidden." });
+    }
+
+    const viewerLeft = (chatDoc.userLeftChat ?? []).some(
+      (id: unknown) => String(id) === userId,
+    );
+    if (viewerLeft) {
+      return void res.status(404).json({
+        ok: false,
+        message: "This chat was removed from your inbox.",
+      });
     }
 
     const chatObjectId = new mongoose.Types.ObjectId(chatId);
@@ -99,6 +111,11 @@ export async function getChatMessages(req: Request, res: Response) {
       Message.countDocuments({ chatId: chatObjectId }),
     ]);
 
+    const otherId = otherParticipantId(participantIds, userId);
+    const otherParticipantLeft = otherId
+      ? userHasLeftChat(chatDoc.userLeftChat, otherId)
+      : false;
+
     const serialized = await serializeMessagesForViewer(
       chatDoc,
       userId,
@@ -108,6 +125,7 @@ export async function getChatMessages(req: Request, res: Response) {
         senderId: unknown;
         text: string;
         read?: boolean;
+        isSystem?: boolean;
         createdAt?: Date;
         updatedAt?: Date;
       }>,
@@ -119,6 +137,7 @@ export async function getChatMessages(req: Request, res: Response) {
     return void res.status(200).json({
       chatPreview,
       chatMessages: serialized,
+      otherParticipantLeft,
       totalMessages,
       totalPages,
       page: pageNum,

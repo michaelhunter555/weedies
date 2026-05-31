@@ -35,6 +35,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/context/auth-context";
 import SaveCardForm from "@/components/Wallet/SaveCardForm";
 import { WalletBillingTab } from "@/components/Wallet/WalletBillingTab";
+import { WalletPayoutsTab } from "@/components/Wallet/WalletPayoutsTab";
 import {
   type StripePaymentMethod,
   useStripeWallet,
@@ -63,6 +64,7 @@ export default function WalletPage() {
     createSetupIntent,
     updateDefaultPayment,
     deletePaymentMethods,
+    startSellerOnboarding,
   } = useStripeWallet();
 
   const [selectedDefaultId, setSelectedDefaultId] = useState<string | null>(
@@ -79,6 +81,13 @@ export default function WalletPage() {
   }>({ open: false, message: "", severity: "success" });
 
   const stripeCustomerId = user?.stripeCustomerId;
+  const hasConnectAccount = Boolean(
+    user?.stripeConnectAccountId || user?.stripeAccountId,
+  );
+  const localeCountry =
+    typeof Intl !== "undefined"
+      ? new Intl.DateTimeFormat().resolvedOptions().locale.split("-")[1] ?? "US"
+      : "US";
 
   const {
     data: paymentMethods,
@@ -146,6 +155,31 @@ export default function WalletPage() {
         open: true,
         severity: "error",
         message: err?.message ?? "Could not update default card.",
+      });
+    },
+  });
+
+  const onboardMutation = useMutation({
+    mutationFn: () =>
+      startSellerOnboarding({
+        hasExistingAccount: hasConnectAccount,
+        countryCode: localeCountry,
+      }),
+    onSuccess: (data) => {
+      if (user && data.stripeConnectAccountId) {
+        update({
+          ...user,
+          stripeConnectAccountId: data.stripeConnectAccountId,
+          stripeAccountId: data.stripeAccountId || data.stripeConnectAccountId,
+        });
+      }
+      if (data.url) window.location.href = data.url;
+    },
+    onError: (err: Error) => {
+      setToast({
+        open: true,
+        severity: "error",
+        message: err?.message ?? "Could not start Stripe onboarding.",
       });
     },
   });
@@ -244,20 +278,30 @@ export default function WalletPage() {
           Wallet &amp; billing
         </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          Manage saved cards and view charges on your account.
+          Manage saved cards, billing history, and seller payouts.
         </Typography>
 
         <Tabs
           value={tab}
           onChange={(_, v) => setTab(v)}
           sx={{ mb: 3, borderBottom: 1, borderColor: "divider" }}
+          variant="scrollable"
+          scrollButtons="auto"
+          allowScrollButtonsMobile
         >
           <Tab label="Wallet" sx={{ textTransform: "none", fontWeight: 700 }} />
           <Tab label="Billing" sx={{ textTransform: "none", fontWeight: 700 }} />
+          <Tab label="Stripe payouts" sx={{ textTransform: "none", fontWeight: 700 }} />
         </Tabs>
 
         {tab === 1 ? (
           <WalletBillingTab />
+        ) : tab === 2 ? (
+          <WalletPayoutsTab
+            active={tab === 2}
+            onStartOnboarding={() => onboardMutation.mutate()}
+            onboardingLoading={onboardMutation.isPending}
+          />
         ) : (
           <>
         <Stack

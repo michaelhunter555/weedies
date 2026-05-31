@@ -2,6 +2,7 @@ import { io } from "../app";
 import { userChatMessageReceivedNotificationEmail } from "./email-notifications";
 import { senderLabelForRealtime } from "./chat-view-serialization";
 import { SocketEvents } from "./socket-events";
+import { userHasLeftChat } from "./chat-active";
 import type { IParticipantInfo } from "../models/conversations";
 import User from "../models/user";
 
@@ -45,6 +46,7 @@ type ChatNotifyContext = {
   listingId?: unknown;
   initiatedBy?: unknown;
   participantInfo?: IParticipantInfo[];
+  userLeftChat?: unknown[];
 };
 
 /**
@@ -73,6 +75,7 @@ export async function notifyChatRecipient(params: {
   const receiver = infos.find((p) => String(p.id) !== String(senderUserId));
   const receiverId = receiver?.id != null ? String(receiver.id) : "";
   if (!receiverId) return;
+  if (userHasLeftChat(chat.userLeftChat, receiverId)) return;
 
   const senderName = await senderLabelForRealtime(
     {

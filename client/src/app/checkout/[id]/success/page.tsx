@@ -77,6 +77,7 @@ export default function CheckoutSuccessPage() {
   useEffect(() => {
     if (!saleReady || !listingId) return;
     void queryClient.invalidateQueries({ queryKey: ["my-marketplace-orders"] });
+    void queryClient.invalidateQueries({ queryKey: ["my-transactions"] });
   }, [saleReady, listingId, queryClient]);
 
   return (

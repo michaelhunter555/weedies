@@ -6,7 +6,6 @@ import {
   createEscrowTransaction as createEscrowTransactionApi,
   EscrowApiError,
   isEscrowApiConfigured,
-  resolveBuyerEscrowAgreeUrl,
 } from "../../lib/escrow-api";
 import { buildEscrowInitResponse } from "../../lib/escrow-init-response";
 import { isEscrowEligiblePrice } from "../../lib/escrow-eligible";
@@ -26,8 +25,8 @@ import User from "../../models/user";
  * POST /api/escrow/transaction
  * Body: `{ listingId: string }`
  *
- * Creates an Escrow.com transaction and returns an optional buyer agree URL.
- * Escrow.com owns agree / pay / delivery; webhooks update our order + listing state.
+ * Creates an Escrow.com transaction. Buyer continues via Escrow.com email.
+ * Webhooks update our order + listing state.
  */
 export async function initEscrowTransaction(req: Request, res: Response) {
   try {
@@ -120,15 +119,10 @@ export async function initEscrowTransaction(req: Request, res: Response) {
       if (!reserve.ok) {
         return void res.status(409).json({ ok: false, message: reserve.message });
       }
-      const agreeUrl = await resolveBuyerEscrowAgreeUrl(
-        pendingEscrow.escrowTransactionId,
-        buyerEmail,
-      );
       return void res.status(200).json(
         buildEscrowInitResponse({
           escrowTransactionId: pendingEscrow.escrowTransactionId,
           transactionId: String(pendingEscrow._id),
-          agreeUrl,
           reused: true,
         }),
       );
@@ -188,13 +182,10 @@ export async function initEscrowTransaction(req: Request, res: Response) {
       await transaction.save();
       transactionSaved = true;
 
-      const agreeUrl = await resolveBuyerEscrowAgreeUrl(escrowTransactionId, buyerEmail);
-
       return void res.status(200).json(
         buildEscrowInitResponse({
           escrowTransactionId,
           transactionId: String(transaction._id),
-          agreeUrl,
           reused: false,
         }),
       );

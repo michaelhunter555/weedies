@@ -5,6 +5,8 @@ export interface IMessage extends mongoose.Document {
   senderId: mongoose.Types.ObjectId;
   text: string;
   read: boolean;
+  /** Centered thread notice (e.g. "User left this chat."). */
+  isSystem?: boolean;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -15,6 +17,7 @@ const MessageSchema = new mongoose.Schema<IMessage>(
     senderId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
     text: { type: String, required: true },
     read: { type: Boolean, default: false },
+    isSystem: { type: Boolean, default: false },
   },
   { timestamps: true },
 );

@@ -1,9 +1,14 @@
 import type { Request, Response } from "express";
 import mongoose from "mongoose";
 
+import { getEscrowTransaction, isEscrowApiConfigured } from "../../lib/escrow-api";
+import {
+  escrowFundsSecured,
+  escrowItemAccepted,
+} from "../../lib/escrow-reconcile";
 import ListingExchange from "../../models/exchange";
 import Listing from "../../models/listing";
-import Transaction from "../../models/transactions";
+import Transaction, { type ITransaction } from "../../models/transactions";
 import { LISTING_PURCHASE_BILLING_REASONS } from "../../lib/listing-purchase-billing";
 
 export async function confirmListingExchange(req: Request, res: Response) {
@@ -40,19 +45,51 @@ export async function confirmListingExchange(req: Request, res: Response) {
       billingReason: { $in: [...LISTING_PURCHASE_BILLING_REASONS] },
     })
       .sort({ createdAt: -1 })
-      .lean()) as { paymentStatus?: string } | null;
+      .lean()) as Pick<
+      ITransaction,
+      "paymentStatus" | "paymentType" | "escrowTransactionId"
+    > | null;
 
-    const exchangeCaptured =
-      ex.sellerCapturedPayment === true ||
-      ex.paymentStatus === "succeeded" ||
-      ex.paymentStatus === "captured";
-    const txSucceeded = tx?.paymentStatus === "succeeded";
+    const isEscrow = tx?.paymentType === "escrow";
 
-    if (!exchangeCaptured && !txSucceeded) {
-      return void res.status(409).json({
-        message:
-          "The seller must capture payment before you can confirm receipt. Optional handover files do not affect this step.",
-      });
+    if (isEscrow) {
+      if (!isEscrowApiConfigured()) {
+        return void res.status(503).json({
+          message: "Escrow is not configured. Try again later.",
+        });
+      }
+      const escrowId = tx?.escrowTransactionId?.trim();
+      if (!escrowId) {
+        return void res.status(409).json({
+          message: "Escrow transaction is not linked to this sale yet.",
+        });
+      }
+      const escrowTx = await getEscrowTransaction(escrowId);
+      if (!escrowFundsSecured(escrowTx)) {
+        return void res.status(409).json({
+          message:
+            "Escrow funds are not secured yet. Finish payment on Escrow.com before confirming receipt here.",
+        });
+      }
+      if (!escrowItemAccepted(escrowTx)) {
+        return void res.status(409).json({
+          message:
+            "Complete delivery and inspection on Escrow.com first (accept the item there). Then confirm receipt on Dap & Flip.",
+        });
+      }
+    } else {
+      const exchangeCaptured =
+        ex.sellerCapturedPayment === true ||
+        ex.paymentStatus === "succeeded" ||
+        ex.paymentStatus === "captured";
+      const txSucceeded = tx?.paymentStatus === "succeeded";
+
+      if (!exchangeCaptured && !txSucceeded) {
+        return void res.status(409).json({
+          message:
+            "The seller must capture payment before you can confirm receipt. Optional handover files do not affect this step.",
+        });
+      }
     }
 
     if (ex.buyerConfirmedAt) {

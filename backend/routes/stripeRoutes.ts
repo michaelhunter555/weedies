@@ -15,6 +15,7 @@ import setDefaultPaymentMethod from "../controllers/customers/set-default-paymen
 import deletePaymentMethods from "../controllers/customers/delete-payment-methods";
 import handlePaymentIntent from "../controllers/sellers/handle-payment-intent";
 import { getConnectBalance } from "../controllers/stripe/get-connect-balance";
+import { getPayoutBatches } from "../controllers/stripe/get-payout-batches";
 import { getBillingHistory } from "../controllers/stripe/get-billing-history";
 
 const router = Router();
@@ -61,6 +62,7 @@ router.post("/handle-payment-intent", paymentUpdateLimiter, handlePaymentIntent)
 
 // Seller Connect balance (available / pending / reserved).
 router.get("/connect-balance", getConnectBalance);
+router.get("/payout-batches", getPayoutBatches);
 
 // SetupIntent - must run after `authenticate` so the controller can
 // compare req.user.userId against the customer's owner.

@@ -52,6 +52,22 @@ export async function finalizeEscrowListingPurchase(
       escrowTransactionId: String(escrowTransactionId),
     });
     if (existing) {
+      if (existing.paymentStatus !== paymentStatus) {
+        existing.paymentStatus = paymentStatus;
+        await existing.save();
+      }
+      await ListingExchange.updateOne(
+        { listingId: listingPre._id },
+        {
+          $set: {
+            paymentStatus: paymentStatus === "succeeded" ? "succeeded" : "pending",
+            sellerCapturedPayment: paymentStatus === "succeeded",
+            ...(paymentStatus === "succeeded"
+              ? { paymentReceivedAt: new Date() }
+              : {}),
+          },
+        },
+      );
       return {
         transactionId: String(existing._id),
         listingAppName: listingPre.appName ?? "Listing",

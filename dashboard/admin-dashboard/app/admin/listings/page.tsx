@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import * as React from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Tab from "@mui/material/Tab";
@@ -134,8 +135,32 @@ const coverColumn: GridColDef = {
   },
 };
 
+const viewColumn: GridColDef = {
+  field: "view",
+  headerName: "",
+  width: 88,
+  sortable: false,
+  filterable: false,
+  disableColumnMenu: true,
+  renderCell: ({ row }) => {
+    const id = String((row as { _id?: string })._id ?? "");
+    return (
+      <Button
+        component={Link}
+        href={`/admin/listings/${encodeURIComponent(id)}`}
+        size="small"
+        variant="outlined"
+        sx={{ textTransform: "none" }}
+      >
+        Review
+      </Button>
+    );
+  },
+};
+
 const baseColumns: GridColDef[] = [
   coverColumn,
+  viewColumn,
   {
     field: "appName",
     headerName: "App",
@@ -143,11 +168,19 @@ const baseColumns: GridColDef[] = [
     minWidth: 160,
     renderCell: ({ row, value }) => {
       const r = row as Record<string, unknown>;
+      const id = String(r._id ?? "");
       const tagline =
         typeof r.tagline === "string" && r.tagline ? r.tagline : null;
       return (
         <Box sx={{ py: 0.75, minWidth: 0 }}>
-          <Typography variant="body2" fontWeight={600} noWrap>
+          <Typography
+            component={Link}
+            href={`/admin/listings/${encodeURIComponent(id)}`}
+            variant="body2"
+            fontWeight={600}
+            noWrap
+            sx={{ color: "primary.main", textDecoration: "none" }}
+          >
             {value as string}
           </Typography>
           {tagline ? (

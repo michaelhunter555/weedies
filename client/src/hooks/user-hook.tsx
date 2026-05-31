@@ -1,115 +1,20 @@
 import { useCallback } from "react";
 
-import { useMutation } from "@tanstack/react-query";
+import { useApiFetchOrThrow } from "./use-api-fetch";
 
-import { useInvalidateQuery } from "./invalidateQuery";
-
-type UserProps = {
-  userName?: string;
-  email: string;
-  password: string;
+type DeleteAccountResponse = {
+  ok?: boolean;
+  message?: string;
 };
 
 export const useUser = () => {
-  const { invalidateQuery } = useInvalidateQuery();
+  const { apiFetch } = useApiFetchOrThrow();
 
-  //POST - on Sign-up form submit
-  const signUp = useCallback(async (userData: UserProps) => {
-    try {
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_SERVER}/user/sign-up`,
-        {
-          method: "POST",
-          body: JSON.stringify({ userData }),
-          headers: { "Content-Type": "application/json" },
-        }
-      );
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error);
-      }
-
-      return data;
-    } catch (err) {
-      console.log(err);
-    }
-  }, []);
-
-  //mutation for sign-up
-  const signupUser = useMutation({
-    mutationKey: ["sign-up"],
-    mutationFn: (userData: UserProps) => signUp(userData),
-  });
-
-  const login = useCallback(async (userData: UserProps) => {
-    try {
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_SERVER}/user/login`,
-        {
-          method: "POST",
-          body: JSON.stringify({ userData }),
-          headers: { "Content-Type": "application/json" },
-        }
-      );
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error);
-      }
-
-      return data;
-    } catch (err) {
-      console.log(err);
-    }
-  }, []);
-  //mutation for sign-up
-  const loginUser = useMutation({
-    mutationKey: ["login"],
-    mutationFn: (userData: UserProps) => login(userData),
-  });
-
-  const getUserById = useCallback(async (id: string) => {
-    try {
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_SERVER}/user/${id}`,
-        { method: "GET" }
-      );
-
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error);
-      }
-      return data;
-    } catch (err) {
-      console.log(err);
-    }
-  }, []);
-
-  const deleteUserById = useCallback(async (id: string) => {
-    try {
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_SERVER}/user/delete/${id}`,
-        { method: "DELETE" }
-      );
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error);
-      }
-      return data.message;
-    } catch (err) {
-      console.log(err);
-    }
-  }, []);
+  const deleteMyAccount = useCallback(async (): Promise<DeleteAccountResponse> => {
+    return apiFetch<DeleteAccountResponse>("/user/me", "DELETE");
+  }, [apiFetch]);
 
   return {
-    //mutates
-    signupUser,
-    loginUser,
-
-    //
-    getUserById,
+    deleteMyAccount,
   };
 };

@@ -64,9 +64,9 @@ const EXCHANGE_STEPS_STRIPE = [
 ] as const;
 
 const EXCHANGE_STEPS_ESCROW = [
-  "Waiting for payment",
+  "Escrow payment",
   "Funds secured",
-  "Buyer confirmed",
+  "Inspection & confirm",
   "Optional review",
 ] as const;
 
@@ -127,7 +127,7 @@ export function ExchangeRoomClient() {
     queryFn: () => getEscrowTransactionStatus(escrowTxId!),
     enabled: Boolean(
       escrowTxId &&
-        data?.transaction?.paymentStatus === "pending" &&
+        data?.transaction?.paymentType === "escrow" &&
         data.exchange.paymentStatus !== "canceled",
     ),
     staleTime: 30_000,
@@ -299,18 +299,38 @@ export function ExchangeRoomClient() {
     );
   }
 
-  const { exchange, listing, role, buyerReview, transaction, escrowAwaitingFunds } =
-    data;
+  const {
+    exchange,
+    listing,
+    role,
+    buyerReview,
+    transaction,
+    escrowAwaitingFunds,
+    escrowProgress,
+  } = data;
   const buyerReviewSnapshot = buyerReview ?? null;
   const isEscrow = transaction?.paymentType === "escrow";
   const exchangeSteps = isEscrow ? EXCHANGE_STEPS_ESCROW : EXCHANGE_STEPS_STRIPE;
-  const paymentAuthorized = Boolean(exchange.paymentReceivedAt);
   const paymentStatus = exchange.paymentStatus ?? "pending";
   const saleCanceled = paymentStatus === "canceled";
   const saleDisputed = paymentStatus === "disputed";
   const fundsCaptured =
-    Boolean(exchange.sellerCapturedPayment) || paymentStatus === "succeeded";
-  const handoverDone = Boolean(exchange.buyerConfirmedAt);
+    Boolean(exchange.sellerCapturedPayment) ||
+    paymentStatus === "succeeded" ||
+    Boolean(transaction?.escrowFundsSecured) ||
+    Boolean(escrowProgress?.fundsSecured) ||
+    Boolean(escrowStatusQ.data?.fundsSecured);
+  const paymentAuthorized = isEscrow
+    ? fundsCaptured
+    : Boolean(exchange.paymentReceivedAt);
+  const escrowItemAccepted =
+    Boolean(escrowProgress?.accepted) ||
+    Boolean(escrowStatusQ.data?.itemAccepted) ||
+    transaction?.escrowLastEvent === "accept";
+  const marketplaceBuyerConfirmed = Boolean(exchange.buyerConfirmedAt);
+  const handoverDone = isEscrow
+    ? marketplaceBuyerConfirmed && escrowItemAccepted
+    : marketplaceBuyerConfirmed;
   const captureDeadlineMs = exchange.paymentCaptureExpiration
     ? new Date(exchange.paymentCaptureExpiration).getTime()
     : null;
@@ -406,9 +426,12 @@ export function ExchangeRoomClient() {
 
       {escrowAwaitingFunds ? (
         <Alert severity="info" sx={{ mb: 2 }}>
-          Escrow payment is still in progress on Escrow.com. This room is open for
-          coordination, but the sale is not final until we receive a payment webhook
-          from Escrow. Buyer confirmation unlocks after funds are secured.
+          Escrow payment is still in progress on Escrow.com.
+          {transaction?.escrowLastEvent
+            ? ` Latest update: ${transaction.escrowLastEvent}.`
+            : ""}{" "}
+          This room is open for coordination; buyer confirmation unlocks after funds are
+          secured.
         </Alert>
       ) : null}
 
@@ -487,10 +510,12 @@ export function ExchangeRoomClient() {
                 color="text.secondary"
                 sx={{ wordBreak: "break-all", display: "block", mt: 0.5 }}
               >
-                Escrow transaction #{transaction.escrowTransactionId}
-                {transaction.paymentStatus
-                  ? ` · ${transaction.paymentStatus}`
+                Escrow #{transaction.escrowTransactionId}
+                {transaction.paymentStatus ? ` · ${transaction.paymentStatus}` : ""}
+                {transaction.escrowLastEvent
+                  ? ` · last event: ${transaction.escrowLastEvent}`
                   : ""}
+                {transaction.escrowFundsSecured ? " · funds secured" : ""}
               </Typography>
             ) : null}
           </Box>
@@ -559,8 +584,10 @@ export function ExchangeRoomClient() {
               </Alert>
             ) : fundsCaptured ? (
               <Alert severity="success">
-                Escrow reports funds secured. Continue with handover and buyer confirmation
-                below.
+                Escrow reports funds secured. Complete delivery and inspection on Escrow.com.
+                {escrowItemAccepted
+                  ? " The buyer can confirm receipt below after accepting the item on Escrow."
+                  : " The buyer will confirm receipt here after they accept the item on Escrow."}
               </Alert>
             ) : (
               <Alert severity="info">
@@ -780,12 +807,27 @@ export function ExchangeRoomClient() {
           3. Buyer confirmation
         </Typography>
         {handoverDone ? (
-          <Alert severity="success">The buyer confirmed receipt. This handover is closed.</Alert>
+          <Alert severity="success">
+            The buyer confirmed receipt on Dap & Flip after Escrow inspection. This handover
+            is closed.
+          </Alert>
+        ) : isEscrow && marketplaceBuyerConfirmed && !escrowItemAccepted ? (
+          <Alert severity="warning">
+            The buyer marked this complete on Dap & Flip before Escrow.com shows inspection
+            finished. Use Escrow.com for the official delivery and inspection status.
+          </Alert>
+        ) : isEscrow && fundsCaptured && !escrowItemAccepted ? (
+          <Alert severity="info">
+            {role === "seller"
+              ? "Funds are secured on Escrow.com. Delivery and inspection happen there — not in this app. You will see confirmation here after the buyer accepts the item on Escrow and confirms below."
+              : "Finish delivery and inspection on Escrow.com (accept the item there). Then confirm receipt below."}
+          </Alert>
         ) : role === "buyer" ? (
           <Stack spacing={2}>
             <Typography variant="body2" color="text.secondary">
-              After the seller captures payment, confirm when you are satisfied with the
-              handover (including anything transferred outside this room).
+              {isEscrow
+                ? "After you accept the item on Escrow.com, confirm here when you are satisfied with the handover (including anything transferred outside this room)."
+                : "After the seller captures payment, confirm when you are satisfied with the handover (including anything transferred outside this room)."}
             </Typography>
             <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, bgcolor: "action.hover" }}>
               <Typography variant="caption" color="text.secondary" component="div" sx={{ mb: 1 }}>
@@ -809,7 +851,8 @@ export function ExchangeRoomClient() {
               disabled={
                 !fundsCaptured ||
                 saleCanceled ||
-                confirmMutation.isPending
+                confirmMutation.isPending ||
+                (isEscrow && !escrowItemAccepted)
               }
               onClick={() => confirmMutation.mutate()}
               sx={{ textTransform: "none", fontWeight: 700, alignSelf: "flex-start" }}
@@ -818,13 +861,21 @@ export function ExchangeRoomClient() {
             </Button>
             {!fundsCaptured && !saleCanceled ? (
               <Typography variant="caption" color="text.secondary">
-                This button enables after the seller captures the authorized payment.
+                {isEscrow
+                  ? "This button enables after Escrow.com secures payment."
+                  : "This button enables after the seller captures the authorized payment."}
+              </Typography>
+            ) : isEscrow && fundsCaptured && !escrowItemAccepted ? (
+              <Typography variant="caption" color="text.secondary">
+                Accept the item on Escrow.com first, then confirm here.
               </Typography>
             ) : null}
           </Stack>
         ) : (
           <Typography variant="body2" color="text.secondary">
-            Waiting for the buyer to confirm after you capture payment.
+            {isEscrow
+              ? "Waiting for the buyer to complete inspection on Escrow.com, then confirm receipt here."
+              : "Waiting for the buyer to confirm after you capture payment."}
           </Typography>
         )}
       </Paper>

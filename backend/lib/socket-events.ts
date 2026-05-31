@@ -5,10 +5,13 @@
 export const SocketEvents = {
   AUCTION_BID_PLACED: "auction.bid.placed",
   AUCTION_BID_RESOLVED: "auction.bid.resolved",
+  AUCTION_ENDED: "auction.ended",
   PRIVATE_LISTING_REQUEST_CREATED: "listing.private.request.created",
   PRIVATE_LISTING_REQUEST_RESOLVED: "listing.private.request.resolved",
   /** Same string as client `Notifications.NEW_MESSAGE` — invalidates inbox. */
   CHAT_MESSAGE_NEW: "chat.message.new",
+  /** Other party removed the thread from their inbox. */
+  CHAT_PARTICIPANT_LEFT: "chat.participant.left",
   /** Same string as client `Notifications.NEW_REVIEW`. */
   NEW_REVIEW: "review.submitted",
   /** Seller capture/cancel finished — both parties refresh exchange room. */
