@@ -15,6 +15,7 @@ import { getMe } from "../controllers/customers/get-me";
 import { patchMePreferences } from "../controllers/customers/patch-me-preferences";
 import { confirmEmailVerified } from "../controllers/customers/confirm-email-verified";
 import { deleteUserAccount } from "../controllers/customers/delete-user-account";
+import { passwordReset } from "../controllers/customers/password-reset";
 
 const router = express.Router();
 
@@ -23,6 +24,7 @@ router.post("/sign-up", signup);
 router.post("/login", login);
 router.post("/refresh", refresh);
 router.post("/logout", logout);
+router.post("/password-reset", passwordReset);
 
 // users - protected routes
 router.use(authenticate);

@@ -131,7 +131,7 @@ export const userSaleNotificationEmail = async (
                 email: userEmail, //info@elevatedappgroup.com
             }
         ],
-        subject: `You listing Sold! Congratulations!`,
+        subject: `Your listing Sold! Congratulations!`,
         htmlContent: `
         <html>
         <body>
@@ -140,13 +140,12 @@ export const userSaleNotificationEmail = async (
         <ol>
             <li>Head over to your <a href="https://dapandflip.com/my-settings/${userId}">seller dashboard</a>.</li>
             <li>On the menu, click on "Orders" and you will see the order. Then click the button that says "Exchange" to visit the exchange page.</li>
-            <li>Buyer's payment method was ${paymentMethod}. ${paymentMethod === 'stripe' ? 'You must accept this payment.' : 'You will complete this transaction on escrow.com. You should receive an email from escrow.com soon.'}</li>
+            <li>Buyer's payment method was proccessed via ${paymentMethod}. ${paymentMethod === 'stripe' ? 'You must accept this payment before handover of deliverables.' : 'You will complete this transaction on escrow.com. You should receive an email from escrow.com soon.'}</li>
             <li>After accepting payment, reach out to the buyer if you haven't already and request handover details.</li>
             <li>Once the handover is complete, your buyer will confirm the handover.</li>
-            <li>You receive payment to your listed bank account after the buyer confirms the handover and payment finishes processing (2-3 business days for USA).</li>
+            <li>You'll receive payment to your listed bank account after the buyer confirms the handover and payment finishes processing (2-3 business days for USA).</li>
         </ol>
         <p>Listing url: <a href="https://dapandflip.com/products/${listingId}/${slug}">${listingName}</a></p>
-        <p>User Email: ${userEmail}</p>
         <br />
         sale amount: $${saleAmount.toFixed(2)}
         <br />

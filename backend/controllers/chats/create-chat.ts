@@ -94,6 +94,10 @@ export async function createChat(req: Request, res: Response) {
     });
 
     if (existing) {
+      const previousLastMessageTime = existing.lastMessageTime
+        ? new Date(existing.lastMessageTime)
+        : null;
+
       const senderLeft = (existing.userLeftChat ?? []).some(
         (id: mongoose.Types.ObjectId) => String(id) === senderId,
       );
@@ -119,6 +123,7 @@ export async function createChat(req: Request, res: Response) {
         senderUserId: senderId,
         senderRealName: String(sender.name ?? "User"),
         text,
+        previousLastMessageTime,
         isNewChat: false,
         listingId: lid,
       });

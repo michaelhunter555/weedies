@@ -281,6 +281,7 @@ export type ListingStatus =
   | "live"
   | "reserved"
   | "paused"
+  | "expired"
   | "rejected"
   | "sold"
   | "removed";
@@ -352,6 +353,8 @@ export type Listing = {
   openBidCount?: number;
   /** Public auction summary on listing GETs (no per-bid rows). */
   auctionCurrentPrice?: number;
+  /** Set when an auction ends and a winner is reserved. */
+  auctionWinningAmount?: number;
   auctionMinimumNextBid?: number;
   auctionBidCount?: number;
   auctionHighBidAmount?: number | null;
@@ -455,6 +458,8 @@ export type ListingExchangePayload = {
   phase: ListingExchangePhase;
   /** Escrow checkout started but listing not sold until payment webhooks. */
   escrowAwaitingFunds?: boolean;
+  /** Auction won; buyer must complete Stripe Checkout before handover. */
+  awaitingAuctionCheckout?: boolean;
   /** Live Escrow.com delivery / inspection flags (when paymentType is escrow). */
   escrowProgress?: {
     fundsSecured: boolean;
@@ -479,6 +484,7 @@ export type ListingExchangePayload = {
     currency: string;
     buyItNowPrice?: number;
     startingPrice?: number;
+    auctionWinningAmount?: number;
   };
 };
 
@@ -532,6 +538,7 @@ export type Paginated<T> = {
 export type MyListingsMeta = {
   totalActive: number;
   totalSold: number;
+  totalExpired: number;
   pendingPrivateAccessTotal: number;
 };
 

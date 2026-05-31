@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { useAuth } from "@/context/auth-context";
 import { useListings } from "@/hooks/use-listings";
@@ -50,6 +50,7 @@ const statusChip: Record<
   rejected: { label: "Rejected", color: "error" },
   sold: { label: "Sold", color: "default" },
   paused: { label: "Paused", color: "default" },
+  expired: { label: "Expired", color: "default" },
   removed: { label: "Removed", color: "default" },
 };
 
@@ -99,11 +100,19 @@ export default function MyListingsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user, hydrated } = useAuth();
-  const { getMyListings } = useListings();
+  const { getMyListings, relistListing } = useListings();
+  const queryClient = useQueryClient();
 
   const tabParam = searchParams.get("tab");
-  const tab: "active" | "sold" = tabParam === "sold" ? "sold" : "active";
+  const tab: "active" | "sold" | "expired" =
+    tabParam === "sold"
+      ? "sold"
+      : tabParam === "expired"
+        ? "expired"
+        : "active";
   const [page, setPage] = useState(1);
+  const [relistError, setRelistError] = useState<string | null>(null);
+  const [relistingId, setRelistingId] = useState<string | null>(null);
 
   const routeUserId = params?.id ? decodeURIComponent(String(params.id)).trim() : "";
   const sessionUserId = user?.id ? String(user.id).trim() : "";
@@ -128,18 +137,37 @@ export default function MyListingsPage() {
     () => ({
       active: listingsQuery.data?.meta?.totalActive ?? 0,
       sold: listingsQuery.data?.meta?.totalSold ?? 0,
+      expired: listingsQuery.data?.meta?.totalExpired ?? 0,
     }),
     [listingsQuery.data?.meta],
   );
+
+  const relistMutation = useMutation({
+    mutationFn: (listingId: string) => relistListing(listingId),
+    onMutate: (listingId) => {
+      setRelistingId(listingId);
+      setRelistError(null);
+    },
+    onSuccess: async (_data, listingId) => {
+      await queryClient.invalidateQueries({ queryKey: ["my-listings", sessionUserId] });
+      router.push(
+        `/products?list=edit&listingId=${encodeURIComponent(listingId)}`,
+      );
+    },
+    onError: (e: Error) => setRelistError(e.message),
+    onSettled: () => setRelistingId(null),
+  });
 
   useEffect(() => {
     setPage(1);
   }, [tab]);
 
   const handleTabChange = (_: React.SyntheticEvent, next: string) => {
-    const nextTab = next === "sold" ? "sold" : "active";
+    const nextTab =
+      next === "sold" ? "sold" : next === "expired" ? "expired" : "active";
     setPage(1);
-    const qs = nextTab === "sold" ? "?tab=sold" : "";
+    const qs =
+      nextTab === "active" ? "" : `?tab=${encodeURIComponent(nextTab)}`;
     router.replace(`${settingsBase}/listings${qs}`);
   };
 
@@ -237,7 +265,26 @@ export default function MyListingsPage() {
             label={`Sold (${tabCounts.sold})`}
             sx={{ textTransform: "none", fontWeight: 700 }}
           />
+          <Tab
+            value="expired"
+            label={`Expired (${tabCounts.expired})`}
+            sx={{ textTransform: "none", fontWeight: 700 }}
+          />
         </Tabs>
+
+        {tab === "expired" ? (
+          <Alert severity="info" sx={{ borderRadius: 2 }}>
+            These listings did not sell. Relist reuses the same listing ID and
+            charges the listing fee again (not a free edit). Inactive expired
+            listings are removed after 30 days.
+          </Alert>
+        ) : null}
+
+        {relistError ? (
+          <Alert severity="error" onClose={() => setRelistError(null)}>
+            {relistError}
+          </Alert>
+        ) : null}
 
         {listingsQuery.isLoading ? (
           <Stack alignItems="center" py={6}>
@@ -256,7 +303,11 @@ export default function MyListingsPage() {
         {!listingsQuery.isLoading && !listingsQuery.isError && items.length === 0 ? (
           <Paper variant="outlined" sx={{ p: 4, borderRadius: 3, borderColor: "#ececec" }}>
             <Typography variant="body1" sx={{ fontWeight: 700 }}>
-              {tab === "sold" ? "No sold listings yet." : "No active listings."}
+              {tab === "sold"
+                ? "No sold listings yet."
+                : tab === "expired"
+                  ? "No expired listings."
+                  : "No active listings."}
             </Typography>
             {tab === "active" ? (
               <Button
@@ -360,6 +411,24 @@ export default function MyListingsPage() {
                         }}
                       >
                         Exchange
+                      </Button>
+                    ) : null}
+                    {tab === "expired" && l._id ? (
+                      <Button
+                        size="small"
+                        variant="contained"
+                        disabled={relistMutation.isPending}
+                        onClick={() => relistMutation.mutate(String(l._id))}
+                        sx={{
+                          textTransform: "none",
+                          fontWeight: 700,
+                          boxShadow: "none",
+                          ...brandContainedButtonSx,
+                        }}
+                      >
+                        {relistingId === String(l._id) && relistMutation.isPending
+                          ? "Relisting…"
+                          : "Relist"}
                       </Button>
                     ) : null}
                   </Stack>

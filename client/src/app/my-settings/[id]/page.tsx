@@ -90,6 +90,7 @@ const statusChipProps: Record<
   sold: { label: "Sold", color: "default" },
   paused: { label: "Paused", color: "default" },
   removed: { label: "Removed", color: "default" },
+  expired: { label: "Expired", color: "error" },
 };
 
 const categoryLabels: Record<ListingCategory, string> = {

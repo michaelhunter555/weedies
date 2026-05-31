@@ -307,6 +307,7 @@ export function ExchangeRoomClient() {
     transaction,
     escrowAwaitingFunds,
     escrowProgress,
+    awaitingAuctionCheckout,
   } = data;
   const buyerReviewSnapshot = buyerReview ?? null;
   const isEscrow = transaction?.paymentType === "escrow";
@@ -328,6 +329,14 @@ export function ExchangeRoomClient() {
     Boolean(escrowStatusQ.data?.itemAccepted) ||
     transaction?.escrowLastEvent === "accept";
   const marketplaceBuyerConfirmed = Boolean(exchange.buyerConfirmedAt);
+  const saleReadyForDispute = isEscrow
+    ? escrowItemAccepted
+    : fundsCaptured;
+  const canOpenDispute =
+    Boolean(transaction) &&
+    saleReadyForDispute &&
+    !marketplaceBuyerConfirmed &&
+    !saleCanceled;
   const handoverDone = isEscrow
     ? marketplaceBuyerConfirmed && escrowItemAccepted
     : marketplaceBuyerConfirmed;
@@ -424,6 +433,30 @@ export function ExchangeRoomClient() {
         Optional files below are not required to confirm.
       </Typography>
 
+      {awaitingAuctionCheckout ? (
+        <Alert
+          severity="warning"
+          sx={{ mb: 2 }}
+          action={
+            role === "buyer" ? (
+              <Button
+                component={Link}
+                href={`/checkout/${encodeURIComponent(listingId)}`}
+                color="inherit"
+                size="small"
+                sx={{ fontWeight: 700 }}
+              >
+                Go to checkout
+              </Button>
+            ) : undefined
+          }
+        >
+          {role === "buyer"
+            ? "You won this auction. Complete Stripe Checkout to authorize payment before handover steps unlock."
+            : "The high bidder has not completed checkout yet. Handover unlocks after they pay."}
+        </Alert>
+      ) : null}
+
       {escrowAwaitingFunds ? (
         <Alert severity="info" sx={{ mb: 2 }}>
           Escrow payment is still in progress on Escrow.com.
@@ -446,7 +479,10 @@ export function ExchangeRoomClient() {
         </Alert>
       )}
 
-      {transaction && role === "buyer" && fundsCaptured && !saleCanceled && (
+      {transaction &&
+        role === "buyer" &&
+        !saleCanceled &&
+        (transaction.hasDispute || canOpenDispute) && (
         <ExchangeDisputeSection
           listingId={listingId}
           transaction={transaction}
@@ -643,21 +679,26 @@ export function ExchangeRoomClient() {
         ) : !paymentAuthorized ? (
           <Stack spacing={2}>
             <Alert severity="warning">
-              We do not have a completed checkout on file for this listing yet. Add a card in
-              Wallet, then finish checkout.
+              {awaitingAuctionCheckout
+                ? role === "buyer"
+                  ? "You won this auction. Complete Stripe Checkout to authorize payment before handover steps unlock. Add a card in Wallet if needed."
+                  : "Waiting for the buyer to complete checkout for their winning bid."
+                : "We do not have a completed checkout on file for this listing yet. Add a card in Wallet, then finish checkout."}
             </Alert>
-            <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
-              <Button variant="outlined" component={Link} href={walletHref}>
-                Open Wallet
-              </Button>
-              <Button
-                variant="contained"
-                component={Link}
-                href={`/checkout/${encodeURIComponent(listingId)}`}
-              >
-                Go to checkout
-              </Button>
-            </Stack>
+            {role === "buyer" || awaitingAuctionCheckout ? (
+              <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
+                <Button variant="outlined" component={Link} href={walletHref}>
+                  Open Wallet
+                </Button>
+                <Button
+                  variant="contained"
+                  component={Link}
+                  href={`/checkout/${encodeURIComponent(listingId)}`}
+                >
+                  {awaitingAuctionCheckout ? "Complete auction checkout" : "Go to checkout"}
+                </Button>
+              </Stack>
+            ) : null}
           </Stack>
         ) : fundsCaptured ? (
           <Alert severity="success">

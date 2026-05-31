@@ -79,7 +79,7 @@ export async function getListingExchange(req: Request, res: Response) {
 
     const listingRaw = await Listing.findById(listingId)
       .select(
-        "_id appName slug photos coverIndex status sellerId buyerId saleType currency buyItNowPrice startingPrice",
+        "_id appName slug photos coverIndex status sellerId buyerId saleType currency buyItNowPrice startingPrice auctionWinningAmount",
       )
       .lean();
 
@@ -96,6 +96,7 @@ export async function getListingExchange(req: Request, res: Response) {
       currency?: string;
       buyItNowPrice?: number;
       startingPrice?: number;
+      auctionWinningAmount?: number;
     } | null;
 
     if (!listing) {
@@ -165,17 +166,13 @@ export async function getListingExchange(req: Request, res: Response) {
     const listingIsSold = listing.status === "sold";
     const escrowInProgress =
       saleTx?.paymentType === "escrow" && saleTx.paymentStatus === "pending";
+    const auctionReservedAwaitingPayment =
+      listing.status === "reserved" && Boolean(listing.buyerId);
 
-    if (!listingIsSold && !escrowInProgress) {
+    if (!listingIsSold && !escrowInProgress && !auctionReservedAwaitingPayment) {
       return void res.status(404).json({
         message:
           "Exchange opens after checkout. For Escrow, finish payment on Escrow.com first.",
-      });
-    }
-
-    if (!listingIsSold && !saleTx) {
-      return void res.status(404).json({
-        message: "Exchange is only available for sold listings.",
       });
     }
 
@@ -197,6 +194,8 @@ export async function getListingExchange(req: Request, res: Response) {
     }
 
     const escrowAwaitingFunds = escrowInProgress && !listingIsSold;
+    const awaitingAuctionCheckout =
+      auctionReservedAwaitingPayment && !listingIsSold && !saleTx;
 
     type ExchangeLean = {
       _id: mongoose.Types.ObjectId;
@@ -365,6 +364,7 @@ export async function getListingExchange(req: Request, res: Response) {
     return void res.status(200).json({
       role,
       phase,
+      awaitingAuctionCheckout,
       escrowAwaitingFunds,
       escrowProgress,
       buyerReview,
@@ -433,6 +433,7 @@ export async function getListingExchange(req: Request, res: Response) {
         currency: listing.currency ?? "USD",
         buyItNowPrice: listing.buyItNowPrice,
         startingPrice: listing.startingPrice,
+        auctionWinningAmount: listing.auctionWinningAmount,
       },
     });
   } catch (err) {

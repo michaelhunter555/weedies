@@ -43,13 +43,16 @@ function selectionToSingleId(model: GridRowSelectionModel): string | null {
 }
 
 /** Pick a GA4 property after OAuth; links it to `listingId` on the server. */
+const GA_NEEDS_RECONNECT = "GA_NEEDS_RECONNECT";
+
 export function GaPropertyPicker(props: {
   listingId: string | null | undefined;
   open: boolean;
   onLinked: () => void;
   onClose: () => void;
+  onNeedsReconnect?: () => void;
 }) {
-  const { listingId, open, onLinked, onClose } = props;
+  const { listingId, open, onLinked, onClose, onNeedsReconnect } = props;
   const { apiFetch } = useApiFetchOrThrow();
   const [rowSelectionModel, setRowSelectionModel] =
     useState<GridRowSelectionModel>([]);
@@ -71,11 +74,19 @@ export function GaPropertyPicker(props: {
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["ga-properties", listingId],
     queryFn: async () => {
-      const res = await apiFetch<{ properties: GaPropertyRow[] }>(
-        "/integrations/google-analytics/properties",
-        "GET",
-      );
-      return res?.properties ?? [];
+      try {
+        const res = await apiFetch<{ properties: GaPropertyRow[] }>(
+          "/integrations/google-analytics/properties",
+          "GET",
+        );
+        return res?.properties ?? [];
+      } catch (e) {
+        const err = e as Error & { status?: number; code?: string };
+        if (err.status === 412 || err.code === GA_NEEDS_RECONNECT) {
+          onNeedsReconnect?.();
+        }
+        throw e;
+      }
     },
     enabled: Boolean(open && listingId),
   });
@@ -163,9 +174,19 @@ export function GaPropertyPicker(props: {
           <Alert
             severity="error"
             action={
-              <Button color="inherit" size="small" onClick={() => void refetch()}>
-                Retry
-              </Button>
+              (error as Error & { status?: number })?.status === 412 ? (
+                <Button
+                  color="inherit"
+                  size="small"
+                  onClick={() => onNeedsReconnect?.()}
+                >
+                  Reconnect
+                </Button>
+              ) : (
+                <Button color="inherit" size="small" onClick={() => void refetch()}>
+                  Retry
+                </Button>
+              )
             }
           >
             {error instanceof Error ? error.message : "Could not load properties."}

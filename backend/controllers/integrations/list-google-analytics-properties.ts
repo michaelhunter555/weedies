@@ -1,6 +1,11 @@
 import type { Request, Response } from "express";
 
-import { getValidGoogleAnalyticsAccessToken } from "../../lib/google-analytics-access-token";
+import {
+  GA_NEEDS_RECONNECT,
+  GoogleAnalyticsReconnectError,
+  getValidGoogleAnalyticsAccessToken,
+} from "../../lib/google-analytics-access-token";
+import { revokeStoredGoogleAnalyticsTokens } from "../../lib/google-analytics-disconnect";
 
 export type GaPropertyRow = {
   id: string;
@@ -17,6 +22,15 @@ type AccountSummary = {
   }>;
 };
 
+function isInsufficientScope(status: number, bodyText: string): boolean {
+  const lower = bodyText.toLowerCase();
+  if (status === 403) return true;
+  return (
+    lower.includes("insufficient") &&
+    (lower.includes("scope") || lower.includes("permission"))
+  );
+}
+
 /**
  * Lists GA4 properties the user can access (flattened for a picker grid).
  * @see https://developers.google.com/analytics/devguides/config/admin/v1/rest/v1beta/accountSummaries/list
@@ -28,7 +42,18 @@ export async function listGoogleAnalyticsProperties(req: Request, res: Response)
       return void res.status(401).json({ message: "Unauthorized" });
     }
 
-    const accessToken = await getValidGoogleAnalyticsAccessToken(userId);
+    let accessToken: string;
+    try {
+      accessToken = await getValidGoogleAnalyticsAccessToken(userId);
+    } catch (e) {
+      if (e instanceof GoogleAnalyticsReconnectError) {
+        return void res.status(412).json({
+          code: GA_NEEDS_RECONNECT,
+          message: e.message,
+        });
+      }
+      throw e;
+    }
 
     const url = new URL(
       "https://analyticsadmin.googleapis.com/v1beta/accountSummaries",
@@ -42,6 +67,16 @@ export async function listGoogleAnalyticsProperties(req: Request, res: Response)
     if (!gRes.ok) {
       const text = await gRes.text();
       console.error("GA Admin API error:", gRes.status, text);
+
+      if (isInsufficientScope(gRes.status, text)) {
+        await revokeStoredGoogleAnalyticsTokens(userId);
+        return void res.status(412).json({
+          code: GA_NEEDS_RECONNECT,
+          message:
+            "Google Analytics access is missing required permissions. Connect again and approve all requested scopes.",
+        });
+      }
+
       return void res.status(502).json({
         message: "Google Analytics Admin API request failed.",
         details: text.slice(0, 500),

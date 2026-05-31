@@ -19,6 +19,7 @@ import cron from "node-cron";
 import initiatePayout from "./controllers/cron/payouts";
 import purgeChats from "./controllers/cron/purge-chats";
 import runAuctionCronJobs from "./controllers/cron/auctions";
+import purgeExpiredListings from "./controllers/cron/purge-expired-listings";
 import { ensureChatIndexes } from "./lib/ensure-chat-indexes";
 
 dotenv.config();
@@ -185,6 +186,16 @@ mongoose
         });
         // eslint-disable-next-line no-console
         console.log("[cron] Auction jobs scheduled (every 15 min UTC)");
+      }
+
+      if (process.env.ENABLE_EXPIRED_LISTING_PURGE_CRON !== "false") {
+        cron.schedule("0 5 * * *", () => {
+          void purgeExpiredListings();
+        });
+        // eslint-disable-next-line no-console
+        console.log(
+          "[cron] Expired listing purge scheduled (daily 05:00 UTC)",
+        );
       }
     });
   })

@@ -45,9 +45,31 @@ type ChatNotifyContext = {
   _id: unknown;
   listingId?: unknown;
   initiatedBy?: unknown;
+  participants?: unknown[];
   participantInfo?: IParticipantInfo[];
   userLeftChat?: unknown[];
 };
+
+function resolveReceiver(
+  chat: ChatNotifyContext,
+  senderUserId: string,
+): { receiverId: string; receiver?: IParticipantInfo } {
+  const infos = (chat.participantInfo ?? []) as IParticipantInfo[];
+  const sender = String(senderUserId);
+  let receiver = infos.find((p) => String(p.id) !== sender);
+  if (receiver?.id != null) {
+    return { receiverId: String(receiver.id), receiver };
+  }
+  const otherParticipant = (chat.participants ?? []).find(
+    (p) => String(p) !== sender,
+  );
+  if (!otherParticipant) {
+    return { receiverId: "", receiver: undefined };
+  }
+  const receiverId = String(otherParticipant);
+  receiver = infos.find((p) => String(p.id) === receiverId);
+  return { receiverId, receiver };
+}
 
 /**
  * Real-time socket + throttled email when the recipient is offline.
@@ -72,8 +94,7 @@ export async function notifyChatRecipient(params: {
   } = params;
 
   const infos = (chat.participantInfo ?? []) as IParticipantInfo[];
-  const receiver = infos.find((p) => String(p.id) !== String(senderUserId));
-  const receiverId = receiver?.id != null ? String(receiver.id) : "";
+  const { receiverId, receiver } = resolveReceiver(chat, senderUserId);
   if (!receiverId) return;
   if (userHasLeftChat(chat.userLeftChat, receiverId)) return;
 
@@ -96,7 +117,8 @@ export async function notifyChatRecipient(params: {
 
   const preview = text.length > 140 ? `${text.slice(0, 137)}…` : text;
 
-  if (isUserSocketOnline(receiverId)) {
+  const recipientOnline = isUserSocketOnline(receiverId);
+  if (recipientOnline) {
     if (isNewChat) {
       io.to(receiverId).emit(SocketEvents.CHAT_MESSAGE_NEW, {
         message: "New message",
@@ -112,10 +134,16 @@ export async function notifyChatRecipient(params: {
         senderName,
       });
     }
+  }
+
+  // New thread: always email so the first message is not lost when the
+  // recipient is logged in elsewhere (socket room ≠ reading messages).
+  if (recipientOnline && !isNewChat) {
     return;
   }
 
   if (
+    !isNewChat &&
     !shouldEmailChatRecipient(previousLastMessageTime, { isNewChat })
   ) {
     return;

@@ -12,6 +12,7 @@ import { DeleteListingConfirmModal } from "@/components/Listings/DeleteListingCo
 import { PrivateAccessRequestsModal } from "@/components/Listings/PrivateAccessRequestsModal";
 import { ListingReviewsPanel } from "@/components/Reviews/ListingReviewsPanel";
 import { useAuth } from "@/context/auth-context";
+import { mongoIdString } from "@/utils/mongo-id";
 import { useListings } from "@/hooks/use-listings";
 import { useStripeWallet } from "@/hooks/use-stripe-wallet";
 import { DIFFICULTY_OPTIONS, TURNAROUND_OPTIONS } from "@/utils/listingOptions";
@@ -498,6 +499,32 @@ export function ProductDetailsClient({ fetchBy }: ProductDetailsClientProps) {
           </Alert>
         ) : null}
 
+        {listing.status === "reserved" &&
+        hydrated &&
+        isLoggedIn &&
+        isPurchasingBuyer ? (
+          <Alert
+            severity="warning"
+            action={
+              <Button
+                component={Link}
+                href={`/checkout/${encodeURIComponent(listingMongoId)}`}
+                color="inherit"
+                size="small"
+                sx={{ fontWeight: 700 }}
+              >
+                Complete checkout
+              </Button>
+            }
+          >
+            You won this auction
+            {listing.auctionWinningAmount != null
+              ? ` for $${Number(listing.auctionWinningAmount).toLocaleString()}`
+              : ""}
+            . Complete Stripe Checkout to secure the sale, then continue in the success room.
+          </Alert>
+        ) : null}
+
         {listing.status === "sold" &&
         hydrated &&
         isLoggedIn &&
@@ -722,10 +749,9 @@ export function ProductDetailsClient({ fetchBy }: ProductDetailsClientProps) {
                           {listing.googleAnalyticsPropertyDisplayName ? (
                             <Chip
                               size="small"
-                              icon={<InsightsRoundedIcon sx={{ fontSize: 16 }} />}
+                              avatar={<Avatar src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" />}
                               label={`Google Analytics · ${listing.googleAnalyticsPropertyDisplayName}`}
                               variant="outlined"
-                              color="warning"
                             />
                           ) : null}
                           {listing.revenueCatProjectDisplayName ? (

@@ -38,6 +38,8 @@ export interface Listing {
   auctionEndDate?: Date;
   /** Set when cron finalizes an ended auction (winner reserved or no sale). */
   auctionFinalizedAt?: Date;
+  /** When the listing expired without a sale (purge cron uses this). */
+  expiredAt?: Date;
   /** One-shot flag so ending-soon emails are not duplicated. */
   auctionEndingSoonNotifiedAt?: Date;
   /** High bid in dollars when status moves to `reserved` after auction end. */
@@ -176,6 +178,7 @@ const ListingSchema = new mongoose.Schema<Listing>(
     auctionStartDate: { type: Date, required: false },
     auctionEndDate: { type: Date, required: false },
     auctionFinalizedAt: { type: Date, required: false },
+    expiredAt: { type: Date, required: false },
     auctionEndingSoonNotifiedAt: { type: Date, required: false },
     auctionWinningAmount: { type: Number, required: false, min: 0 },
     currency: { type: String, required: true, default: "USD", uppercase: true },
@@ -235,6 +238,7 @@ const ListingSchema = new mongoose.Schema<Listing>(
         "live",
         "reserved",
         "paused",
+        "expired",
         "rejected",
         "sold",
         "removed",

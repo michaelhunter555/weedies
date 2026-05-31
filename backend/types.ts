@@ -35,6 +35,7 @@ export type ListingStatus =
     | "live"
     | "reserved"
     | "paused"
+    | "expired"
     | "rejected"
     | "sold"
     | "removed";

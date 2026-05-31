@@ -27,6 +27,19 @@ import { useAuth } from "@/context/auth-context";
 const PENDING_LISTING_KEY = `${STORAGE_PREFIX}.pendingListing`;
 const LEGACY_PENDING_LISTING_KEY = "vibestack.pendingListing";
 const VERIFY_GA_RETURN_PREFIX = `${STORAGE_PREFIX}.verifyGaReturn`;
+
+function clearVerifyGaReturnDedupe() {
+  try {
+    for (let i = sessionStorage.length - 1; i >= 0; i--) {
+      const key = sessionStorage.key(i);
+      if (key?.startsWith(VERIFY_GA_RETURN_PREFIX)) {
+        sessionStorage.removeItem(key);
+      }
+    }
+  } catch {
+    // ignore
+  }
+}
 import {
   BRAND_PALETTE,
   brandContainedButtonSx,
@@ -100,6 +113,9 @@ export default function VerifyListingContent() {
     },
   );
   const [connecting, setConnecting] = useState<AnalyticsProvider | null>(null);
+  const [disconnecting, setDisconnecting] = useState<AnalyticsProvider | null>(
+    null,
+  );
   const [pending, setPending] = useState<PendingListing | null>(null);
   const [gaOauthError, setGaOauthError] = useState<string | null>(null);
   const [showGaPropertyPicker, setShowGaPropertyPicker] = useState(false);
@@ -144,6 +160,9 @@ export default function VerifyListingContent() {
           hasAnalyticsToVerify: true,
         };
         setPending((prev) => ({ ...prev, ...next }));
+        if (row.googleAnalyticsPropertyResourceName?.trim()) {
+          setConnected((prev) => ({ ...prev, "google-analytics": true }));
+        }
         try {
           sessionStorage.setItem(
             PENDING_LISTING_KEY,
@@ -160,6 +179,28 @@ export default function VerifyListingContent() {
       cancelled = true;
     };
   }, [bootListingId, hydrated, isLoggedIn, apiFetch]);
+
+  const activeListingId = pending?._id ?? bootListingId;
+
+  useEffect(() => {
+    if (!hydrated || !isLoggedIn) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const status = await apiFetch<{ connected?: boolean }>(
+          "/integrations/google-analytics/status",
+          "GET",
+        );
+        if (cancelled || !status?.connected) return;
+        setConnected((prev) => ({ ...prev, "google-analytics": true }));
+      } catch {
+        // ignore
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [hydrated, isLoggedIn, apiFetch]);
 
   /**
    * One-shot: read the real URL query on the client (no `useSearchParams` subscription).
@@ -184,11 +225,35 @@ export default function VerifyListingContent() {
     }
 
     if (ok === "1") {
-      setConnected((prev) => ({ ...prev, "google-analytics": true }));
       setGaOauthError(null);
-      setShowGaPropertyPicker(true);
+      void (async () => {
+        try {
+          const status = await apiFetch<{ connected?: boolean }>(
+            "/integrations/google-analytics/status",
+            "GET",
+          );
+          if (!status?.connected) {
+            setGaOauthError(
+              "Google sign-in finished but the connection was not saved. Try Connect again.",
+            );
+            setConnected((prev) => ({ ...prev, "google-analytics": false }));
+            return;
+          }
+          setConnected((prev) => ({ ...prev, "google-analytics": true }));
+          setShowGaPropertyPicker(true);
+        } catch (e) {
+          const msg =
+            e instanceof Error ? e.message : "Could not confirm GA connection.";
+          setGaOauthError(msg);
+        }
+      })();
     } else if (err) {
-      setGaOauthError(decodeURIComponent(err));
+      const decoded = decodeURIComponent(err);
+      setGaOauthError(
+        decoded === "no_refresh_token"
+          ? "Google did not issue a new refresh token. Disconnect Google Analytics in your Google Account permissions for this app, then connect again."
+          : decoded,
+      );
     }
 
     const listingIdPreserve = sp.get("listingId")?.trim();
@@ -223,10 +288,14 @@ export default function VerifyListingContent() {
         setGaOauthError("Please sign in to connect Google Analytics.");
         return;
       }
+      clearVerifyGaReturnDedupe();
       setConnecting(id);
       try {
+        const startQs = activeListingId
+          ? `?listingId=${encodeURIComponent(activeListingId)}`
+          : "";
         const data = await apiFetch<{ authorizationUrl?: string }>(
-          "/integrations/google-analytics/start",
+          `/integrations/google-analytics/start${startQs}`,
           "GET",
         );
         const url = data?.authorizationUrl;
@@ -258,9 +327,28 @@ export default function VerifyListingContent() {
     setConnecting(null);
   };
 
-  const handleDisconnect = (id: AnalyticsProvider) => {
+  const handleDisconnect = async (id: AnalyticsProvider) => {
+    if (id === "google-analytics") {
+      setDisconnecting(id);
+      try {
+        await apiFetch("/integrations/google-analytics/disconnect", "POST", {
+          listingId: activeListingId ?? undefined,
+          clearListingProperty: Boolean(activeListingId),
+        });
+        clearVerifyGaReturnDedupe();
+        setShowGaPropertyPicker(false);
+        setGaOauthError(null);
+      } catch (e) {
+        const msg =
+          e instanceof Error
+            ? e.message
+            : "Could not disconnect Google Analytics.";
+        setGaOauthError(msg);
+      } finally {
+        setDisconnecting(null);
+      }
+    }
     setConnected((prev) => ({ ...prev, [id]: false }));
-    if (id === "google-analytics") setShowGaPropertyPicker(false);
     if (id === "revenuecat") setShowRcLinker(false);
   };
 
@@ -408,9 +496,9 @@ export default function VerifyListingContent() {
                   key={p.id}
                   provider={p}
                   connected={connected[p.id]}
-                  busy={connecting === p.id}
-                  onConnect={() => handleConnect(p.id)}
-                  onDisconnect={() => handleDisconnect(p.id)}
+                  busy={connecting === p.id || disconnecting === p.id}
+                  onConnect={() => void handleConnect(p.id)}
+                  onDisconnect={() => void handleDisconnect(p.id)}
                 />
               ))}
             </Stack>
@@ -442,9 +530,9 @@ export default function VerifyListingContent() {
                   key={p.id}
                   provider={p}
                   connected={connected[p.id]}
-                  busy={connecting === p.id}
-                  onConnect={() => handleConnect(p.id)}
-                  onDisconnect={() => handleDisconnect(p.id)}
+                  busy={connecting === p.id || disconnecting === p.id}
+                  onConnect={() => void handleConnect(p.id)}
+                  onDisconnect={() => void handleDisconnect(p.id)}
                 />
               ))}
             </Stack>
@@ -453,10 +541,17 @@ export default function VerifyListingContent() {
 
         {showGaPropertyPicker ? (
           <GaPropertyPicker
-            listingId={pending?._id}
+            listingId={activeListingId}
             open={showGaPropertyPicker}
             onLinked={() => setShowGaPropertyPicker(false)}
             onClose={() => setShowGaPropertyPicker(false)}
+            onNeedsReconnect={() => {
+              setConnected((prev) => ({ ...prev, "google-analytics": false }));
+              setShowGaPropertyPicker(false);
+              setGaOauthError(
+                "Google Analytics access expired or is missing permissions. Connect again and approve all requested scopes.",
+              );
+            }}
           />
         ) : null}
 

@@ -5,6 +5,8 @@ import { startGoogleAnalyticsOAuth } from "../controllers/integrations/start-goo
 import { googleAnalyticsOAuthCallback } from "../controllers/integrations/google-analytics-oauth-callback";
 import { listGoogleAnalyticsProperties } from "../controllers/integrations/list-google-analytics-properties";
 import { linkGoogleAnalyticsToListing } from "../controllers/integrations/link-google-analytics-to-listing";
+import { getGoogleAnalyticsConnectionStatus } from "../controllers/integrations/get-google-analytics-status";
+import { disconnectGoogleAnalytics } from "../controllers/integrations/disconnect-google-analytics";
 import { listRevenueCatProjects } from "../controllers/integrations/list-revenuecat-projects";
 import { linkRevenueCatToListing } from "../controllers/integrations/link-revenuecat-to-listing";
 
@@ -16,6 +18,8 @@ router.get("/google-analytics/callback", googleAnalyticsOAuthCallback);
 router.use(authenticate);
 router.use(enforceAccountStanding);
 router.get("/google-analytics/start", startGoogleAnalyticsOAuth);
+router.get("/google-analytics/status", getGoogleAnalyticsConnectionStatus);
+router.post("/google-analytics/disconnect", disconnectGoogleAnalytics);
 router.get("/google-analytics/properties", listGoogleAnalyticsProperties);
 router.post("/google-analytics/link-listing", linkGoogleAnalyticsToListing);
 router.get("/revenuecat/projects", listRevenueCatProjects);

@@ -9,7 +9,9 @@ import { SocketEvents } from "../../lib/socket-events";
 import Dispute from "../../models/disputes";
 import Listing from "../../models/listing";
 import ListingExchange from "../../models/exchange";
-import Transaction from "../../models/transactions";
+import Transaction, {
+  type EscrowEventLogEntry,
+} from "../../models/transactions";
 import User from "../../models/user";
 import stripe from "../../utils/stripe";
 import { isListingPurchaseBillingReason } from "../../lib/listing-purchase-billing";
@@ -99,6 +101,45 @@ export async function createDispute(req: Request, res: Response) {
         message: "Disputes are only available for marketplace purchases.",
         ok: false,
       });
+    }
+
+    const ex = await ListingExchange.findOne({
+      listingId: transaction.ListingId,
+    }).select("buyerConfirmedAt paymentStatus sellerCapturedPayment");
+
+    if (ex?.buyerConfirmedAt) {
+      return void res.status(409).json({
+        message:
+          "You already confirmed this transaction was acceptable. Disputes cannot be opened after that confirmation.",
+        ok: false,
+      });
+    }
+
+    if (transaction.paymentType === "escrow") {
+      const escrowAccepted =
+        transaction.escrowLastEvent === "accept" ||
+        (transaction.escrowEvents ?? []).some(
+          (e: EscrowEventLogEntry) => e.event === "accept",
+        );
+      if (!escrowAccepted) {
+        return void res.status(409).json({
+          message:
+            "Open a dispute after you accept the item on Escrow.com, before you confirm receipt on Dap & Flip.",
+          ok: false,
+        });
+      }
+    } else {
+      const captured =
+        ex?.sellerCapturedPayment === true ||
+        ex?.paymentStatus === "succeeded" ||
+        transaction.paymentStatus === "succeeded";
+      if (!captured) {
+        return void res.status(409).json({
+          message:
+            "Disputes are available after the seller captures payment, before you confirm receipt.",
+          ok: false,
+        });
+      }
     }
 
     const seller = (await User.findById(transaction.sellerId)

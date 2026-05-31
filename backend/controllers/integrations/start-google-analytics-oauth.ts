@@ -28,7 +28,12 @@ export async function startGoogleAnalyticsOAuth(req: Request, res: Response) {
       return void res.status(401).json({ message: "Unauthorized" });
     }
 
-    const state = signGoogleAnalyticsOAuthState(userId);
+    const listingId =
+      typeof req.query.listingId === "string"
+        ? req.query.listingId.trim()
+        : undefined;
+
+    const state = signGoogleAnalyticsOAuthState(userId, listingId);
 
     const scope = [
       "https://www.googleapis.com/auth/analytics.readonly",
@@ -43,7 +48,6 @@ export async function startGoogleAnalyticsOAuth(req: Request, res: Response) {
       scope,
       access_type: "offline",
       prompt: "consent",
-      include_granted_scopes: "true",
       state,
     });
 

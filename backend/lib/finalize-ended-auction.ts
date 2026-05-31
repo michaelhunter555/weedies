@@ -45,7 +45,8 @@ export async function finalizeEndedAuction(
 
   if (!winner?.bidderId) {
     listing.auctionFinalizedAt = now;
-    listing.status = "paused";
+    listing.expiredAt = now;
+    listing.status = "expired";
     await listing.save();
 
     const seller = (await User.findById(listing.sellerId)
@@ -79,7 +80,8 @@ export async function finalizeEndedAuction(
 
   if (!buyer?.email) {
     listing.auctionFinalizedAt = now;
-    listing.status = "paused";
+    listing.expiredAt = now;
+    listing.status = "expired";
     await listing.save();
 
     const seller = (await User.findById(listing.sellerId)

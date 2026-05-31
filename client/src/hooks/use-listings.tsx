@@ -21,7 +21,7 @@ import type {
 export type MyListingsParams = {
   page?: number;
   limit?: number;
-  status?: "active" | "sold" | "all";
+  status?: "active" | "sold" | "expired" | "all";
 };
 
 export type MyMarketplaceOrdersParams = {
@@ -55,6 +55,7 @@ export type ListingFeed = {
 const EMPTY_MY_LISTINGS_META = {
   totalActive: 0,
   totalSold: 0,
+  totalExpired: 0,
   pendingPrivateAccessTotal: 0,
 } as const;
 
@@ -79,6 +80,7 @@ function normalizeMyListingsPayload(
       (l) => l.status !== "sold" && l.status !== "removed",
     ).length;
     const totalSold = raw.filter((l) => l.status === "sold").length;
+    const totalExpired = raw.filter((l) => l.status === "expired").length;
     const status = params.status ?? "active";
     const pool =
       status === "sold"
@@ -93,7 +95,7 @@ function normalizeMyListingsPayload(
       limit,
       total,
       totalPages: Math.max(1, Math.ceil(total / limit) || 1),
-      meta: { totalActive, totalSold, pendingPrivateAccessTotal: 0 },
+      meta: { totalActive, totalSold, totalExpired, pendingPrivateAccessTotal: 0 },
     };
   }
 
@@ -478,8 +480,18 @@ export const useListings = () => {
     [apiFetch],
   );
 
+  const relistListing = useCallback(
+    async (listingId: string): Promise<{ ok?: boolean; message?: string }> =>
+      apiFetch<{ ok?: boolean; message?: string }>(
+        `/listings/${encodeURIComponent(listingId)}/relist`,
+        "POST",
+      ),
+    [apiFetch],
+  );
+
   return {
     getMyListings,
+    relistListing,
     getMyMarketplaceOrders,
     getMyTransactions,
     getMyAuctionBids,

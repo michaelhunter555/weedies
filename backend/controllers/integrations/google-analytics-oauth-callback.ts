@@ -2,7 +2,10 @@ import type { Request, Response } from "express";
 import { OAuth2Client } from "google-auth-library";
 import { getGoogleAnalyticsOAuthEnv } from "../../lib/google-analytics-oauth-env";
 import { verifyGoogleAnalyticsOAuthState } from "../../lib/google-analytics-oauth-state";
-import { storeGoogleAnalyticsOAuthTokens } from "../../lib/store-google-analytics-oauth-tokens";
+import {
+  GoogleAnalyticsOAuthStoreError,
+  storeGoogleAnalyticsOAuthTokens,
+} from "../../lib/store-google-analytics-oauth-tokens";
 
 function clientOrigin(): string {
   const raw = process.env.CLIENT_ORIGIN?.trim();
@@ -13,42 +16,69 @@ function clientOrigin(): string {
   return "http://localhost:3000";
 }
 
+function verifyRedirectUrl(listingId?: string): string {
+  const base = `${clientOrigin()}/products/verify`;
+  const params = new URLSearchParams({ ga_connected: "1" });
+  const lid = listingId?.trim();
+  if (lid) params.set("listingId", lid);
+  return `${base}?${params.toString()}`;
+}
+
+function errorRedirectUrl(message: string, listingId?: string): string {
+  const base = `${clientOrigin()}/products/verify`;
+  const params = new URLSearchParams({
+    ga_error: message,
+  });
+  const lid = listingId?.trim();
+  if (lid) params.set("listingId", lid);
+  return `${base}?${params.toString()}`;
+}
+
 /**
  * Google redirects the **browser** here with `?code=&state=` (no Bearer token).
- * This handler runs **only on the server**: it exchanges `code` for tokens via
- * Google's token endpoint - **`refresh_token` and `access_token` are returned
- * in that HTTPS response to your backend**, never to the client.
- *
- * Tokens are encrypted (`utils/encryption/encryptData`) and saved on
- * `User.googleAnalyticsOAuth` by `storeGoogleAnalyticsOAuthTokens`.
- *
- * Env: see `getGoogleAnalyticsOAuthEnv` (OAuth client id/secret/redirect), ENCRYPTION_KEY.
+ * Tokens are encrypted and saved on `User.googleAnalyticsOAuth`.
  */
 export async function googleAnalyticsOAuthCallback(req: Request, res: Response) {
-  const base = `${clientOrigin()}/products/verify`;
+  let listingId: string | undefined;
 
   try {
     const code = typeof req.query.code === "string" ? req.query.code : "";
     const state = typeof req.query.state === "string" ? req.query.state : "";
     const err = typeof req.query.error === "string" ? req.query.error : "";
 
+    if (state) {
+      try {
+        listingId = verifyGoogleAnalyticsOAuthState(state).listingId;
+      } catch {
+        // state invalid - handled below if we need userId
+      }
+    }
+
     if (err) {
       return void res.redirect(
         302,
-        `${base}?ga_error=${encodeURIComponent(err)}`,
+        errorRedirectUrl(err, listingId),
       );
     }
 
     if (!code || !state) {
-      return void res.redirect(302, `${base}?ga_error=missing_code_or_state`);
+      return void res.redirect(
+        302,
+        errorRedirectUrl("missing_code_or_state", listingId),
+      );
     }
 
-    const userId = verifyGoogleAnalyticsOAuthState(state);
+    const oauthState = verifyGoogleAnalyticsOAuthState(state);
+    const userId = oauthState.sub;
+    listingId = oauthState.listingId ?? listingId;
 
     const { clientId, clientSecret, redirectUri } = getGoogleAnalyticsOAuthEnv();
 
     if (!clientId || !clientSecret || !redirectUri) {
-      return void res.redirect(302, `${base}?ga_error=server_not_configured`);
+      return void res.redirect(
+        302,
+        errorRedirectUrl("server_not_configured", listingId),
+      );
     }
 
     const oauth2 = new OAuth2Client(clientId, clientSecret, redirectUri);
@@ -56,10 +86,15 @@ export async function googleAnalyticsOAuthCallback(req: Request, res: Response) 
 
     await storeGoogleAnalyticsOAuthTokens(userId, tokens);
 
-    return void res.redirect(302, `${base}?ga_connected=1`);
+    return void res.redirect(302, verifyRedirectUrl(listingId));
   } catch (e) {
     console.error("googleAnalyticsOAuthCallback:", e);
-    const msg = e instanceof Error ? e.message : "callback_failed";
-    return void res.redirect(302, `${base}?ga_error=${encodeURIComponent(msg)}`);
+    const msg =
+      e instanceof GoogleAnalyticsOAuthStoreError
+        ? "no_refresh_token"
+        : e instanceof Error
+          ? e.message
+          : "callback_failed";
+    return void res.redirect(302, errorRedirectUrl(msg, listingId));
   }
 }

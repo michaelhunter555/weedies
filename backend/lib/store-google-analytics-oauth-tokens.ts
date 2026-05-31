@@ -21,6 +21,15 @@ type GaOauthLean = {
   };
 };
 
+export class GoogleAnalyticsOAuthStoreError extends Error {
+  constructor(
+    message = "Google did not return a refresh token. Disconnect any prior link in Google Account permissions, then connect again.",
+  ) {
+    super(message);
+    this.name = "GoogleAnalyticsOAuthStoreError";
+  }
+}
+
 export async function storeGoogleAnalyticsOAuthTokens(
   userId: string,
   tokens: Credentials,
@@ -34,6 +43,10 @@ export async function storeGoogleAnalyticsOAuthTokens(
   const refreshEnc = tokens.refresh_token
     ? encryptData(tokens.refresh_token)
     : (prevO?.refreshTokenEnc ?? null);
+
+  if (!refreshEnc) {
+    throw new GoogleAnalyticsOAuthStoreError();
+  }
 
   const accessEnc = tokens.access_token
     ? encryptData(tokens.access_token)

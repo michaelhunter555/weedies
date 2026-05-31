@@ -27,6 +27,7 @@ import { requestPrivateListingAccess } from "../controllers/listings/request-pri
 import { resolvePrivateListingAccess } from "../controllers/listings/resolve-private-listing-access";
 import { writeLimiter } from "../middleware/rate-limiter";
 import { followListing } from "../controllers/listings/follow-listing";
+import { relistListing } from "../controllers/listings/relist-listing";
 
 const router = Router();
 
@@ -107,6 +108,7 @@ router.post(
   uploadListingPhotos,
 );
 router.patch("/:id/bids/:bidId", writeLimiter, setAuctionBidStatus);
+router.post("/:id/relist", writeLimiter, relistListing);
 router.patch("/:id", writeLimiter, updateListing);
 router.delete("/:id", writeLimiter, deleteListing);
 router.post("/:id/publish", writeLimiter, publishListing);

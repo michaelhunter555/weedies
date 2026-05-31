@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { useAuth } from "@/context/auth-context";
+import { mongoIdString } from "@/utils/mongo-id";
 import { useListings } from "@/hooks/use-listings";
 import { useEscrow } from "@/hooks/use-escrow";
 import { useStripeWallet } from "@/hooks/use-stripe-wallet";
@@ -139,11 +140,13 @@ export function CheckoutListingClient() {
 
   const stripeCustomerId = user?.stripeCustomerId?.trim() ?? "";
   const isAuctionListing = listing?.saleType === "auction";
+  const listingBuyerId = mongoIdString(listing?.buyerId);
+  const sessionUserId = mongoIdString(user?.id);
   const isReservingBuyer = Boolean(
     listing?.status === "reserved" &&
-      user?.id &&
-      listing.buyerId &&
-      String(listing.buyerId) === String(user.id),
+      sessionUserId &&
+      listingBuyerId &&
+      listingBuyerId === sessionUserId,
   );
   const isAuctionWinnerCheckout = isAuctionListing && isReservingBuyer;
   const isAuctionBidFlow = isAuctionListing && !isAuctionWinnerCheckout;
@@ -182,10 +185,16 @@ export function CheckoutListingClient() {
   const displayPrice = useMemo(() => {
     if (!listing) return 0;
     if (listing.saleType === "auction") {
+      if (isAuctionWinnerCheckout) {
+        const win = Number(
+          (listing as { auctionWinningAmount?: number }).auctionWinningAmount,
+        );
+        if (Number.isFinite(win) && win > 0) return win;
+      }
       return Number(listing.auctionCurrentPrice ?? listing.startingPrice ?? 0);
     }
     return Number(listing.buyItNowPrice ?? listing.startingPrice ?? 0);
-  }, [listing]);
+  }, [listing, isAuctionWinnerCheckout]);
 
   const currency = listing?.currency ?? "USD";
   const isEscrowEligible = isEscrowEligiblePrice(displayPrice);
@@ -368,6 +377,24 @@ export function CheckoutListingClient() {
         </Alert>
         <Button component={Link} href="/products" sx={{ mt: 2 }} variant="outlined">
           Back to marketplace
+        </Button>
+      </Container>
+    );
+  }
+
+  if (
+    listing.status === "reserved" &&
+    listingBuyerId &&
+    sessionUserId &&
+    listingBuyerId !== sessionUserId
+  ) {
+    return (
+      <Container maxWidth="md" sx={{ py: 6 }}>
+        <Alert severity="info">
+          This listing is reserved for the auction winner while they complete checkout.
+        </Alert>
+        <Button component={Link} href="/products" sx={{ mt: 2 }} variant="outlined">
+          Browse listings
         </Button>
       </Container>
     );

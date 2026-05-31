@@ -304,7 +304,7 @@ const LoginForm = () => {
 
   const marketingPoints = [
     { icon: <BoltRoundedIcon fontSize="small" />, text: "Ship your app in 5 minutes" },
-    { icon: <RocketLaunchRoundedIcon fontSize="small" />, text: "Keep 90% of revenue" },
+    { icon: <RocketLaunchRoundedIcon fontSize="small" />, text: "Keep up to 94% of revenue" },
     { icon: <VerifiedRoundedIcon fontSize="small" />, text: "Verified creator program" },
     { icon: <AutoAwesomeIcon fontSize="small" />, text: "Curated discovery" },
   ];
@@ -685,8 +685,7 @@ const LoginForm = () => {
                 <Stack direction="row" spacing={1} alignItems="center">
                   <CheckRoundedIcon color="success" fontSize="small" />
                   <Typography variant="caption" color="text.secondary">
-                    By creating an account you agree to our Terms and the 90%
-                    creator revenue share.
+                    By creating an account you agree to our Terms and conditions.
                   </Typography>
                 </Stack>
               )}

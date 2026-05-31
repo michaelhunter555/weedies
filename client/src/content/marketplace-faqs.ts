@@ -31,7 +31,7 @@ export const MARKETPLACE_FAQS: MarketplaceFaq[] = [
   },
   {
     id: "exchange",
-    question: "What is the exchange room after a sale?",
+    question: "How does Post Sale handover work?",
     answer:
       "The exchange room is where the buyer and seller coordinate handover after checkout. The seller captures (or cancels) the authorized payment, may upload optional documents, and the buyer confirms receipt. Either party can leave an optional review after confirmation.",
   },
@@ -39,7 +39,7 @@ export const MARKETPLACE_FAQS: MarketplaceFaq[] = [
     id: "refunds",
     question: "Can I get a refund?",
     answer:
-      "Refunds and disputes depend on the specific sale, Stripe payment status, and our policies. Contact the seller through messages first. For charge issues, email support from the contact page. We do not guarantee refunds for completed handovers confirmed by the buyer.",
+      "Refunds and disputes depend on the specific sale, Stripe payment status, and our policies. Contact the seller through messages first. For charge issues, email support from the contact page. We do not guarantee refunds for completed handovers that were previously confirmed by the buyer.",
   },
   {
     id: "private",
@@ -63,6 +63,6 @@ export const MARKETPLACE_FAQS: MarketplaceFaq[] = [
     id: "account",
     question: "How do I delete my account?",
     answer:
-      "Contact us through the contact page with your account email. We will guide you through deletion where legally and operationally possible. Some transaction records may be retained as required for payments, tax, or fraud prevention.",
+      "You can delete your account by going to your account dashboard page, select 'overview' on the menu and scroll down to the bottom. You will see an option with the heading 'Close account'. Note that to close your account, you must resolve any open or pending listings, transactions, and disputes (if any).",
   },
 ];
