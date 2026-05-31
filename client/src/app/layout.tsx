@@ -19,7 +19,8 @@ import { LiveChatWidget } from "@/components/SupportChat/LiveChatWidget";
 import { LiveChatProvider } from "@/context/live-chat-context";
 import { AppThemeProvider } from "@/theme/app-theme";
 import { APP_DOMAIN } from "@/brand";
-import Typography from "@mui/material/Typography";
+import { GoogleAnalytics } from "@next/third-parties/google";
+import Script from "next/script";
 
 const SITE_OG_IMAGE = "homepage_pack/3.png";
 
@@ -60,45 +61,56 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const metaPixelId = "1984631592413604";
+
   return (
     <html lang="en">
-
+      <GoogleAnalytics gaId="G-Q43283MQVN" />
       <body>
+        <Script id="meta-pixel" strategy="afterInteractive">
+          {`!function(f,b,e,v,n,t,s)
+{if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+n.queue=[];t=b.createElement(e);t.async=!0;
+t.src=v;s=b.getElementsByTagName(e)[0];
+s.parentNode.insertBefore(t,s)}(window, document,'script',
+'https://connect.facebook.net/en_US/fbevents.js');
+fbq('init', '${metaPixelId}');
+fbq('track', 'PageView');`}
+        </Script>
+        <noscript>
+          <img
+            alt=""
+            height="1"
+            width="1"
+            style={{ display: "none" }}
+            src={`https://www.facebook.com/tr?id=${metaPixelId}&ev=PageView&noscript=1`}
+          />
+        </noscript>
         <QueryClientWrapper>
           <AppThemeProvider>
             <SnackbarProvider>
               <StripeCheckoutProvider>
                 <AuthProvider>
                   <AccountAccessGate>
-                  <EmailVerificationGate>
-                  <SocketProvider>
-                    <LiveChatProvider>
-                      <PageContainer>
-                        <Typography dangerouslySetInnerHTML={{
-                          __html:
-                            `<!-- Google tag (gtag.js) -->
-                          <script async src="https://www.googletagmanager.com/gtag/js?id=G-Q43283MQVN"></script>
-                          <script>
-                            window.dataLayer = window.dataLayer || [];
-                            function gtag(){dataLayer.push(arguments);}
-                            gtag('js', new Date());
-
-                            gtag('config', 'G-Q43283MQVN');
-                          </script>`
-                        }} />
-                        <MainNavigation />
-                        <Content>{children}</Content>
-                        <Footer>
-                          <Copyright />
-                        </Footer>
-                      </PageContainer>
-                      <LiveChatWidget />
-                      <SocketEventsListener />
-                      <UserLocaleSync />
-                      <Toaster />
-                    </LiveChatProvider>
-                  </SocketProvider>
-                  </EmailVerificationGate>
+                    <EmailVerificationGate>
+                      <SocketProvider>
+                        <LiveChatProvider>
+                          <PageContainer>
+                            <MainNavigation />
+                            <Content>{children}</Content>
+                            <Footer>
+                              <Copyright />
+                            </Footer>
+                          </PageContainer>
+                          <LiveChatWidget />
+                          <SocketEventsListener />
+                          <UserLocaleSync />
+                          <Toaster />
+                        </LiveChatProvider>
+                      </SocketProvider>
+                    </EmailVerificationGate>
                   </AccountAccessGate>
                 </AuthProvider>
               </StripeCheckoutProvider>
