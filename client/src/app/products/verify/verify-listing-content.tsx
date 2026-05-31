@@ -58,6 +58,8 @@ type ProviderCard = {
   description: string;
   accent: string;
   initials: string;
+  /** When set, shown instead of initials (e.g. Google G mark). */
+  logoSrc?: string;
 };
 
 const PROVIDERS: ProviderCard[] = [
@@ -85,8 +87,9 @@ const PROVIDERS: ProviderCard[] = [
     kind: "analytics",
     description:
       "Connect GA4 via Google OAuth (separate from Firebase sign-in): read-only Analytics access after you approve on Google.",
-    accent: "#f9ab00",
+    accent: "#fff",
     initials: "GA",
+    logoSrc: "/google-g.svg",
   },
 ];
 
@@ -630,8 +633,9 @@ function ProviderRow({
             width: 40,
             height: 40,
             borderRadius: 2,
-            background: provider.accent,
-            color: "#fff",
+            background: provider.logoSrc ? "#fff" : provider.accent,
+            color: provider.logoSrc ? "inherit" : "#fff",
+            border: provider.logoSrc ? "1px solid #ececec" : "none",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -640,7 +644,17 @@ function ProviderRow({
             flexShrink: 0,
           }}
         >
-          {provider.initials}
+          {provider.logoSrc ? (
+            <Box
+              component="img"
+              src={provider.logoSrc}
+              alt=""
+              aria-hidden
+              sx={{ width: 24, height: 24, display: "block" }}
+            />
+          ) : (
+            provider.initials
+          )}
         </Box>
         <Stack sx={{ flex: 1 }}>
           <Stack direction="row" alignItems="center" spacing={1}>

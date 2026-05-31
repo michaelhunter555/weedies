@@ -496,9 +496,10 @@ const LoginForm = () => {
               startIcon={
                 <Box
                   component="img"
-                  src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg"
+                  src="/google-g.svg"
                   alt=""
-                  sx={{ width: 18, height: 18 }}
+                  aria-hidden
+                  sx={{ width: 20, height: 20, display: "block" }}
                 />
               }
               sx={{

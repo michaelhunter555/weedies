@@ -749,7 +749,7 @@ export function ProductDetailsClient({ fetchBy }: ProductDetailsClientProps) {
                           {listing.googleAnalyticsPropertyDisplayName ? (
                             <Chip
                               size="small"
-                              avatar={<Avatar src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" />}
+                              avatar={<Avatar src="/google-g.svg" alt="" />}
                               label={`Google Analytics · ${listing.googleAnalyticsPropertyDisplayName}`}
                               variant="outlined"
                             />

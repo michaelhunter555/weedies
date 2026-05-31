@@ -153,7 +153,21 @@ export function GaPropertyPicker(props: {
   return (
     <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
       <Stack spacing={2}>
-        <Stack spacing={0.5}>
+        <Stack direction="row" spacing={1.5} alignItems="flex-start">
+          <Box
+            component="img"
+            src="/google-g.svg"
+            alt=""
+            aria-hidden
+            sx={{
+              width: 28,
+              height: 28,
+              mt: 0.25,
+              flexShrink: 0,
+              display: "block",
+            }}
+          />
+          <Stack spacing={0.5} sx={{ minWidth: 0 }}>
           <Typography variant="subtitle1" fontWeight={800}>
             Link a GA4 property to this listing
           </Typography>
@@ -161,6 +175,7 @@ export function GaPropertyPicker(props: {
             Choose the Google Analytics property that matches this app. Buyers will
             see this label on the product page when the listing is verified.
           </Typography>
+          </Stack>
         </Stack>
 
         {!listingId ? (
