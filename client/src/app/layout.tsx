@@ -23,6 +23,7 @@ import { GoogleAnalytics } from "@next/third-parties/google";
 import Script from "next/script";
 
 const SITE_OG_IMAGE = "homepage_pack/3.png";
+const GOOGLE_ADS_ID = "AW-18151888903";
 
 export const metadata: Metadata = {
   metadataBase: new URL(`https://${APP_DOMAIN}`),
@@ -67,6 +68,9 @@ export default function RootLayout({
     <html lang="en">
       <GoogleAnalytics gaId="G-Q43283MQVN" />
       <body>
+        <Script id="google-ads-gtag" strategy="afterInteractive">
+          {`gtag('config', '${GOOGLE_ADS_ID}');`}
+        </Script>
         <Script id="meta-pixel" strategy="afterInteractive">
           {`!function(f,b,e,v,n,t,s)
 {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
