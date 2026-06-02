@@ -33,6 +33,7 @@ export default function CheckoutSuccessPage() {
 
   const listingId = decodeURIComponent(params?.id ?? "").trim();
   const sessionId = searchParams?.get("session_id")?.trim() ?? "";
+  const isEscrowSuccess = searchParams?.get("escrow") === "1";
 
   useEffect(() => {
     pollStartedAt.current = Date.now();
@@ -56,7 +57,7 @@ export default function CheckoutSuccessPage() {
   });
 
   const saleReady = listing?.status === "sold";
-  const canOpenExchange = saleReady || exchangeGateOpen;
+  const canOpenExchange = saleReady || exchangeGateOpen || isEscrowSuccess;
   const exchangeHref =
     listingId.length > 0 ? `/exchange/${encodeURIComponent(listingId)}` : "/products";
 
@@ -87,16 +88,23 @@ export default function CheckoutSuccessPage() {
           <Stack direction="row" spacing={1.5} alignItems="center">
             <CheckCircleRoundedIcon color="success" sx={{ fontSize: 36 }} />
             <Typography variant="h5" fontWeight={800}>
-              Payment submitted
+              {isEscrowSuccess ? "Escrow started" : "Payment submitted"}
             </Typography>
           </Stack>
-          <Typography variant="body1" color="text.secondary">
-            Stripe has authorized your payment. The marketplace will mark this listing as sold in
-            a few seconds; you can open the exchange room once that finishes. Capture still
-            happens on the usual schedule. The room is for handover and confirmation with the
-            seller.
-          </Typography>
-          {!saleReady && listingId ? (
+          {isEscrowSuccess ? (
+            <Typography variant="body1" color="text.secondary">
+              Your Escrow.com transaction is started. Check your inbox for an email to agree on
+              terms and fund the purchase. We will update this order when Escrow confirms payment.
+            </Typography>
+          ) : (
+            <Typography variant="body1" color="text.secondary">
+              Stripe has authorized your payment. The marketplace will mark this listing as sold in
+              a few seconds; you can open the exchange room once that finishes. Capture still
+              happens on the usual schedule. The room is for handover and confirmation with the
+              seller.
+            </Typography>
+          )}
+          {!isEscrowSuccess && !saleReady && listingId ? (
             <Stack direction="row" spacing={1} alignItems="center" sx={{ color: "text.secondary" }}>
               {isFetching ? <CircularProgress size={18} /> : null}
               <Typography variant="body2" color="text.secondary">
@@ -107,6 +115,12 @@ export default function CheckoutSuccessPage() {
                     : "Waiting for the server to record your purchase…"}
               </Typography>
             </Stack>
+          ) : null}
+          {isEscrowSuccess && !saleReady ? (
+            <Typography variant="body2" color="text.secondary">
+              The exchange room opens after Escrow payment is received and the listing is marked
+              sold.
+            </Typography>
           ) : null}
           <Button
             component={Link}

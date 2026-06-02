@@ -8,5 +8,8 @@ export const LEGAL_ENTITY_NAME = "Elevated Apps LLC";
 export const LEGAL_ENTITY_DOMAIN = "elevatedappgroup.com";
 export const LEGAL_ENTITY_URL = `https://${LEGAL_ENTITY_DOMAIN}`;
 
+/** Support inbox for contact form and help links. */
+export const SUPPORT_EMAIL = "info@elevatedappgroup.com";
+
 /** sessionStorage / local draft keys (not user-visible). */
 export const STORAGE_PREFIX = "dapandflip";

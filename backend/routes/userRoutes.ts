@@ -16,6 +16,7 @@ import { patchMePreferences } from "../controllers/customers/patch-me-preference
 import { confirmEmailVerified } from "../controllers/customers/confirm-email-verified";
 import { deleteUserAccount } from "../controllers/customers/delete-user-account";
 import { passwordReset } from "../controllers/customers/password-reset";
+import { postContactUs } from "../controllers/customers/contact-us";
 
 const router = express.Router();
 
@@ -33,6 +34,7 @@ router.delete("/me", deleteUserAccount);
 router.post("/confirm-email-verified", confirmEmailVerified);
 router.use(enforceAccountStanding);
 router.patch("/me/preferences", patchMePreferences);
+router.post("/contact-us", postContactUs);
 router.get("/customer/:id", getCustomerById);
 router.post("/create-custoemr", createCustomer);
 router.put("/customer/:id", updateCustomer);

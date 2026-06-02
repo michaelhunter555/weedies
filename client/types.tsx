@@ -286,13 +286,28 @@ export type ListingStatus =
   | "sold"
   | "removed";
 
+/** Populated seller on `GET /listings/:id` (and some feed payloads). */
+export type ListingSellerPublic = {
+  _id: string;
+  email?: string;
+  name?: string;
+  hasVerifiedAnalytics?: boolean;
+  isVerifiedCreator?: boolean;
+  totalListingsSold?: number;
+  sellerRating?: number;
+  totalSellerReviews?: number;
+};
+
+/** Unpopulated id string when creating/updating; populated object on public detail reads. */
+export type ListingSellerRef = string | ListingSellerPublic;
+
 /**
  * Shape of a new listing submission. Mirrors the form on /products?list=new
  * and the backend `Listing` model.
  */
 export type Listing = {
   _id?: string;
-  sellerId: string;
+  sellerId: ListingSellerRef;
   slug?: string;
   appName: string;
   tagline: string;

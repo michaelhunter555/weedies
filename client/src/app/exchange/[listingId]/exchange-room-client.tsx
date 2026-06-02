@@ -685,7 +685,7 @@ export function ExchangeRoomClient() {
                   : "Waiting for the buyer to complete checkout for their winning bid."
                 : "We do not have a completed checkout on file for this listing yet. Add a card in Wallet, then finish checkout."}
             </Alert>
-            {role === "buyer" || awaitingAuctionCheckout ? (
+            {role === "buyer" ? (
               <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
                 <Button variant="outlined" component={Link} href={walletHref}>
                   Open Wallet
@@ -800,7 +800,9 @@ export function ExchangeRoomClient() {
           </>
         ) : role === "seller" && !paymentAuthorized ? (
           <Typography variant="body2" color="text.secondary">
-            Complete checkout (step 1) before uploading optional files.
+            {awaitingAuctionCheckout
+              ? "Waiting for the buyer to complete checkout before optional uploads unlock."
+              : "Handover unlocks after the buyer completes checkout."}
           </Typography>
         ) : role === "buyer" ? (
           <Typography variant="body2" color="text.secondary">

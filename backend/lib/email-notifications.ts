@@ -352,7 +352,54 @@ export const adminDisputeDecisionEmail = async (
     await sendBrevoPayload(payload);
 };
 
-async function sendBrevoPayload(payload: Record<string, unknown>): Promise<void> {
+/** Contact form submission from signed-in users → support inbox. */
+export const contactUsSupportEmail = async (input: {
+  userId: string;
+  userEmail: string;
+  userName: string;
+  topic: string;
+  topicLabel: string;
+  message: string;
+}) => {
+  const safeMessage = input.message
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\n/g, "<br />");
+
+  const payload = {
+    sender: {
+      name: "Dap & Flip Contact",
+      email: "no-reply@elevatedappgroup.com",
+    },
+    replyTo: {
+      email: input.userEmail,
+      name: input.userName,
+    },
+    to: [{ name: "Dap & Flip Support", email: ADMIN_INBOX }],
+    subject: `[Contact] ${input.topicLabel} — ${input.userName}`,
+    htmlContent: `
+        <html><body>
+        <p><b>Contact form</b> (${input.topicLabel})</p>
+        <ul>
+        <li>User: ${input.userName}</li>
+        <li>Email: <a href="mailto:${input.userEmail}">${input.userEmail}</a></li>
+        <li>User ID: <code>${input.userId}</code></li>
+        <li>Topic: <code>${input.topic}</code></li>
+        </ul>
+        <p><b>Message</b></p>
+        <p>${safeMessage}</p>
+        </body></html>
+        `,
+  };
+
+  await sendBrevoPayload(payload, { throwOnFailure: true });
+};
+
+async function sendBrevoPayload(
+  payload: Record<string, unknown>,
+  opts?: { throwOnFailure?: boolean },
+): Promise<void> {
     try {
         const res = await fetch(`https://api.brevo.com/v3/smtp/email`, {
             method: "POST",
@@ -366,11 +413,17 @@ async function sendBrevoPayload(payload: Record<string, unknown>): Promise<void>
         if (!res.ok) {
             const err = await res.text();
             console.error("brevo error", err);
+            if (opts?.throwOnFailure) {
+                throw new Error("Support email could not be delivered.");
+            }
         } else {
             console.log("brevo email sent successfully");
         }
     } catch (err) {
         console.log("POST error", err);
+        if (opts?.throwOnFailure) {
+            throw err instanceof Error ? err : new Error("Support email could not be delivered.");
+        }
     }
 }
 

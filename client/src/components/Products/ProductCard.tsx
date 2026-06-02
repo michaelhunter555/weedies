@@ -67,11 +67,9 @@ function formatMoney(amount: number, currency = "USD") {
 function extractSellerName(
   sellerId: Listing["sellerId"] | undefined,
 ): string | null {
-  if (!sellerId) return null;
-  if (typeof sellerId === "string") return null;
-  const s = sellerId as unknown as { name?: string; email?: string };
-  if (s?.name) return s.name;
-  if (s?.email) return s.email.split("@")[0];
+  if (!sellerId || typeof sellerId === "string") return null;
+  if (sellerId.name) return sellerId.name;
+  if (sellerId.email) return sellerId.email.split("@")[0] ?? null;
   return null;
 }
 

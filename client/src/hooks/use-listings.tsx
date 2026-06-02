@@ -337,7 +337,10 @@ export const useListings = () => {
     [apiFetch],
   );
 
-  /** Public single listing by Mongo `_id` or `slug`. */
+  /**
+   * Public single listing by Mongo `_id` or `slug`.
+   * `sellerId` is usually a populated `ListingSellerPublic` object (see `types.tsx`).
+   */
   const getListing = useCallback(
     async (idOrSlug: string): Promise<Listing> =>
       apiFetch<Listing>(`/listings/${encodeURIComponent(idOrSlug)}`, "GET"),

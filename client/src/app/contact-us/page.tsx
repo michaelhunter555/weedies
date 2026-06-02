@@ -1,13 +1,26 @@
+"use client";
+
+import { useState } from "react";
 import Link from "next/link";
 
 import MailOutlineRoundedIcon from "@mui/icons-material/MailOutlineRounded";
-import { Stack, Typography } from "@mui/material";
+import { Alert, Box, Button, CircularProgress, Stack, Typography } from "@mui/material";
 
 import { ContactForm } from "./contact-form";
 import { MarketingPageShell } from "@/components/Marketing/MarketingPageShell";
-import { APP_DOMAIN, APP_NAME } from "@/brand";
+import { useAuth } from "@/context/auth-context";
+import { APP_DOMAIN, APP_NAME, SUPPORT_EMAIL } from "@/brand";
+import { brandContainedButtonSx } from "@/theme/brand-palette";
+
+const signInHref = `/signup?returnUrl=${encodeURIComponent("/contact-us")}`;
 
 export default function ContactUsPage() {
+  const { user, hydrated, isLoggedIn } = useAuth();
+  const [messageSent, setMessageSent] = useState(false);
+
+  const displayName = user?.name?.trim() || user?.email?.split("@")[0] || "";
+  const accountEmail = user?.email?.trim() ?? "";
+
   return (
     <MarketingPageShell
       title="Contact us"
@@ -23,11 +36,46 @@ export default function ContactUsPage() {
             <Link href="/support" style={{ fontWeight: 700 }}>
               FAQs
             </Link>{" "}
-            first as many answers are there.
+            first — many answers are there.
           </Typography>
         </Stack>
 
-        <ContactForm />
+        {!hydrated ? (
+          <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
+            <CircularProgress size={28} />
+          </Box>
+        ) : !isLoggedIn ? (
+          <Alert severity="info" sx={{ borderRadius: 2 }}>
+            <Typography variant="body2" sx={{ mb: 1.5 }}>
+              Sign in to send us a message through this form. You can also email us directly at{" "}
+              <Link href={`mailto:${SUPPORT_EMAIL}`} style={{ fontWeight: 700 }}>
+                {SUPPORT_EMAIL}
+              </Link>
+              .
+            </Typography>
+            <Button
+              component={Link}
+              href={signInHref}
+              variant="contained"
+              size="small"
+              sx={{ ...brandContainedButtonSx, textTransform: "none", fontWeight: 700 }}
+            >
+              Sign in to contact support
+            </Button>
+          </Alert>
+        ) : messageSent ? (
+          <Alert severity="success" sx={{ borderRadius: 2 }}>
+            Your message has been sent. We will get back to you at{" "}
+            <b>{accountEmail}</b> as soon as we can.
+          </Alert>
+        ) : (
+          <ContactForm
+            key={accountEmail}
+            defaultName={displayName}
+            defaultEmail={accountEmail}
+            onSubmitted={() => setMessageSent(true)}
+          />
+        )}
       </Stack>
     </MarketingPageShell>
   );

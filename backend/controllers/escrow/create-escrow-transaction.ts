@@ -9,6 +9,8 @@ import {
 } from "../../lib/escrow-api";
 import { buildEscrowInitResponse } from "../../lib/escrow-init-response";
 import { isEscrowEligiblePrice } from "../../lib/escrow-eligible";
+import { auctionBuyItNowPriceDollars } from "../../lib/listing-auction-buy-it-now";
+import { listingAuctionPurchasePriceDollars } from "../../lib/listing-auction-price";
 import {
   listingBuyItNowPriceDollars,
   platformApplicationFeeCents,
@@ -62,21 +64,36 @@ export async function initEscrowTransaction(req: Request, res: Response) {
     }
 
     const listing = await Listing.findById(listingId).select(
-      "_id appName tagline slug photos coverIndex status saleType sellerId buyItNowPrice startingPrice currency",
+      "_id appName tagline slug photos coverIndex status saleType sellerId buyItNowPrice startingPrice currency buyerId auctionBids auctionWinningAmount",
     );
     if (!listing) {
       return void res.status(404).json({ ok: false, message: "Listing not found" });
     }
-    if (listing.status !== "live") {
+
+    const isAuctionWinnerCheckout =
+      listing.saleType === "auction" &&
+      listing.status === "reserved" &&
+      listing.buyerId &&
+      String(listing.buyerId) === buyerUserId;
+
+    const auctionBuyItNowPrice =
+      listing.saleType === "auction" && listing.status === "live"
+        ? auctionBuyItNowPriceDollars(listing)
+        : null;
+    const isAuctionBuyItNowCheckout = auctionBuyItNowPrice != null;
+
+    if (listing.saleType === "auction") {
+      if (!isAuctionWinnerCheckout && !isAuctionBuyItNowCheckout) {
+        return void res.status(400).json({
+          ok: false,
+          message:
+            "Escrow for auctions is available after you win or via Buy it now when offered.",
+        });
+      }
+    } else if (listing.status !== "live") {
       return void res.status(409).json({
         ok: false,
         message: "This listing is not available for purchase.",
-      });
-    }
-    if (listing.saleType === "auction") {
-      return void res.status(400).json({
-        ok: false,
-        message: "Use the auction flow for this listing.",
       });
     }
 
@@ -88,7 +105,11 @@ export async function initEscrowTransaction(req: Request, res: Response) {
       });
     }
 
-    const priceDollars = listingBuyItNowPriceDollars(listing);
+    const priceDollars = isAuctionWinnerCheckout
+      ? listingAuctionPurchasePriceDollars(listing)
+      : isAuctionBuyItNowCheckout
+        ? auctionBuyItNowPrice
+        : listingBuyItNowPriceDollars(listing);
     if (!isEscrowEligiblePrice(priceDollars)) {
       return void res.status(400).json({
         ok: false,

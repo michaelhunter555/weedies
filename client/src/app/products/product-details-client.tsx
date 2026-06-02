@@ -54,7 +54,11 @@ import useMediaQuery from "@mui/material/useMediaQuery";
 import useTheme from "@mui/material/styles/useTheme";
 
 import { brandContainedButtonSx } from "@/theme/brand-palette";
-import type { Listing } from "../../../types";
+import type { Listing, ListingSellerPublic, ListingSellerRef } from "../../../types";
+import {
+  auctionBuyItNowPriceDollars,
+  hasAuctionBuyItNow,
+} from "@/lib/auction-buy-it-now";
 import { countPendingPrivateAccessRequests } from "@/utils/private-listing-access";
 const PLACEHOLDER_COVER = "/placeholder-app-cover.svg";
 const PENDING_AUCTION_BID_KEY = "weedies.pendingAuctionBid";
@@ -80,9 +84,13 @@ function formatMoney(amount: number, currency = "USD") {
   }).format(amount);
 }
 
-function extractSeller(
-  sellerId: Listing["sellerId"] | undefined,
-): {
+function isPopulatedListingSeller(
+  sellerId: ListingSellerRef | undefined,
+): sellerId is ListingSellerPublic {
+  return typeof sellerId === "object" && sellerId !== null && "_id" in sellerId;
+}
+
+function extractSeller(sellerId: ListingSellerRef | undefined): {
   id: string | null;
   display: string;
   sellerRating: number;
@@ -99,34 +107,27 @@ function extractSeller(
     };
   }
   if (typeof sellerId === "string") {
+    const id = sellerId.trim() || null;
     return {
-      id: sellerId,
+      id,
       display: "Seller",
       sellerRating: 0,
       totalSellerReviews: 0,
       totalListingsSold: 0,
     };
   }
-  const s = sellerId as unknown as {
-    _id?: string;
-    name?: string;
-    email?: string;
-    sellerRating?: number;
-    totalSellerReviews?: number;
-    totalListingsSold?: number;
-  };
-  const id = s._id ? String(s._id) : null;
-  const display = s.name
-    ? s.name
-    : s.email
-      ? s.email.split("@")[0] ?? "Seller"
+  const id = mongoIdString(sellerId._id) || null;
+  const display = sellerId.name
+    ? sellerId.name
+    : sellerId.email
+      ? sellerId.email.split("@")[0] ?? "Seller"
       : "Seller";
   return {
     id,
     display,
-    sellerRating: Number(s.sellerRating ?? 0),
-    totalSellerReviews: Number(s.totalSellerReviews ?? 0),
-    totalListingsSold: Number(s.totalListingsSold ?? 0),
+    sellerRating: Number(sellerId.sellerRating ?? 0),
+    totalSellerReviews: Number(sellerId.totalSellerReviews ?? 0),
+    totalListingsSold: Number(sellerId.totalListingsSold ?? 0),
   };
 }
 
@@ -192,9 +193,12 @@ export function ProductDetailsClient({ fetchBy }: ProductDetailsClientProps) {
   const pendingBidsHistory =
     listing?.auctionBids?.filter((bid) => bid.bidStatus === "pending") ?? [];
 
-  const listingSellerId = extractSeller(listing?.sellerId).id;
+  const listingSellerId = mongoIdString(listing?.sellerId);
   const isListingOwner = Boolean(
-    hydrated && isLoggedIn && user?.id && listingSellerId && user.id === listingSellerId,
+    hydrated &&
+      isLoggedIn &&
+      listingSellerId &&
+      mongoIdString(user?.id) === listingSellerId,
   );
   const stripeCustomerId = user?.stripeCustomerId?.trim() ?? "";
   const isAuction = listing?.saleType === "auction";
@@ -303,6 +307,10 @@ export function ProductDetailsClient({ fetchBy }: ProductDetailsClientProps) {
     }
   };
 
+  const auctionBuyItNowPrice =
+    listing && isAuction ? auctionBuyItNowPriceDollars(listing) : null;
+  const showAuctionBuyItNow = Boolean(listing && isAuction && hasAuctionBuyItNow(listing));
+
   const buyItNowDisabled =
     !hydrated ||
     !isLoggedIn ||
@@ -371,10 +379,33 @@ export function ProductDetailsClient({ fetchBy }: ProductDetailsClientProps) {
 
   const countdown = useCountdown(auctionEnd);
 
+  const auctionBuyItNowDisabled =
+    !hydrated ||
+    !isLoggedIn ||
+    !showAuctionBuyItNow ||
+    countdown.ended ||
+    !listing ||
+    listing.status !== "live" ||
+    isListingOwner ||
+    (listing.isPrivateListing && listing.privateAccess?.canView === false);
+
+  const auctionBuyItNowTooltip = useMemo(() => {
+    if (!hydrated) return "One moment…";
+    if (!isLoggedIn) return "Sign in to buy it now.";
+    if (isListingOwner) return "You can't purchase your own listing.";
+    if (countdown.ended) return "This auction has ended.";
+    if (listing?.status !== "live") return "This listing is not available to buy.";
+    if (listing?.isPrivateListing && listing?.privateAccess?.canView === false) {
+      return "Request access from the seller first.";
+    }
+    return "";
+  }, [hydrated, isLoggedIn, isListingOwner, countdown.ended, listing]);
+
   const placeBidDisabled =
     !hydrated ||
     !isLoggedIn ||
     countdown.ended ||
+    isListingOwner ||
     (listing?.isPrivateListing && listing?.privateAccess?.canView === false);
 
   const bidTooltip = useMemo(() => {
@@ -383,19 +414,27 @@ export function ProductDetailsClient({ fetchBy }: ProductDetailsClientProps) {
     }
     if (!hydrated) return "";
     if (!isLoggedIn) return "Sign in to place a bid.";
+    if (isListingOwner) return "You can't bid on your own listing.";
     if (listing?.isPrivateListing && listing?.privateAccess?.canView === false) {
       return "Request access from the seller first.";
     }
     return "";
-  }, [listing, countdown.ended, hydrated, isLoggedIn]);
+  }, [listing, countdown.ended, hydrated, isLoggedIn, isListingOwner]);
 
   const handleBuyItNow = () => {
     if (!listing?._id || buyItNowDisabled || isAuction) return;
     router.push(`/checkout/${encodeURIComponent(String(listing._id))}`);
   };
 
+  const handleAuctionBuyItNow = () => {
+    if (!listing?._id || auctionBuyItNowDisabled) return;
+    router.push(
+      `/checkout/${encodeURIComponent(String(listing._id))}?purchase=buy-it-now`,
+    );
+  };
+
   const handlePlaceBid = () => {
-    if (!listing?._id || placeBidDisabled || !isAuction) return;
+    if (!listing?._id || placeBidDisabled || !isAuction || isListingOwner) return;
     setBidModalOpen(true);
   };
 
@@ -449,9 +488,9 @@ export function ProductDetailsClient({ fetchBy }: ProductDetailsClientProps) {
     );
   }
 
-  const populatedSeller = listing.sellerId as unknown as {
-    isVerifiedCreator?: boolean;
-  } | null;
+  const populatedSeller = isPopulatedListingSeller(listing.sellerId)
+    ? listing.sellerId
+    : null;
   const verifiedCreator = Boolean(populatedSeller?.isVerifiedCreator);
 
   const messageSellerTooltip = !hydrated
@@ -1125,6 +1164,29 @@ export function ProductDetailsClient({ fetchBy }: ProductDetailsClientProps) {
                           {countdown.label}
                         </Typography>
                       </Box>
+                      {showAuctionBuyItNow && auctionBuyItNowPrice != null ? (
+                        <Stack spacing={0.5}>
+                          <Typography variant="subtitle2" color="text.secondary">
+                            Buy it now
+                          </Typography>
+                          <Typography variant="h5" fontWeight={800}>
+                            {formatMoney(auctionBuyItNowPrice, currency)}
+                          </Typography>
+                          {auctionBuyItNowPrice > 999.99 ? (
+                            <Stack direction="row" alignItems="center" spacing={1}>
+                              <Image
+                                src="https://secureapi.escrow.com/api/ecart/Content/Images/Affiliate%20Banners/banner-88x31.gif"
+                                alt="Escrow eligible"
+                                width={81}
+                                height={31}
+                              />
+                              <Typography sx={{ fontSize: 11 }} variant="caption" color="text.secondary">
+                                Escrow eligible
+                              </Typography>
+                            </Stack>
+                          ) : null}
+                        </Stack>
+                      ) : null}
                       {isPrivateRestricted ? (
                         <>
                           {privateAccessMutation.isError ? (
@@ -1176,18 +1238,49 @@ export function ProductDetailsClient({ fetchBy }: ProductDetailsClientProps) {
                           </Box>
                         </Tooltip>
                       ) : (
-                        <Stack spacing={0.5}>
-                          <Button
-                            variant="contained"
-                            size="large"
-                            startIcon={<GavelRoundedIcon />}
-                            disabled={placeBidDisabled}
-                            onClick={handlePlaceBid}
-                            sx={{ borderRadius: 2, textTransform: "none", fontWeight: 700 }}
-                          >
-                            Place bid
-                          </Button>
-                          <SecureCheckoutNote />
+                        <Stack spacing={1.5}>
+                          <Stack spacing={0.5}>
+                            <Button
+                              variant="contained"
+                              size="large"
+                              startIcon={<GavelRoundedIcon />}
+                              disabled={placeBidDisabled}
+                              onClick={handlePlaceBid}
+                              sx={{ borderRadius: 2, textTransform: "none", fontWeight: 700 }}
+                            >
+                              Place bid
+                            </Button>
+                            <SecureCheckoutNote />
+                          </Stack>
+                          {showAuctionBuyItNow ? (
+                            auctionBuyItNowDisabled && auctionBuyItNowTooltip ? (
+                              <Tooltip title={auctionBuyItNowTooltip}>
+                                <Box component="span" sx={{ display: "block" }}>
+                                  <Button
+                                    variant="outlined"
+                                    size="large"
+                                    startIcon={<PaymentRoundedIcon />}
+                                    disabled={auctionBuyItNowDisabled}
+                                    onClick={handleAuctionBuyItNow}
+                                    sx={{ borderRadius: 2, textTransform: "none", fontWeight: 700, width: "100%" }}
+                                  >
+                                    Buy it now
+                                  </Button>
+                                </Box>
+                              </Tooltip>
+                            ) : (
+                              <Button
+                                variant="outlined"
+                                size="large"
+                                startIcon={<PaymentRoundedIcon />}
+                                disabled={auctionBuyItNowDisabled}
+                                onClick={handleAuctionBuyItNow}
+                                sx={{ borderRadius: 2, textTransform: "none", fontWeight: 700 }}
+                              >
+                                Buy it now
+                              </Button>
+                            )
+                          ) : null}
                         </Stack>
                       )}
                     </>

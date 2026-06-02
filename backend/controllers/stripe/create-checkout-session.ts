@@ -6,6 +6,7 @@ import stripe from "../../utils/stripe";
 import User from "../../models/user";
 import Listing from "../../models/listing";
 import { isEscrowRequiredPrice } from "../../lib/escrow-eligible";
+import { auctionBuyItNowPriceDollars } from "../../lib/listing-auction-buy-it-now";
 import { listingAuctionPurchasePriceDollars } from "../../lib/listing-auction-price";
 import {
   listingBuyItNowPriceDollars,
@@ -63,10 +64,16 @@ export default async function createCheckoutSession(req: Request, res: Response)
       listing.buyerId &&
       String(listing.buyerId) === buyerUserId;
 
-    if (listing.saleType === "auction" && !isAuctionWinnerCheckout) {
+    const auctionBuyItNowPrice =
+      listing.saleType === "auction" && listing.status === "live"
+        ? auctionBuyItNowPriceDollars(listing)
+        : null;
+    const isAuctionBuyItNowCheckout = auctionBuyItNowPrice != null;
+
+    if (listing.saleType === "auction" && !isAuctionWinnerCheckout && !isAuctionBuyItNowCheckout) {
       return void res.status(400).json({
         message:
-          "Auction checkout opens after you win. Place bids while the auction is live.",
+          "Auction checkout opens after you win, or use Buy it now when this listing offers it.",
       });
     }
 
@@ -89,7 +96,9 @@ export default async function createCheckoutSession(req: Request, res: Response)
 
     const priceDollars = isAuctionWinnerCheckout
       ? listingAuctionPurchasePriceDollars(listing)
-      : listingBuyItNowPriceDollars(listing);
+      : isAuctionBuyItNowCheckout
+        ? auctionBuyItNowPrice
+        : listingBuyItNowPriceDollars(listing);
     if (!Number.isFinite(priceDollars) || priceDollars < 0.5) {
       return void res.status(400).json({ message: "Invalid or too small purchase amount." });
     }
