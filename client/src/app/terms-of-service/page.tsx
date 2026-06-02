@@ -105,7 +105,7 @@ export default function TermsOfServicePage() {
           Stripe charges a flat fee of 2.9% + $0.30 USD per transaction. 
           This fee is the responsibility of the seller. 
           Payouts via Stripe can take up 2-3 business days AFTER the seller has accepted payment. 
-          Please note, your very first purchase may be subject to Stripe risk assessment causing your first payout to delay for up to 7 business days.
+          Please note, your very first payout may be subject to Stripe risk assessment causing it to delay for up to 7 business days.
           `
         ]}
       />

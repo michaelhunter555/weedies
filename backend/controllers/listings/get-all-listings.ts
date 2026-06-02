@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import { attachAuctionSummary } from "../../lib/listing-auction-summary";
+import { sanitizeListingDescriptionFields } from "../../lib/listing-description";
 import Listing from "../../models/listing";
 
 /**
@@ -116,7 +117,7 @@ export async function getAllListings(req: Request, res: Response) {
         pendingPrivateListingRequests: _ppr,
         ...rest
       } = withAccess;
-      return rest;
+      return sanitizeListingDescriptionFields(rest);
     });
 
     return void res.status(200).json({

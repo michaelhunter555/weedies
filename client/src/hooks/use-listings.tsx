@@ -401,6 +401,7 @@ export const useListings = () => {
       recipientId: string;
       message: string;
       listingId?: string;
+      chatType?: "general" | "postSale";
     }): Promise<{ chat?: { _id?: string } }> =>
       apiFetch<{ chat?: { _id?: string } }>("/chats", "POST", body),
     [apiFetch],

@@ -12,6 +12,7 @@ import { moderateListing } from "../controllers/admin/listings/moderate-listing"
 import { getAdminDisputes } from "../controllers/admin/disputes/get-admin-disputes";
 import { getAdminDisputeById } from "../controllers/admin/disputes/get-admin-dispute-by-id";
 import { adminDisputeDecision } from "../controllers/admin/disputes/dispute-decision";
+import { getAdminTransactions } from "../controllers/admin/transactions/get-admin-transactions";
 import { getAllOrders } from "../controllers/orders/get-all-orders";
 import { getAllProducts } from "../controllers/products/get-all-products";
 import { getAllReviews } from "../controllers/reviews/get-all-review";
@@ -35,6 +36,7 @@ router.get("/listings/pending", getPendingListings);
 router.get("/listings/active", getActiveListings);
 router.get("/listings/:listingId", getAdminListingById);
 router.patch("/listings/:listingId/review", moderateListing);
+router.get("/transactions", getAdminTransactions);
 router.get("/disputes", getAdminDisputes);
 router.patch("/disputes/:disputeId/decision", adminDisputeDecision);
 router.get("/disputes/:disputeId", getAdminDisputeById);

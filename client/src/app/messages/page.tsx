@@ -649,6 +649,7 @@ function MessagesPageContent() {
         recipientId: payload.intent.recipientId,
         message: payload.text,
         listingId: payload.intent.listingId || undefined,
+        chatType: payload.intent.fromExchange ? "postSale" : "general",
       }),
     onSuccess: async (data) => {
       await queryClient.invalidateQueries({ queryKey: ["chats"] });

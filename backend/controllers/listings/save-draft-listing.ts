@@ -8,6 +8,10 @@ import {
   parseOptionalNonNegNumber,
   parsePrivateListingFlag,
 } from "../../lib/listing-submission-fields";
+import {
+  prepareAppDescriptionForWrite,
+  sanitizeListingDescriptionFields,
+} from "../../lib/listing-description";
 import type {
   ListingCategory,
   ListingDifficulty,
@@ -69,8 +73,20 @@ export async function saveDraftListing(req: Request, res: Response) {
 
     const appName = String(body.appName ?? "").trim() || "Untitled listing";
     const tagline = String(body.tagline ?? "").trim() || "-";
+    const descriptionPrepared = prepareAppDescriptionForWrite(
+      body.appDescription ?? "",
+      { minPlainText: 0 },
+    );
+    const draftFallback = prepareAppDescriptionForWrite(
+      "Draft - add a description.",
+      { minPlainText: 0 },
+    );
     const appDescription =
-      String(body.appDescription ?? "").trim() || "Draft - add a description.";
+      descriptionPrepared.ok && descriptionPrepared.value.trim()
+        ? descriptionPrepared.value
+        : draftFallback.ok
+          ? draftFallback.value
+          : "<p>Draft - add a description.</p>";
     const startingPrice = Math.max(
       0,
       Number(body.startingPrice ?? 0) || 0,
@@ -167,7 +183,11 @@ export async function saveDraftListing(req: Request, res: Response) {
       }
 
       await existing.save();
-      return void res.status(200).json(existing);
+      return void res.status(200).json(
+        sanitizeListingDescriptionFields(
+          existing.toObject() as Record<string, unknown>,
+        ),
+      );
     }
 
     const slug = await ensureUniqueListingSlug(fromClient || slugifyAppName(appName));
@@ -211,7 +231,11 @@ export async function saveDraftListing(req: Request, res: Response) {
         : {}),
     });
 
-    return void res.status(201).json(listing);
+    return void res.status(201).json(
+      sanitizeListingDescriptionFields(
+        listing.toObject() as Record<string, unknown>,
+      ),
+    );
   } catch (err) {
     console.log("saveDraftListing error:", err);
     return void res.status(500).json({ message: "Failed to save draft" });

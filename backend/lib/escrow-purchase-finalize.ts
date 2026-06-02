@@ -6,6 +6,7 @@ import ListingExchange from "../models/exchange";
 import Transaction from "../models/transactions";
 import User from "../models/user";
 import { checkRoom } from "../utils/check-socket-room";
+import { isAuctionWithWinnerOutcome } from "./listing-auction-winner";
 import { releaseListingEscrowReserve } from "./listing-reserve";
 
 const PURCHASE_SUCCEEDED = "stripe.payment.succeeded";
@@ -196,7 +197,7 @@ export async function cancelEscrowListingPurchase(
   await transaction.save();
 
   const listing = await Listing.findById(transaction.ListingId).select(
-    "status buyerId appName",
+    "status buyerId appName saleType auctionWinningAmount auctionFinalizedAt",
   );
   if (!listing) return;
 
@@ -209,10 +210,17 @@ export async function cancelEscrowListingPurchase(
     listing.buyerId &&
     String(listing.buyerId) === buyerId
   ) {
-    await Listing.findByIdAndUpdate(listing._id, {
-      $set: { status: "live" },
-      $unset: { buyerId: "", soldAt: "" },
-    });
+    if (isAuctionWithWinnerOutcome(listing)) {
+      await Listing.findByIdAndUpdate(listing._id, {
+        $set: { status: "reserved" },
+        $unset: { soldAt: "" },
+      });
+    } else {
+      await Listing.findByIdAndUpdate(listing._id, {
+        $set: { status: "live" },
+        $unset: { buyerId: "", soldAt: "" },
+      });
+    }
   }
 
   await ListingExchange.updateOne(

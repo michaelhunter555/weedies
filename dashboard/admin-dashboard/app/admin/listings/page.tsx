@@ -18,6 +18,7 @@ import {
   patchListingReview,
   type ListingReviewAction,
 } from "@/lib/admin-api";
+import { RejectListingDialog } from "@/components/admin/RejectListingDialog";
 import { useAdminAuth } from "@/context/admin-auth-context";
 
 const PAGE_SIZE = 100;
@@ -251,6 +252,10 @@ export default function AdminListingsPage() {
   const [tab, setTab] = React.useState<ListingsTab>("pending");
   const [busyId, setBusyId] = React.useState<string | null>(null);
   const [actionError, setActionError] = React.useState<string | null>(null);
+  const [rejectTarget, setRejectTarget] = React.useState<{
+    id: string;
+    name: string;
+  } | null>(null);
 
   const pendingQuery = useQuery({
     queryKey: ["admin-listings", "pending", admin?.email ?? ""],
@@ -283,27 +288,25 @@ export default function AdminListingsPage() {
     [queryClient],
   );
 
-  const pendingReject = React.useCallback(
-    async (listingId: string) => {
-      const reason = window.prompt(
-        "Optional rejection note (shown to seller later if you add that UI):",
-        "",
-      );
-      if (reason === null) return;
+  const confirmReject = React.useCallback(
+    async (rejectionReason: string) => {
+      if (!rejectTarget) return;
+      const listingId = rejectTarget.id;
       setActionError(null);
       setBusyId(listingId);
       try {
         await patchListingReview(listingId, "reject", {
-          rejectionReason: reason.trim() || undefined,
+          rejectionReason: rejectionReason || undefined,
         });
         await queryClient.invalidateQueries({ queryKey: ["admin-listings"] });
+        setRejectTarget(null);
       } catch (e) {
         setActionError(e instanceof Error ? e.message : "Update failed");
       } finally {
         setBusyId(null);
       }
     },
-    [queryClient],
+    [queryClient, rejectTarget],
   );
 
   const actionsColumnPending: GridColDef = React.useMemo(
@@ -334,7 +337,13 @@ export default function AdminListingsPage() {
               variant="outlined"
               color="error"
               disabled={busy}
-              onClick={() => void pendingReject(id)}
+              onClick={() => {
+                const name =
+                  typeof (row as { appName?: unknown }).appName === "string"
+                    ? (row as { appName: string }).appName
+                    : "";
+                setRejectTarget({ id, name });
+              }}
             >
               Reject
             </Button>
@@ -342,7 +351,7 @@ export default function AdminListingsPage() {
         );
       },
     }),
-    [busyId, runReview, pendingReject],
+    [busyId, runReview],
   );
 
   const actionsColumnActive: GridColDef = React.useMemo(
@@ -443,6 +452,16 @@ export default function AdminListingsPage() {
           />
         </Paper>
       </ListingsGridUiContext.Provider>
+
+      <RejectListingDialog
+        open={!!rejectTarget}
+        listingName={rejectTarget?.name ?? ""}
+        busy={!!rejectTarget && busyId === rejectTarget.id}
+        onClose={() => {
+          if (!rejectTarget || busyId !== rejectTarget.id) setRejectTarget(null);
+        }}
+        onConfirm={(reason) => void confirmReject(reason)}
+      />
     </Stack>
   );
 }

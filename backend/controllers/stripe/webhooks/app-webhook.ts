@@ -571,6 +571,14 @@ export default async function appWebhook(req: Request, res: Response) {
             { listingId: new mongoose.Types.ObjectId(listingId) },
             { $set: { paymentStatus: "canceled", sellerCapturedPayment: false } },
           );
+          await Transaction.findOneAndUpdate({
+            stripePaymentIntentId: pi.id,
+          }, {
+            $set: {
+              paymentStatus: "canceled",
+              amountPaid: 0,
+            }
+          })
         }
         break;
       }

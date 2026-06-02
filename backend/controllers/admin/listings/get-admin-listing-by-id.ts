@@ -7,6 +7,7 @@ import {
   type AuctionBidLean,
 } from "../../../lib/listing-auction-summary";
 import { auctionBidsClientJson } from "../../../lib/listing-auction-bids-client";
+import { sanitizeListingDescriptionFields } from "../../../lib/listing-description";
 import type { Listing } from "../../../models/listing";
 import ListingModel from "../../../models/listing";
 
@@ -42,15 +43,18 @@ export async function getAdminListingById(req: Request, res: Response) {
       });
       return void res.json({
         ok: true,
-        listing: {
+        listing: sanitizeListingDescriptionFields({
           ...summarized,
           auctionBids: auctionBidsClientJson(listing.auctionBids),
           auctionPendingBidCount: countPendingAuctionBids(listing.auctionBids),
-        },
+        } as Record<string, unknown>),
       });
     }
 
-    return void res.json({ ok: true, listing: base });
+    return void res.json({
+      ok: true,
+      listing: sanitizeListingDescriptionFields(base),
+    });
   } catch (err) {
     console.error("getAdminListingById:", err);
     return void res.status(500).json({ message: "Failed to load listing" });

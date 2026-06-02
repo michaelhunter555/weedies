@@ -41,7 +41,12 @@ import TimerRoundedIcon from "@mui/icons-material/TimerRounded";
 import VerifiedRoundedIcon from "@mui/icons-material/VerifiedRounded";
 import LockIcon from '@mui/icons-material/Lock';
 import Collection from "@/components/Collections/Collection";
+import { AppDescriptionEditor } from "@/components/Listings/AppDescriptionEditor";
 import { ApplicationFeeTierBreakdownModal } from "@/components/Listings/ApplicationFeeTierBreakdownModal";
+import {
+  isAppDescriptionValid,
+  toEditorHtml,
+} from "@/lib/sanitize-html";
 import { AuthContext } from "@/context/auth-context";
 import { useForm } from "@/hooks/useForm";
 import { useListings } from "@/hooks/use-listings";
@@ -256,7 +261,7 @@ export default function ProductsPage() {
 
         const appName = String(found.appName ?? "");
         const tagline = String(found.tagline ?? "");
-        const appDescription = String(found.appDescription ?? "");
+        const appDescription = toEditorHtml(String(found.appDescription ?? ""));
         const startingPrice = Number(found.startingPrice ?? 0);
         const buyItNowPrice = Number(found.buyItNowPrice ?? 0);
         const isBuyItNow = Boolean(
@@ -318,7 +323,7 @@ export default function ProductsPage() {
           },
           appDescription: {
             value: appDescription,
-            isValid: appDescription.trim().length >= 40,
+            isValid: isAppDescriptionValid(appDescription),
           },
           photos: { value: [], isValid: true },
           coverIndex: {
@@ -398,6 +403,7 @@ export default function ProductsPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [feeTierBreakdownOpen, setFeeTierBreakdownOpen] = useState(false);
   const photoInputRef = useRef<HTMLInputElement | null>(null);
+  const [hideAppDescriptionAlert, setHideAppDescriptionAlert] = useState(false);
 
   const {
     data: paymentMethods,
@@ -1489,29 +1495,24 @@ export default function ProductsPage() {
             />
             
 
-            <TextField
-              placeholder={`Describe your app in under 500 words.
- • What does it do?
- • Who is it for?
- • What makes it unique?
- • Key features & benefits
- • Advice for the next owner / Requirements before considering buying
- • Important information to know
- • All assets included in purchase (i.e. repo, accounts, social media, branding, etc.)`
-}
-              fullWidth
-              multiline
-              rows={6}
-              value={formState?.inputs?.appDescription?.value || ""}
-              onChange={(e) =>
-                inputHandler(
-                  "appDescription",
-                  e.target.value,
-                  e.target.value.trim().length >= 40
-                )
+            {!hideAppDescriptionAlert && (
+              <Alert severity="info" onClose={() => setHideAppDescriptionAlert(true)}>
+              <Typography variant="body2" color="text.secondary">
+                Do not include personal contact details in app description.
+              </Typography>
+            </Alert>
+          )}
+            
+            <AppDescriptionEditor
+              key={
+                workListingId
+                  ? `app-desc-${workListingId}-${draftLoading ? "loading" : "ready"}`
+                  : "app-desc-new"
               }
-              sx={listFormOutlinedFieldSx}
-              InputProps={{ sx: { borderRadius: 2 } }}
+              value={String(formState?.inputs?.appDescription?.value || "")}
+              onChange={(html, valid) =>
+                inputHandler("appDescription", html, valid)
+              }
             />
 
             <Divider />

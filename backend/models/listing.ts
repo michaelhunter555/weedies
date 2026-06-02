@@ -139,7 +139,7 @@ const ListingSchema = new mongoose.Schema<Listing>(
 
     appName: { type: String, required: true, trim: true, maxlength: 80 },
     tagline: { type: String, required: true, trim: true, maxlength: 140 },
-    appDescription: { type: String, required: true, maxlength: 8000 },
+    appDescription: { type: String, required: true, maxlength: 32000 },
     category: {
       type: String,
       required: true,

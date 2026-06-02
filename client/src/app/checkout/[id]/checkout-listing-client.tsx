@@ -11,6 +11,7 @@ import { useListings } from "@/hooks/use-listings";
 import { useEscrow } from "@/hooks/use-escrow";
 import { useStripeWallet } from "@/hooks/use-stripe-wallet";
 import { auctionBuyItNowPriceDollars } from "@/lib/auction-buy-it-now";
+import { isAuctionWinnerCheckoutForUser } from "@/lib/auction-winner-checkout";
 import {
   isEscrowEligiblePrice,
   isEscrowRequiredPrice,
@@ -23,6 +24,7 @@ import ChatRoundedIcon from "@mui/icons-material/ChatRounded";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import LockIcon from '@mui/icons-material/Lock';
 import {
   Alert,
   Box,
@@ -123,6 +125,7 @@ export function CheckoutListingClient() {
   const [pendingYourBid, setPendingYourBid] = useState<number | null>(null);
   const [confirmSubmitting, setConfirmSubmitting] = useState(false);
   const [checkoutSubmitting, setCheckoutSubmitting] = useState(false);
+  const [isEscrowSubmitting, setIsEscrowSubmitting] = useState(false);
   const [confirmError, setConfirmError] = useState<string | null>(null);
   const [openEscrowConfirm, setOpenEscrowConfirm] = useState(false);
 
@@ -140,13 +143,17 @@ export function CheckoutListingClient() {
   const isAuctionListing = listing?.saleType === "auction";
   const listingBuyerId = mongoIdString(listing?.buyerId);
   const sessionUserId = mongoIdString(user?.id);
-  const isReservingBuyer = Boolean(
-    listing?.status === "reserved" &&
-      sessionUserId &&
-      listingBuyerId &&
-      listingBuyerId === sessionUserId,
+  const isAuctionWinnerCheckout = isAuctionWinnerCheckoutForUser(
+    listing,
+    sessionUserId,
   );
-  const isAuctionWinnerCheckout = isAuctionListing && isReservingBuyer;
+  const isReservingBuyer = Boolean(
+    isAuctionWinnerCheckout ||
+      (listing?.status === "reserved" &&
+        sessionUserId &&
+        listingBuyerId &&
+        listingBuyerId === sessionUserId),
+  );
   const auctionBuyItNowPrice =
     listing && isAuctionListing && listing.status === "live"
       ? auctionBuyItNowPriceDollars(listing)
@@ -304,10 +311,17 @@ export function CheckoutListingClient() {
     }
   };
 
+  /** Stripe Checkout redirect in progress — only the Stripe button should show loading. */
+  const isStripeCheckoutBusy = checkoutSubmitting;
+  /** Escrow transaction create in progress — only the Escrow button should show loading. */
+  const isEscrowCheckoutBusy = isEscrowSubmitting;
+  /** Disable the other payment method while one is in flight (no loading UI on the idle button). */
+  const isOtherPaymentBusy = isStripeCheckoutBusy || isEscrowCheckoutBusy;
+
   const handleStripeCheckout = async () => {
     if (!acknowledged || !listing?._id) return;
     if (listing.saleType === "auction" && !isAuctionWinnerCheckout) return;
-    if (checkoutSubmitting || isEscrowRequired) return;
+    if (isStripeCheckoutBusy || isEscrowCheckoutBusy || isEscrowRequired) return;
     setConfirmError(null);
     setCheckoutSubmitting(true);
     try {
@@ -322,22 +336,23 @@ export function CheckoutListingClient() {
 
   const handleEscrowCheckout = async () => {
     if (!acknowledged || !listing?._id || !isPurchaseCheckout) return;
-    if (!isEscrowEligible || checkoutSubmitting) return;
+    if (!isEscrowEligible || isStripeCheckoutBusy || isEscrowCheckoutBusy) return;
     setConfirmError(null);
     setOpenEscrowConfirm(false);
-    setCheckoutSubmitting(true);
+    setIsEscrowSubmitting(true);
     try {
       await initEscrowTransaction(String(listing._id));
       await queryClient.invalidateQueries({ queryKey: ["listing", listingId] });
       router.replace(escrowSuccessPath(listingId));
     } catch (e) {
       setConfirmError(e instanceof Error ? e.message : "Could not start Escrow checkout.");
-      setCheckoutSubmitting(false);
+    } finally {
+      setIsEscrowSubmitting(false);
     }
   };
 
   const handleConfirmEscrowModal = () => {
-    if (checkoutSubmitting) return;
+    if (isEscrowCheckoutBusy) return;
     setOpenEscrowConfirm((prev) => !prev);
   };
 
@@ -445,7 +460,7 @@ export function CheckoutListingClient() {
   return (
     <Container maxWidth="md" sx={{ py: { xs: 3, md: 5 } }}>
       <Modal
-        open={openEscrowConfirm && !checkoutSubmitting}
+        open={openEscrowConfirm && !isEscrowSubmitting}
         onClose={handleConfirmEscrowModal}
       >
         <StyledBoxContainer width="350px" height="auto" sx={{ p: 2 }}>
@@ -465,10 +480,10 @@ export function CheckoutListingClient() {
             endIcon={<CheckCircleIcon />}
             variant="contained"
             color="success"
-            disabled={checkoutSubmitting}
+            disabled={isEscrowCheckoutBusy}
             onClick={() => void handleEscrowCheckout()}
           >
-            {checkoutSubmitting ? "Creating…" : "I confirm"}
+            {isEscrowCheckoutBusy ? "Creating…" : "I confirm"}
           </Button>
           </Stack>
           </Stack>
@@ -714,7 +729,9 @@ export function CheckoutListingClient() {
               <Checkbox
                 checked={acknowledged}
                 onChange={(_, v) => setAcknowledged(v)}
-                disabled={submitted || confirmSubmitting || checkoutSubmitting}
+                disabled={
+                  submitted || confirmSubmitting || isOtherPaymentBusy
+                }
               />
             }
             label={
@@ -759,13 +776,17 @@ export function CheckoutListingClient() {
         <Stack direction={{ xs: "column", sm: "row" }} spacing={2} flexWrap="wrap">
           {!isEscrowRequired ? (
             <Button
+              startIcon={
+                isStripeCheckoutBusy ? (
+                  <CircularProgress size={20} color="inherit" />
+                ) : (
+                  <LockIcon />
+                )
+              }
               variant="contained"
               size="large"
               disabled={
-                !acknowledged ||
-                checkoutSubmitting ||
-                !checkoutAvailable ||
-                checkoutSubmitting
+                !acknowledged || !checkoutAvailable || isOtherPaymentBusy
               }
               onClick={() => void handleStripeCheckout()}
               sx={{
@@ -777,33 +798,41 @@ export function CheckoutListingClient() {
                 boxShadow: "none",
               }}
             >
-              {checkoutSubmitting ? "Redirecting to Stripe…" : "Continue to Stripe Checkout"}
+              {isStripeCheckoutBusy
+                ? "Redirecting to Stripe…"
+                : "Continue to Stripe Checkout"}
             </Button>
           ) : null}
           {isEscrowEligible ? (
-            <Button
-              startIcon={<AccountBalanceIcon />}
-              variant="contained"
-              size="large"
-              disabled={
-                !acknowledged ||
-                checkoutSubmitting ||
-                !checkoutAvailable ||
-                checkoutSubmitting
-              }
-              onClick={handleConfirmEscrowModal}
-              color="success"
-              sx={{
-                textTransform: "none",
-                fontWeight: 700,
-                borderRadius: 2,
-                px: 3,
-              }}
-            >
-              {checkoutSubmitting
-                ? "Creating Transaction…"
-                : "Start Escrow Processing"}
-            </Button>
+            <>
+              <Divider orientation="vertical" flexItem />
+              <Button
+                startIcon={
+                  isEscrowCheckoutBusy ? (
+                    <CircularProgress size={20} color="inherit" />
+                  ) : (
+                    <AccountBalanceIcon />
+                  )
+                }
+                variant="contained"
+                size="large"
+                disabled={
+                  !acknowledged || !checkoutAvailable || isOtherPaymentBusy
+                }
+                onClick={handleConfirmEscrowModal}
+                color="success"
+                sx={{
+                  textTransform: "none",
+                  fontWeight: 700,
+                  borderRadius: 2,
+                  px: 3,
+                }}
+              >
+                {isEscrowCheckoutBusy
+                  ? "Creating transaction…"
+                  : "Start Escrow processing"}
+              </Button>
+            </>
           ) : null}
         </Stack>
       )}

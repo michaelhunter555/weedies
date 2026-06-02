@@ -288,6 +288,84 @@ export async function fetchAdminDisputeById(
 
 export type AdminDisputeDecision = "in_favor_user" | "in_favor_seller";
 
+export type AdminTransactionRow = {
+  id: string;
+  listingId: string;
+  listingAppName: string;
+  listingSlug: string;
+  listingStatus: string;
+  customerId: string;
+  customerName: string;
+  customerEmail: string;
+  sellerId: string;
+  sellerName: string;
+  sellerEmail: string;
+  amountCharged: number;
+  amountPaid: number;
+  serviceFee: number;
+  paymentStatus: string;
+  billingReason: string;
+  hasDispute: boolean;
+  paidOut: boolean;
+  payoutDate: string | null;
+  paymentType: string;
+  stripePaymentIntentId: string;
+  escrowTransactionId: string;
+  escrowFundsSecured: boolean;
+  createdAt: string | null;
+  updatedAt: string | null;
+};
+
+export type TransactionsFeedResponse = {
+  ok: boolean;
+  items: AdminTransactionRow[];
+  total: number;
+  page: number;
+  limit: number;
+  summary: {
+    totalSales: number;
+    totalServiceFee: number;
+    transactionCount: number;
+  };
+};
+
+export type AdminTransactionsQuery = {
+  page?: number;
+  limit?: number;
+  id?: string;
+  status?: string;
+  paymentType?: string;
+  hasDispute?: boolean;
+  paidOut?: boolean;
+  days?: 7 | 14 | 30;
+};
+
+export async function fetchAdminTransactions(
+  params?: AdminTransactionsQuery,
+): Promise<TransactionsFeedResponse> {
+  const q = new URLSearchParams();
+  if (params?.page) q.set("page", String(params.page));
+  if (params?.limit) q.set("limit", String(params.limit));
+  if (params?.id) q.set("id", params.id);
+  if (params?.status) q.set("status", params.status);
+  if (params?.paymentType) q.set("paymentType", params.paymentType);
+  if (params?.hasDispute === true) q.set("hasDispute", "true");
+  if (params?.hasDispute === false) q.set("hasDispute", "false");
+  if (params?.paidOut === true) q.set("paidOut", "true");
+  if (params?.paidOut === false) q.set("paidOut", "false");
+  if (params?.days) q.set("days", String(params.days));
+  const qs = q.toString();
+  const url = `${getApiBase()}/admin/transactions${qs ? `?${qs}` : ""}`;
+  const res = await fetchWithAdminAuth(url);
+  const data = await parseJson(res);
+  if (!res.ok) {
+    throw new Error(
+      typeof data.message === "string" ? data.message : "Request failed",
+    );
+  }
+  return data as TransactionsFeedResponse;
+}
+
 export async function patchAdminDisputeDecision(
   disputeId: string,
   body: {

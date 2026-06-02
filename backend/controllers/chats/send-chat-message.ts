@@ -3,7 +3,9 @@ import mongoose from "mongoose";
 
 import { otherParticipantId, userHasLeftChat } from "../../lib/chat-active";
 import { notifyChatRecipient } from "../../lib/chat-notifications";
+import { chatTypeOrDefault } from "../../lib/chat-type";
 import Chat from "../../models/conversations";
+import { hasProhibitedGeneralChatList } from "../../utils/prohibited-general-chat-list";
 import Message from "../../models/messages";
 import User from "../../models/user";
 
@@ -70,6 +72,15 @@ export async function sendChatMessage(req: Request, res: Response) {
         code: "RECIPIENT_LEFT_CHAT",
         message:
           "The other person left this chat. They will not see new messages until they open the conversation again.",
+      });
+    }
+
+    const effectiveChatType = chatTypeOrDefault(chat.chatType);
+    if (hasProhibitedGeneralChatList(text, effectiveChatType)) {
+      return void res.status(400).json({
+        ok: false,
+        message:
+          "Messages cannot include contact details or off-platform payment requests before a sale is complete. Complete checkout and use the exchange room to coordinate handover.",
       });
     }
 

@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import Listing from "../models/listing";
+import { isAuctionWinnerAwaitingPayment } from "./listing-auction-winner";
 
 /** Atomically take a live listing off the market for escrow checkout. */
 export async function reserveListingForEscrowBuyer(
@@ -39,11 +40,22 @@ export async function reserveListingForEscrowBuyer(
   };
 }
 
-/** Return a reserved listing to the marketplace after escrow cancel / abandon. */
+/**
+ * Return a reserved listing to the marketplace after escrow cancel / abandon.
+ * Auction winners stay `reserved` with `buyerId` so they can pay via Stripe or retry Escrow.
+ */
 export async function releaseListingEscrowReserve(
   listingId: mongoose.Types.ObjectId | string,
   buyerId: string,
 ): Promise<void> {
+  const listing = (await Listing.findById(listingId)
+    .select("saleType status buyerId auctionWinningAmount auctionFinalizedAt")
+    .lean()) as Parameters<typeof isAuctionWinnerAwaitingPayment>[0];
+
+  if (isAuctionWinnerAwaitingPayment(listing)) {
+    return;
+  }
+
   await Listing.findOneAndUpdate(
     {
       _id: listingId,

@@ -20,6 +20,8 @@ import {
   patchListingReview,
   type ListingReviewAction,
 } from "@/lib/admin-api";
+import { RejectListingDialog } from "@/components/admin/RejectListingDialog";
+import { AppDescriptionHtml } from "@/components/listings/AppDescriptionHtml";
 import { useAdminAuth } from "@/context/admin-auth-context";
 
 function str(v: unknown): string {
@@ -53,6 +55,7 @@ export default function AdminListingDetailPage() {
   const queryClient = useQueryClient();
   const [busy, setBusy] = React.useState(false);
   const [actionError, setActionError] = React.useState<string | null>(null);
+  const [rejectOpen, setRejectOpen] = React.useState(false);
 
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ["admin-listing", listingId],
@@ -67,19 +70,31 @@ export default function AdminListingDetailPage() {
     setActionError(null);
     setBusy(true);
     try {
-      if (action === "reject") {
-        const reason = window.prompt("Optional rejection note:", "") ?? "";
-        await patchListingReview(listingId, "reject", {
-          rejectionReason: reason.trim() || undefined,
-        });
-      } else {
-        await patchListingReview(listingId, action);
-      }
+      await patchListingReview(listingId, action);
       await queryClient.invalidateQueries({ queryKey: ["admin-listing", listingId] });
       await queryClient.invalidateQueries({ queryKey: ["admin-listings"] });
       if (action === "approve" || action === "reject") {
         router.push("/admin/listings");
       }
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : "Update failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const confirmReject = async (rejectionReason: string) => {
+    if (!listingId) return;
+    setActionError(null);
+    setBusy(true);
+    try {
+      await patchListingReview(listingId, "reject", {
+        rejectionReason: rejectionReason || undefined,
+      });
+      await queryClient.invalidateQueries({ queryKey: ["admin-listing", listingId] });
+      await queryClient.invalidateQueries({ queryKey: ["admin-listings"] });
+      setRejectOpen(false);
+      router.push("/admin/listings");
     } catch (e) {
       setActionError(e instanceof Error ? e.message : "Update failed");
     } finally {
@@ -172,6 +187,11 @@ export default function AdminListingDetailPage() {
     });
   }
 
+  const demoUrl = str(listing.demoUrl);
+  const liveUrl = str(listing.liveUrl);
+  const repoUrl = str(listing.repoUrl);
+  const hasListingLinks = !!(demoUrl || liveUrl || repoUrl);
+
   return (
     <Stack spacing={2.5} sx={{ maxWidth: 960 }}>
       <Button
@@ -226,7 +246,7 @@ export default function AdminListingDetailPage() {
                 variant="outlined"
                 color="error"
                 disabled={busy}
-                onClick={() => void runReview("reject")}
+                onClick={() => setRejectOpen(true)}
                 sx={{ textTransform: "none" }}
               >
                 Reject
@@ -303,44 +323,42 @@ export default function AdminListingDetailPage() {
         <Typography variant="subtitle2" fontWeight={700} gutterBottom>
           Description
         </Typography>
-        <Typography variant="body2" sx={{ whiteSpace: "pre-wrap" }}>
-          {str(listing.appDescription) || "—"}
-        </Typography>
+        <AppDescriptionHtml html={str(listing.appDescription)} variant="body2" />
       </Paper>
 
-      {(listing.demoUrl || listing.repoUrl || listing.liveUrl) && (
+      {hasListingLinks ? (
         <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 2 }}>
           <Typography variant="subtitle2" fontWeight={700} gutterBottom>
             Links
           </Typography>
           <Stack spacing={0.75}>
-            {listing.demoUrl ? (
+            {demoUrl ? (
               <Typography variant="body2">
                 Demo:{" "}
-                <a href={str(listing.demoUrl)} target="_blank" rel="noreferrer">
-                  {str(listing.demoUrl)}
+                <a href={demoUrl} target="_blank" rel="noreferrer">
+                  {demoUrl}
                 </a>
               </Typography>
             ) : null}
-            {listing.liveUrl ? (
+            {liveUrl ? (
               <Typography variant="body2">
                 Live:{" "}
-                <a href={str(listing.liveUrl)} target="_blank" rel="noreferrer">
-                  {str(listing.liveUrl)}
+                <a href={liveUrl} target="_blank" rel="noreferrer">
+                  {liveUrl}
                 </a>
               </Typography>
             ) : null}
-            {listing.repoUrl ? (
+            {repoUrl ? (
               <Typography variant="body2">
                 Repo:{" "}
-                <a href={str(listing.repoUrl)} target="_blank" rel="noreferrer">
-                  {str(listing.repoUrl)}
+                <a href={repoUrl} target="_blank" rel="noreferrer">
+                  {repoUrl}
                 </a>
               </Typography>
             ) : null}
           </Stack>
         </Paper>
-      )}
+      ) : null}
 
       {listing.saleType === "auction" && Array.isArray(listing.auctionBids) ? (
         <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 2 }}>
@@ -359,6 +377,16 @@ export default function AdminListingDetailPage() {
           </Stack>
         </Paper>
       ) : null}
+
+      <RejectListingDialog
+        open={rejectOpen}
+        listingName={str(listing.appName)}
+        busy={busy}
+        onClose={() => {
+          if (!busy) setRejectOpen(false);
+        }}
+        onConfirm={(reason) => void confirmReject(reason)}
+      />
     </Stack>
   );
 }

@@ -7,6 +7,11 @@ import {
   hasBuyerBlockingTransactions,
   sellerCanEditListingFields,
 } from "../../lib/listing-seller-edit";
+import {
+  APP_DESCRIPTION_MIN_PLAIN_TEXT,
+  applySanitizedListingFields,
+  sanitizeListingDescriptionFields,
+} from "../../lib/listing-description";
 import { parsePrivateListingFlag } from "../../lib/listing-submission-fields";
 
 /** Seller-only: patch mutable fields on their own listing (blocked if bids / buyer purchases exist). */
@@ -80,7 +85,20 @@ export async function updateListing(req: Request, res: Response) {
       !existing.isPrivateListing &&
       !existing.privateListingFeePaid;
 
-    const patch: Record<string, unknown> = { ...safe, status: "pending_review" };
+    const applied = applySanitizedListingFields(
+      { ...safe },
+      "appDescription" in safe
+        ? { minPlainText: APP_DESCRIPTION_MIN_PLAIN_TEXT }
+        : undefined,
+    );
+    if (!applied.ok) {
+      return void res.status(400).json({ message: applied.message });
+    }
+
+    const patch: Record<string, unknown> = {
+      ...applied.data,
+      status: "pending_review",
+    };
 
     if (turningOnPrivate) {
       const user = await User.findById(sellerId).select(
@@ -133,7 +151,11 @@ export async function updateListing(req: Request, res: Response) {
       return void res.status(404).json({ message: "Listing not found" });
     }
 
-    return void res.status(200).json(listing);
+    return void res.status(200).json(
+      sanitizeListingDescriptionFields(
+        listing.toObject() as Record<string, unknown>,
+      ),
+    );
   } catch (err) {
     console.log("updateListing error:", err);
     return void res.status(500).json({ message: "Failed to update listing" });

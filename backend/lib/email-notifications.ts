@@ -604,63 +604,88 @@ export const paymentExpiringNotificationEmail = async (
     }
 };
 
-// payment expiring notification
+function escapeHtml(text: string): string {
+    return text
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+}
+
+/** Seller notification after admin approve / reject / unpublish on a listing review. */
 export const adminListingApprovalOrDenialNotificationEmail = async (
-    userEmail: string, 
+    userEmail: string,
     userName: string,
     listingId: string,
     listingName: string,
     listingStatus: string,
     listingStatusChangeDate: Date,
+    rejectionReason?: string,
 ) => {
+    const safeName = escapeHtml(userName || "there");
+    const safeListing = escapeHtml(listingName || "Listing");
+    const when = listingStatusChangeDate.toLocaleString("en-US", {
+        dateStyle: "medium",
+        timeStyle: "short",
+    });
+
+    const isRejected = listingStatus === "rejected";
+    const isLive = listingStatus === "live";
+    const isPaused = listingStatus === "paused";
+
+    const subject = isRejected
+        ? `Your listing "${listingName}" needs changes before it can go live`
+        : isLive
+          ? `Your listing "${listingName}" is now live on Dap & Flip`
+          : isPaused
+            ? `Your listing "${listingName}" has been unpublished`
+            : `Update on your listing "${listingName}"`;
+
+    const statusLine = isRejected
+        ? "not approved yet"
+        : isLive
+          ? "approved and is live on the marketplace"
+          : isPaused
+            ? "unpublished (taken off the marketplace)"
+            : `updated to <b>${escapeHtml(listingStatus)}</b>`;
+
+    const reasonBlock = isRejected
+        ? `<p><b>What to fix</b></p>
+<p>${escapeHtml(rejectionReason?.trim() || "Please review our listing guidelines and update your listing so it meets marketplace standards.")}</p>
+<p>You can edit and resubmit this listing from your seller dashboard. Listings in <b>rejected</b> status are removed automatically if they stay inactive for about 7 days, so resubmit when you are ready.</p>`
+        : isLive
+          ? `<p>Buyers can discover and purchase your app on Dap & Flip. Open your seller dashboard to manage the listing.</p>`
+          : "";
+
     const payload = {
         sender: {
-            name: "Admin Listing Review Notification[Dap & Flip]",
-            email: 'no-reply@elevatedappgroup.com', //
+            name: "Dap & Flip Listings",
+            email: "no-reply@elevatedappgroup.com",
         },
         to: [
             {
-                name: 'Admin Listing Review Notification',
-                email: userEmail, //info@elevatedappgroup.com
-            }
+                name: userName || "Seller",
+                email: userEmail,
+            },
         ],
-        subject: `${userName} submitted a listing for review`,
+        subject,
         htmlContent: `
         <html>
         <body>
-        <p>Hi ${userName}, your listing has been approved. Details are below.</p>
-        <p>User Email: ${userEmail}</p> <br />
-        listing id: ${listingId}
-        <br />
-        listing name: ${listingName}
-        <br />
-        listing status: ${listingStatus}
-        <br />
-        listing status change date: ${listingStatusChangeDate}
-        <br />
+        <p>Hi ${safeName},</p>
+        <p>Your listing <b>${safeListing}</b> was ${statusLine}.</p>
+        ${reasonBlock}
+        <p style="color:#666;font-size:13px;">
+        Listing ID: ${escapeHtml(listingId)}<br />
+        Updated: ${escapeHtml(when)}
+        </p>
+        <p>Questions? Reply to this message or contact us at info@elevatedappgroup.com.</p>
         </body>
         </html>
-        `
-    }
-    try {
-        const res = await fetch(`https://api.brevo.com/v3/smtp/email`, {
-            method: "POST",
-            headers: {
-                "accept": "application/json",
-                "Content-Type": "application/json",
-                "api-key": String(brevoAPIKey),
-            },
-            body: JSON.stringify(payload)
-        })
-        if(!res.ok) {
-            const err = await res.text();
-            console.error("brevo error",err)
-        } else {
-            console.log("brevo email sent successfully");
-        }
-    } catch(err) {
-        console.log("POST error",err);
-    }
+        `,
+    };
+
+    await sendBrevoPayload(payload);
 };
 
 export type PayoutEmailStatus = "created" | "paid" | "failed" | "canceled";

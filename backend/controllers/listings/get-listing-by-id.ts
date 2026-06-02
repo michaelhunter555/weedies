@@ -6,6 +6,7 @@ import {
 } from "../../lib/listing-auction-summary";
 import { auctionBidsClientJson } from "../../lib/listing-auction-bids-client";
 import { enrichPendingPrivateListingRequests } from "../../lib/enrich-private-listing-requests";
+import { sanitizeListingDescriptionFields } from "../../lib/listing-description";
 import Listing from "../../models/listing";
 
 const populateSeller = {
@@ -61,7 +62,9 @@ export async function getListingById(req: Request, res: Response) {
       return void res.status(404).json({ message: "Listing not found" });
     }
 
-    const plain = listing.toObject() as Record<string, unknown>;
+    const plain = sanitizeListingDescriptionFields(
+      listing.toObject() as Record<string, unknown>,
+    );
     const viewerId = req.user?.userId ?? "";
     const ownerId = listingOwnerIdString(listing);
     const isSellerViewingOwn = Boolean(viewerId && ownerId && viewerId === ownerId);

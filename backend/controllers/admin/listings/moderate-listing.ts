@@ -106,6 +106,7 @@ export async function moderateListing(req: Request, res: Response) {
       listing.appName,
       listing.status,
       new Date(),
+      action === "reject" ? listing.rejectionReason : undefined,
     );
 
     res.json({ ok: true, listing: listing.toObject() });

@@ -8,6 +8,11 @@ import {
 } from "../../lib/listing-submission-fields";
 import { computeListingFeeUsd } from "../../lib/listing-fee";
 import {
+  APP_DESCRIPTION_MIN_PLAIN_TEXT,
+  applySanitizedListingFields,
+  sanitizeListingDescriptionFields,
+} from "../../lib/listing-description";
+import {
   ensureUniqueListingSlug,
   slugifyAppName,
 } from "../../utils/listing-slug";
@@ -79,11 +84,18 @@ export async function createListing(req: Request, res: Response) {
     }
     const monthlyRevenue = parseOptionalNonNegNumber(body.monthlyRevenue);
 
-    const safe = {
-      ...safeListingWrite(body),
-      isPrivateListing,
-      ...(monthlyRevenue !== undefined ? { monthlyRevenue } : {}),
-    };
+    const applied = applySanitizedListingFields(
+      {
+        ...safeListingWrite(body),
+        isPrivateListing,
+        ...(monthlyRevenue !== undefined ? { monthlyRevenue } : {}),
+      },
+      { minPlainText: APP_DESCRIPTION_MIN_PLAIN_TEXT },
+    );
+    if (!applied.ok) {
+      return void res.status(400).json({ message: applied.message });
+    }
+    const safe = applied.data;
 
     const fromClient =
       typeof body.slug === "string" && body.slug.trim().length > 0
@@ -105,7 +117,11 @@ export async function createListing(req: Request, res: Response) {
       }
 
       if (draft.sellerCommittedAt) {
-        return void res.status(200).json(draft);
+        return void res.status(200).json(
+          sanitizeListingDescriptionFields(
+            draft.toObject() as Record<string, unknown>,
+          ),
+        );
       }
 
       const slug = await ensureUniqueListingSlug(
@@ -133,7 +149,11 @@ export async function createListing(req: Request, res: Response) {
     await listing.save();
 
     if (listing.sellerCommittedAt) {
-      return void res.status(200).json(listing);
+      return void res.status(200).json(
+        sanitizeListingDescriptionFields(
+          listing.toObject() as Record<string, unknown>,
+        ),
+      );
     }
 
     await User.findByIdAndUpdate(sellerId, { $inc: { totalListings: 1 } });
@@ -184,7 +204,11 @@ export async function createListing(req: Request, res: Response) {
     }
     await listing.save();
 
-    return void res.status(existingDraftId ? 200 : 201).json(listing);
+    return void res.status(existingDraftId ? 200 : 201).json(
+      sanitizeListingDescriptionFields(
+        listing.toObject() as Record<string, unknown>,
+      ),
+    );
   } catch (err) {
     console.log("createListing error:", err);
     return void res.status(500).json({ message: "Failed to create listing" });

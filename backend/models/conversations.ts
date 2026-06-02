@@ -11,11 +11,18 @@ export interface IParticipantInfo {
   email?: string;
 }
 
+export type ChatType = "general" | "postSale";
+
 export interface IChat extends mongoose.Document {
   participants: mongoose.Types.ObjectId[];
   participantInfo: IParticipantInfo[];
   /** First sender in the thread; used to mask their name on listing chats until the other party replies. */
   initiatedBy?: mongoose.Types.ObjectId;
+  /**
+   * `general` — pre-sale listing / private listing inquiries (contact & off-platform rules apply).
+   * `postSale` — exchange-room buyer/seller handover (relaxed moderation).
+   */
+  chatType: ChatType;
   lastMessage?: string;
   lastMessageTime?: Date;
   listingId?: mongoose.Types.ObjectId;
@@ -48,6 +55,12 @@ const ChatSchema = new mongoose.Schema<IChat>(
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: false,
+    },
+    chatType: {
+      type: String,
+      enum: ["general", "postSale"],
+      required: true,
+      default: "general",
     },
     lastMessage: { type: String },
     lastMessageTime: { type: Date },

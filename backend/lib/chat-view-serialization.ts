@@ -4,6 +4,7 @@ import type { ParticipantRole } from "../models/conversations";
 import Listing from "../models/listing";
 import Message from "../models/messages";
 import User from "../models/user";
+import { chatTypeOrDefault } from "./chat-type";
 import { maskLabelForListingThread } from "./chat-privacy";
 
 type ParticipantLean = { id?: unknown; name: string; image?: string; role: string };
@@ -14,6 +15,7 @@ type ChatLean = {
   participantInfo?: ParticipantLean[];
   listingId?: unknown;
   initiatedBy?: unknown;
+  chatType?: string;
   lastMessage?: string;
   lastMessageTime?: Date;
   chatIsComplete?: boolean;
@@ -119,6 +121,7 @@ export async function serializeChatForViewer(
     lastMessageTime: chat.lastMessageTime,
     listingId: listingId || undefined,
     listing: listingSummary,
+    chatType: chatTypeOrDefault(chat.chatType),
     initiatedBy: initiatedBy || undefined,
     chatIsComplete: chat.chatIsComplete,
     createdAt: chat.createdAt,

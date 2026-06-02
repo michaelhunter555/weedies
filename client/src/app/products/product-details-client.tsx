@@ -53,6 +53,7 @@ import Grid from "@mui/material/Grid2";
 import useMediaQuery from "@mui/material/useMediaQuery";
 import useTheme from "@mui/material/styles/useTheme";
 
+import { AppDescriptionHtml } from "@/components/Listings/AppDescriptionHtml";
 import { brandContainedButtonSx } from "@/theme/brand-palette";
 import type { Listing, ListingSellerPublic, ListingSellerRef } from "../../../types";
 import {
@@ -713,11 +714,22 @@ export function ProductDetailsClient({ fetchBy }: ProductDetailsClientProps) {
                   <Typography variant="overline" color="text.secondary" fontWeight={700}>
                     About
                   </Typography>
-                  <Typography variant="body1" color="text.secondary" sx={{ mt: 0.5, whiteSpace: "pre-wrap" }}>
-                    {isPrivateRestricted
-                      ? "This listing is private. After seller approval you can view the app name, screenshots, links, and full handover details."
-                      : listing.appDescription ?? ""}
-                  </Typography>
+                  {isPrivateRestricted ? (
+                    <Typography
+                      variant="body1"
+                      color="text.secondary"
+                      sx={{ mt: 0.5 }}
+                    >
+                      This listing is private. After seller approval you can view
+                      the app name, screenshots, links, and full handover details.
+                    </Typography>
+                  ) : (
+                    <AppDescriptionHtml
+                      html={listing.appDescription ?? ""}
+                      variant="body1"
+                      sx={{ mt: 0.5 }}
+                    />
+                  )}
                 </Box>
 
                 <Divider />

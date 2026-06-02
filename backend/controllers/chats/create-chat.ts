@@ -12,11 +12,18 @@ import Chat from "../../models/conversations";
 import Listing from "../../models/listing";
 import Message from "../../models/messages";
 import User from "../../models/user";
+import {
+  chatTypeOrDefault,
+  resolveChatTypeForCreate,
+  type ChatType,
+} from "../../lib/chat-type";
+import { hasProhibitedGeneralChatList } from "../../utils/prohibited-general-chat-list";
 
 type Body = {
   recipientId?: unknown;
   message?: unknown;
   listingId?: unknown;
+  chatType?: unknown;
 };
 
 type UserLean = {
@@ -45,7 +52,8 @@ export async function createChat(req: Request, res: Response) {
     return void res.status(401).json({ message: "Unauthorized" });
   }
 
-  const { recipientId, message, listingId } = (req.body || {}) as Body;
+  const { recipientId, message, listingId, chatType: chatTypeBody } = (req.body ||
+    {}) as Body;
   const text = typeof message === "string" ? message.trim() : "";
   const rid = typeof recipientId === "string" ? recipientId.trim() : "";
 
@@ -88,12 +96,32 @@ export async function createChat(req: Request, res: Response) {
     const senderOid = userObjectId(senderId);
     const recipientOid = userObjectId(rid);
 
+    const resolvedChatType = await resolveChatTypeForCreate({
+      requested: chatTypeBody,
+      listingId: lid,
+      senderId,
+      recipientId: rid,
+    });
+
     const existing = await Chat.findOne({
       participants: { $all: [senderOid, recipientOid] },
       ...listingFilter(lid),
     });
 
     if (existing) {
+      let effectiveChatType: ChatType = chatTypeOrDefault(existing.chatType);
+      if (effectiveChatType === "general" && resolvedChatType === "postSale") {
+        existing.chatType = "postSale";
+        effectiveChatType = "postSale";
+      }
+
+      if (hasProhibitedGeneralChatList(text, effectiveChatType)) {
+        return void res.status(400).json({
+          message:
+            "Messages cannot include contact details or off-platform payment requests before a sale is complete. Complete checkout and use the exchange room to coordinate handover.",
+        });
+      }
+
       const previousLastMessageTime = existing.lastMessageTime
         ? new Date(existing.lastMessageTime)
         : null;
@@ -146,6 +174,13 @@ export async function createChat(req: Request, res: Response) {
       });
     }
 
+    if (hasProhibitedGeneralChatList(text, resolvedChatType)) {
+      return void res.status(400).json({
+        message:
+          "Messages cannot include contact details or off-platform payment requests before a sale is complete. Complete checkout and use the exchange room to coordinate handover.",
+      });
+    }
+
     const senderRole = participantRoleForListing(
       senderId,
       listingSellerId,
@@ -158,6 +193,7 @@ export async function createChat(req: Request, res: Response) {
     );
 
     const chat = await Chat.create({
+      chatType: resolvedChatType,
       participants: [senderOid, recipientOid],
       participantInfo: [
         {
