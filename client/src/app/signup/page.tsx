@@ -1,4 +1,5 @@
 import LoginForm from "@/components/AuthForms/LoginForm";
+import { AppGoogleOAuthProvider } from "@/components/Auth/AppGoogleOAuthProvider";
 import { BRAND_PALETTE } from "@/theme/brand-palette";
 import Box from "@mui/material/Box";
 
@@ -17,7 +18,9 @@ const LoginPage = () => {
         backgroundColor: BRAND_PALETTE.mint,
       }}
     >
-      <LoginForm />
+      <AppGoogleOAuthProvider>
+        <LoginForm />
+      </AppGoogleOAuthProvider>
     </Box>
   );
 };

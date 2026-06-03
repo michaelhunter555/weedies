@@ -215,6 +215,12 @@ export type AuthContextProps = {
     provider: AuthProviderType,
     idToken: string
   ) => Promise<{ isNewUser: boolean; user: UserObject }>;
+  /** OAuth redirect: exchange `code` from `/callback/google` (server uses client secret). */
+  completeGoogleOAuthRedirect: (
+    code: string,
+    redirectUri: string,
+    intent: "login" | "signup",
+  ) => Promise<{ user: UserObject }>;
   refreshSession: () => Promise<void>;
   /** Reload profile from `/user/me` (syncs Stripe Connect onboarding flags). */
   syncUserFromServer: () => Promise<UserObject | null>;
@@ -234,6 +240,9 @@ export const AuthContext = createContext<AuthContextProps>({
   }),
   signupWithProviderToken: async () => ({
     isNewUser: false,
+    user: { id: "", email: "" },
+  }),
+  completeGoogleOAuthRedirect: async () => ({
     user: { id: "", email: "" },
   }),
   refreshSession: async () => {},
@@ -309,6 +318,71 @@ const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     (provider: AuthProviderType, idToken: string) =>
       exchangeProviderToken("sign-up", provider, idToken),
     [exchangeProviderToken]
+  );
+
+  const completeGoogleOAuthRedirect = useCallback(
+    async (
+      code: string,
+      redirectUri: string,
+      intent: "login" | "signup",
+    ): Promise<{ user: UserObject }> => {
+      if (!apiBase) throw new Error("Missing NEXT_PUBLIC_SERVER");
+
+      const localePrefs = readBrowserLocalePreferences();
+      const post = async (mode: "login" | "signup") => {
+        const resp = await fetch(`${apiBase}/user/google-auth/callback`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            code,
+            redirectUri,
+            intent: mode,
+            ...localePrefs,
+          }),
+        });
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok) {
+          const err = new Error(
+            (data?.message as string) || "Google sign-in failed",
+          ) as Error & { code?: string; status?: number };
+          err.code = data?.code as string | undefined;
+          err.status = resp.status;
+          throw err;
+        }
+        const accessToken = (data?.accessToken as string | undefined) || null;
+        const refreshToken =
+          (data?.refreshToken as string | undefined) || null;
+        const user = normalizeUser(data?.user);
+        if (!user || !accessToken) {
+          throw new Error("Google sign-in returned an incomplete session");
+        }
+        dispatch({ type: "LOGIN", user, accessToken });
+        writeToStorage(user, accessToken, refreshToken);
+        setSessionReady(true);
+        return { user };
+      };
+
+      try {
+        return await post(intent);
+      } catch (err: unknown) {
+        const code =
+          err &&
+          typeof err === "object" &&
+          "code" in err &&
+          (err as { code?: string }).code === "ACCOUNT_EXISTS";
+        const status =
+          err &&
+          typeof err === "object" &&
+          "status" in err &&
+          (err as { status?: number }).status === 409;
+        if (intent === "signup" && (code || status)) {
+          return post("login");
+        }
+        throw err;
+      }
+    },
+    [apiBase],
   );
 
   const refreshSession = useCallback(async () => {
@@ -426,6 +500,7 @@ const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       accessToken: state.accessToken,
       loginWithProviderToken,
       signupWithProviderToken,
+      completeGoogleOAuthRedirect,
       refreshSession,
       syncUserFromServer,
       logout,
@@ -439,6 +514,7 @@ const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       state.accessToken,
       loginWithProviderToken,
       signupWithProviderToken,
+      completeGoogleOAuthRedirect,
       refreshSession,
       syncUserFromServer,
       logout,

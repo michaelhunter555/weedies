@@ -1,54 +1,84 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { getRedirectResult } from "firebase/auth";
-import { auth } from "@/lib/firebase";
-import { useContext } from "react";
+import { useContext, useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Box, CircularProgress, Typography } from "@mui/material";
+
 import { AuthContext } from "@/context/auth-context";
+import { GOOGLE_OAUTH_INTENT_KEY, googleOAuthRedirectUri } from "@/lib/google-oauth-config";
 import { needsEmailVerification } from "../../../../types";
 import { VERIFY_EMAIL_PATH } from "@/lib/email-verification";
 
 export default function GoogleCallbackPage() {
   const router = useRouter();
-  const [message, setMessage] = useState("Finishing Google sign-in...");
+  const searchParams = useSearchParams();
   const authCtx = useContext(AuthContext);
+  const [message, setMessage] = useState("Finishing Google sign-in…");
+
+  const code = searchParams.get("code")?.trim() ?? "";
+  const oauthError = searchParams.get("error")?.trim() ?? "";
+  const redirectUri = useMemo(() => googleOAuthRedirectUri(), []);
 
   useEffect(() => {
+    if (oauthError) {
+      setMessage("Google sign-in was cancelled.");
+      return;
+    }
+    if (!code) {
+      setMessage("Missing authorization code. Return to sign in and try again.");
+      return;
+    }
+    if (!redirectUri) return;
+
     let cancelled = false;
 
     (async () => {
+      let intent: "login" | "signup" = "login";
       try {
-        const result = await getRedirectResult(auth);
+        const stored = sessionStorage.getItem(GOOGLE_OAUTH_INTENT_KEY);
+        if (stored === "signup" || stored === "login") intent = stored;
+        sessionStorage.removeItem(GOOGLE_OAUTH_INTENT_KEY);
+      } catch {
+        /* ignore */
+      }
 
-        if (!result?.user) {
-          if (!cancelled) setMessage("No Google redirect result found. You can close this page.");
-          return;
-        }
-
-        const idToken = await result.user.getIdToken();
-        const { user } = await authCtx.loginWithProviderToken("google", idToken);
-
-        if (!cancelled) setMessage("Signed in. Redirecting...");
-        router.replace(
-          needsEmailVerification(user) ? VERIFY_EMAIL_PATH : "/",
+      try {
+        const { user } = await authCtx.completeGoogleOAuthRedirect(
+          code,
+          redirectUri,
+          intent,
         );
+        if (cancelled) return;
+        setMessage("Signed in. Redirecting…");
+        router.replace(needsEmailVerification(user) ? VERIFY_EMAIL_PATH : "/");
       } catch (err) {
-        if (!cancelled) setMessage("Google sign-in failed. Please try again.");
+        if (!cancelled) {
+          setMessage(
+            err instanceof Error ? err.message : "Google sign-in failed",
+          );
+        }
       }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [router]);
+  }, [code, oauthError, redirectUri, router, authCtx]);
 
   return (
-    <div style={{ padding: 24 }}>
-      <h1>Google Callback</h1>
-      <p>{message}</p>
-    </div>
+    <Box
+      sx={{
+        minHeight: "50vh",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 2,
+        px: 2,
+      }}
+    >
+      <CircularProgress size={32} />
+      <Typography color="text.secondary">{message}</Typography>
+    </Box>
   );
 }
-
-

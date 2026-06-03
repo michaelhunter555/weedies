@@ -2,6 +2,7 @@ import type { Request, Response } from "express";
 import mongoose from "mongoose";
 import UserModel from "../../models/user";
 import { verifyFirebaseIdToken } from "../../lib/verifyFirebaseIdToken";
+import { verifyGoogleIdToken } from "../../lib/verifyGoogleIdToken";
 import { isGoogleAuthProvider } from "../../lib/user-email-verified";
 import { toAppUserJson } from "../../lib/serialize-app-user";
 
@@ -45,6 +46,23 @@ export async function confirmEmailVerified(req: Request, res: Response) {
 
     if (!idToken) {
       return void res.status(400).json({ message: "Missing idToken" });
+    }
+
+    if (user.authProvider === "google") {
+      const gClaims = await verifyGoogleIdToken(idToken);
+      if (user.googleSub && user.googleSub !== gClaims.sub) {
+        return void res.status(403).json({ message: "Token does not match this user" });
+      }
+      if (!user.googleSub) {
+        user.googleSub = gClaims.sub;
+      }
+      user.authProvider = "google";
+      user.emailVerified = true;
+      await user.save();
+      return void res.status(200).json({
+        user: toAppUserJson(user),
+        resolved: "google",
+      });
     }
 
     const claims = await verifyFirebaseIdToken(idToken);

@@ -3,13 +3,12 @@ import { useContext, useEffect, useMemo, useState } from "react";
 
 import { useRouter } from "next/navigation";
 import {
-  GoogleAuthProvider,
   createUserWithEmailAndPassword,
   sendEmailVerification,
   signInWithEmailAndPassword,
-  signInWithPopup,
   updateProfile,
 } from "firebase/auth";
+import { GoogleLogin } from "@react-oauth/google";
 
 import { AuthContext } from "@/context/auth-context";
 import { useForm } from "@/hooks/useForm";
@@ -255,17 +254,15 @@ const LoginForm = () => {
     }
   };
 
-  const handleGoogle = async () => {
+  /** Direct Google OAuth ID token → API `provider: "google"` (not Firebase). */
+  const handleGoogleCredential = async (idToken: string) => {
     setError(null);
     setInfo(null);
     setSubmitting(true);
     try {
-      const provider = new GoogleAuthProvider();
-      const result = await signInWithPopup(firebaseAuth, provider);
-      const idToken = await result.user.getIdToken(true);
       if (isLogin) {
         const { user: appUser } = await authCtx.loginWithProviderToken(
-          "firebase",
+          "google",
           idToken,
         );
         router.replace(
@@ -274,7 +271,7 @@ const LoginForm = () => {
       } else {
         try {
           const { user: appUser } = await authCtx.signupWithProviderToken(
-            "firebase",
+            "google",
             idToken,
           );
           router.replace(
@@ -289,7 +286,7 @@ const LoginForm = () => {
               : "";
           if (code !== "ACCOUNT_EXISTS") throw signupErr;
           const { user: appUser } = await authCtx.loginWithProviderToken(
-            "firebase",
+            "google",
             idToken,
           );
           router.replace(
@@ -297,8 +294,8 @@ const LoginForm = () => {
           );
         }
       }
-    } catch (e: any) {
-      setError(e?.message || "Google sign-in failed");
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Google sign-in failed");
     } finally {
       setSubmitting(false);
     }
@@ -489,32 +486,41 @@ const LoginForm = () => {
               </Typography>
             </Stack>
 
-            <Button
-              variant="outlined"
-              size="large"
-              type="button"
-              onClick={handleGoogle}
-              disabled={submitting}
-              startIcon={
-                <Box
-                  component="img"
-                  src="/google-g.svg"
-                  alt=""
-                  aria-hidden
-                  sx={{ width: 20, height: 20, display: "block" }}
-                />
-              }
+            <Box
               sx={{
-                borderRadius: 999,
-                textTransform: "none",
-                fontWeight: 600,
-                borderColor: "#e5e7eb",
-                color: "text.primary",
-                "&:hover": { borderColor: "#cbd5e1", backgroundColor: "#f8fafc" },
+                width: "100%",
+                display: "flex",
+                justifyContent: "center",
+                opacity: submitting ? 0.6 : 1,
+                pointerEvents: submitting ? "none" : "auto",
               }}
             >
-              Continue with Google
-            </Button>
+              {process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ? (
+                <GoogleLogin
+                  onSuccess={(res) => {
+                    if (!res.credential) {
+                      setError("Google did not return a sign-in credential.");
+                      return;
+                    }
+                    void handleGoogleCredential(res.credential);
+                  }}
+                  onError={() =>
+                    setError("Google sign-in failed. Try again.")
+                  }
+                  useOneTap={false}
+                  theme="outline"
+                  size="large"
+                  width="100%"
+                  text={isLogin ? "signin_with" : "signup_with"}
+                  shape="pill"
+                />
+              ) : (
+                <Alert severity="warning" sx={{ width: "100%" }}>
+                  Google sign-in is not configured (missing{" "}
+                  <code>NEXT_PUBLIC_GOOGLE_CLIENT_ID</code>).
+                </Alert>
+              )}
+            </Box>
 
             <Divider sx={{ my: 0.5 }}>
               <Typography variant="caption" color="text.secondary">

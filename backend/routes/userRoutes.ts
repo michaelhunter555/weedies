@@ -16,6 +16,7 @@ import { patchMePreferences } from "../controllers/customers/patch-me-preference
 import { confirmEmailVerified } from "../controllers/customers/confirm-email-verified";
 import { deleteUserAccount } from "../controllers/customers/delete-user-account";
 import { passwordReset } from "../controllers/customers/password-reset";
+import { googleAuthCallback } from "../controllers/customers/google-auth-callback";
 import { postContactUs } from "../controllers/customers/contact-us";
 
 const router = express.Router();
@@ -26,6 +27,7 @@ router.post("/login", login);
 router.post("/refresh", refresh);
 router.post("/logout", logout);
 router.post("/password-reset", passwordReset);
+router.post("/google-auth/callback", googleAuthCallback);
 
 // users - protected routes
 router.use(authenticate);
