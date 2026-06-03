@@ -1,6 +1,6 @@
 "use client";
 
-import { useContext, useEffect, useMemo, useState } from "react";
+import { Suspense, useContext, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Box, CircularProgress, Typography } from "@mui/material";
 
@@ -10,6 +10,33 @@ import { needsEmailVerification } from "../../../../types";
 import { VERIFY_EMAIL_PATH } from "@/lib/email-verification";
 
 export default function GoogleCallbackPage() {
+  return (
+    <Suspense fallback={<GoogleCallbackFallback message="Finishing Google sign-in…" />}>
+      <GoogleCallbackPageContent />
+    </Suspense>
+  );
+}
+
+function GoogleCallbackFallback({ message }: { message: string }) {
+  return (
+    <Box
+      sx={{
+        minHeight: "50vh",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 2,
+        px: 2,
+      }}
+    >
+      <CircularProgress size={32} />
+      <Typography color="text.secondary">{message}</Typography>
+    </Box>
+  );
+}
+
+function GoogleCallbackPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const authCtx = useContext(AuthContext);
@@ -65,20 +92,5 @@ export default function GoogleCallbackPage() {
     };
   }, [code, oauthError, redirectUri, router, authCtx]);
 
-  return (
-    <Box
-      sx={{
-        minHeight: "50vh",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 2,
-        px: 2,
-      }}
-    >
-      <CircularProgress size={32} />
-      <Typography color="text.secondary">{message}</Typography>
-    </Box>
-  );
+  return <GoogleCallbackFallback message={message} />;
 }
