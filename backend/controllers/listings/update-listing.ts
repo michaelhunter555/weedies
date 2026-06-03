@@ -1,8 +1,12 @@
 import type { Request, Response } from "express";
 import Listing from "../../models/listing";
 import User from "../../models/user";
-import stripe from "../../utils/stripe";
 import { PRIVATE_LISTING_FEE_USD } from "../../lib/listing-fee";
+import {
+  createListingFeeCheckoutSession,
+  ensureStripeCustomerForUser,
+  isCardlessListingFeeCheckout,
+} from "../../lib/listing-fee-checkout";
 import {
   hasBuyerBlockingTransactions,
   sellerCanEditListingFields,
@@ -100,45 +104,48 @@ export async function updateListing(req: Request, res: Response) {
       status: "pending_review",
     };
 
+    let listingFeeCheckoutUrl: string | undefined;
+
     if (turningOnPrivate) {
       const user = await User.findById(sellerId).select(
-        "stripeCustomerId defaultPaymentIntendId",
+        "email name stripeCustomerId defaultPaymentIntendId",
       );
-      if (!user?.stripeCustomerId || !user.defaultPaymentIntendId) {
-        return void res.status(400).json({
-          message:
-            "Add a default payment method in your wallet before enabling private listing ($4.99).",
-        });
+      if (!user) {
+        return void res.status(401).json({ message: "Unauthorized" });
       }
-
-      const paymentIntent = await stripe.paymentIntents.create(
-        {
-          amount: Math.round(PRIVATE_LISTING_FEE_USD * 100),
-          currency: "usd",
-          customer: user.stripeCustomerId,
-          description: "Private listing fee",
-          payment_method: user.defaultPaymentIntendId,
-          capture_method: "automatic",
-          off_session: true,
-          confirm: true,
-          metadata: {
-            listingId: String(existing._id),
-            sellerId: String(user._id),
-            paymentType: "listing-fee",
-            isPrivateListing: "true",
-            listingFeeKind: "private-addon",
-          },
-        },
-        {
-          idempotencyKey: `${String(existing._id)}::private-listing-fee`,
-        },
-      );
 
       patch.isPrivateListing = true;
-      patch.privateListingFeePaid = true;
-      if (!existing.paymentIntentId) {
-        patch.paymentIntentId = paymentIntent.id;
+      patch.privateListingFeePaid = false;
+
+      const listing = await Listing.findOneAndUpdate(
+        { _id: id, sellerId },
+        { $set: patch },
+        { new: true },
+      );
+      if (!listing) {
+        return void res.status(404).json({ message: "Listing not found" });
       }
+
+      const customerId = await ensureStripeCustomerForUser(user);
+      listingFeeCheckoutUrl = await createListingFeeCheckoutSession({
+        customerId,
+        listingId: String(listing._id),
+        sellerId: String(user._id),
+        amountUsd: PRIVATE_LISTING_FEE_USD,
+        description: "Private listing fee",
+        listingFeeKind: "private-addon",
+        cardlessCheckout: isCardlessListingFeeCheckout(user),
+        isPrivateListing: true,
+        idempotencyKey: `${String(listing._id)}::listing-fee-checkout::private-addon`,
+      });
+
+      const body = sanitizeListingDescriptionFields(
+        listing.toObject() as Record<string, unknown>,
+      );
+      return void res.status(200).json({
+        ...body,
+        listingFeeCheckoutUrl,
+      });
     }
 
     const listing = await Listing.findOneAndUpdate(

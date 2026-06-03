@@ -291,7 +291,12 @@ export const useListings = () => {
   const createListing = useCallback(
     async (
       payload: Partial<Listing> & { existingDraftId?: string },
-    ): Promise<Listing> => apiFetch<Listing>("/listings", "POST", payload),
+    ): Promise<Listing & { listingFeeCheckoutUrl?: string }> =>
+      apiFetch<Listing & { listingFeeCheckoutUrl?: string }>(
+        "/listings",
+        "POST",
+        payload,
+      ),
     [apiFetch],
   );
 
@@ -308,8 +313,11 @@ export const useListings = () => {
 
   /** Seller PATCH for an existing listing (subject to edit-eligibility on the server). */
   const updateListing = useCallback(
-    async (id: string, payload: Partial<Listing>): Promise<Listing> =>
-      apiFetch<Listing>(
+    async (
+      id: string,
+      payload: Partial<Listing>,
+    ): Promise<Listing & { listingFeeCheckoutUrl?: string }> =>
+      apiFetch<Listing & { listingFeeCheckoutUrl?: string }>(
         `/listings/${encodeURIComponent(id)}`,
         "PATCH",
         payload,
@@ -485,11 +493,14 @@ export const useListings = () => {
   );
 
   const relistListing = useCallback(
-    async (listingId: string): Promise<{ ok?: boolean; message?: string }> =>
-      apiFetch<{ ok?: boolean; message?: string }>(
-        `/listings/${encodeURIComponent(listingId)}/relist`,
-        "POST",
-      ),
+    async (
+      listingId: string,
+    ): Promise<{ ok?: boolean; message?: string; listingFeeCheckoutUrl?: string }> =>
+      apiFetch<{
+        ok?: boolean;
+        message?: string;
+        listingFeeCheckoutUrl?: string;
+      }>(`/listings/${encodeURIComponent(listingId)}/relist`, "POST"),
     [apiFetch],
   );
 

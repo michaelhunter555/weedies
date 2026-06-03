@@ -1,9 +1,13 @@
 import type { Request, Response } from "express";
 
 import { computeListingFeeUsd } from "../../lib/listing-fee";
+import {
+  createListingFeeCheckoutSession,
+  ensureStripeCustomerForUser,
+  isCardlessListingFeeCheckout,
+} from "../../lib/listing-fee-checkout";
 import { isListingRelistEligible } from "../../lib/seller-listing-expired";
 import Listing from "../../models/listing";
-import stripe from "../../utils/stripe";
 import User from "../../models/user";
 
 /**
@@ -38,49 +42,6 @@ export async function relistListing(req: Request, res: Response) {
     const priorListings = user.totalListings ?? 0;
     const listingFeeUsd = computeListingFeeUsd(priorListings, isPrivateListing);
 
-    if (listingFeeUsd > 0 && !user.stripeCustomerId) {
-      return void res.status(400).json({
-        message:
-          "Add a default payment method in your wallet before relisting a paid listing.",
-      });
-    }
-
-    if (listingFeeUsd > 0) {
-      if (!user.defaultPaymentIntendId) {
-        return void res.status(400).json({
-          message:
-            "Add a default payment method in your wallet before relisting a paid listing.",
-        });
-      }
-
-      const paymentIntent = await stripe.paymentIntents.create(
-        {
-          amount: Math.round(listingFeeUsd * 100),
-          currency: "usd",
-          customer: user.stripeCustomerId,
-          description: isPrivateListing
-            ? "Listing fee (relist, includes private listing)"
-            : "Listing fee (relist)",
-          payment_method: user.defaultPaymentIntendId,
-          capture_method: "automatic",
-          off_session: true,
-          confirm: true,
-          metadata: {
-            listingId: String(listing._id),
-            sellerId: String(user._id),
-            paymentType: "listing-fee",
-            isRelist: "true",
-            isPrivateListing: isPrivateListing ? "true" : "false",
-          },
-        },
-        {
-          idempotencyKey: `${String(listing._id)}::relist::${Date.now()}`,
-        },
-      );
-
-      listing.paymentIntentId = paymentIntent.id;
-    }
-
     await User.findByIdAndUpdate(sellerId, { $inc: { totalListings: 1 } });
 
     listing.buyerId = undefined;
@@ -94,10 +55,32 @@ export async function relistListing(req: Request, res: Response) {
     listing.rejectionReason = undefined;
     listing.auctionStartDate = undefined;
     listing.auctionEndDate = undefined;
-    listing.status = "pending_review";
     listing.sellerCommittedAt = new Date();
-    if (isPrivateListing) {
-      listing.privateListingFeePaid = true;
+
+    let listingFeeCheckoutUrl: string | undefined;
+
+    if (listingFeeUsd > 0) {
+      const customerId = await ensureStripeCustomerForUser(user);
+      listing.status = "pending_listing_fee";
+      listing.privateListingFeePaid = isPrivateListing ? false : listing.privateListingFeePaid;
+      listingFeeCheckoutUrl = await createListingFeeCheckoutSession({
+        customerId,
+        listingId: String(listing._id),
+        sellerId: String(user._id),
+        amountUsd: listingFeeUsd,
+        description: isPrivateListing
+          ? "Listing fee (relist, includes private listing)"
+          : "Listing fee (relist)",
+        listingFeeKind: "relist",
+        cardlessCheckout: isCardlessListingFeeCheckout(user),
+        isPrivateListing,
+        idempotencyKey: `${String(listing._id)}::listing-fee-checkout::relist`,
+      });
+    } else {
+      listing.status = "pending_review";
+      if (isPrivateListing) {
+        listing.privateListingFeePaid = true;
+      }
     }
 
     await listing.save();
@@ -106,9 +89,11 @@ export async function relistListing(req: Request, res: Response) {
       ok: true,
       listing,
       listingFeeUsd,
-      message:
-        listingFeeUsd > 0
-          ? "Relist submitted for review. Listing fee charged to your default payment method."
+      ...(listingFeeCheckoutUrl ? { listingFeeCheckoutUrl } : {}),
+      message: listingFeeCheckoutUrl
+        ? "Complete payment in Stripe Checkout to finish your relist."
+        : listingFeeUsd > 0
+          ? "Relist submitted for review."
           : "Relist submitted for review.",
     });
   } catch (err) {

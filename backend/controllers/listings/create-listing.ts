@@ -1,6 +1,5 @@
 import type { Request, Response } from "express";
 import Listing from "../../models/listing";
-import stripe from "../../utils/stripe";
 import User from "../../models/user";
 import {
   parseOptionalNonNegNumber,
@@ -12,6 +11,11 @@ import {
   applySanitizedListingFields,
   sanitizeListingDescriptionFields,
 } from "../../lib/listing-description";
+import {
+  createListingFeeCheckoutSession,
+  ensureStripeCustomerForUser,
+  isCardlessListingFeeCheckout,
+} from "../../lib/listing-fee-checkout";
 import {
   ensureUniqueListingSlug,
   slugifyAppName,
@@ -52,8 +56,8 @@ function safeListingWrite(body: Record<string, unknown>) {
  * Creates a new listing in `draft` state owned by the authenticated seller,
  * or finalizes an existing saved draft when `existingDraftId` is provided.
  *
- * Listing-fee Stripe PI + `User.totalListings` increment run once per listing
- * (`sellerCommittedAt` guards duplicate submits for the same draft).
+ * Listing-fee Stripe Checkout (or free submit) + `User.totalListings` increment
+ * run once per listing (`sellerCommittedAt` guards duplicate submits).
  */
 export async function createListing(req: Request, res: Response) {
   try {
@@ -76,12 +80,6 @@ export async function createListing(req: Request, res: Response) {
       priorListings,
       isPrivateListing,
     );
-    if (estimatedListingFeeUsd > 0 && !user.stripeCustomerId) {
-      return void res.status(400).json({
-        message:
-          "Add a default payment method in your wallet before submitting a paid listing.",
-      });
-    }
     const monthlyRevenue = parseOptionalNonNegNumber(body.monthlyRevenue);
 
     const applied = applySanitizedListingFields(
@@ -159,56 +157,45 @@ export async function createListing(req: Request, res: Response) {
     await User.findByIdAndUpdate(sellerId, { $inc: { totalListings: 1 } });
 
     const listingFeeUsd = computeListingFeeUsd(priorListings, isPrivateListing);
+    let listingFeeCheckoutUrl: string | undefined;
 
-    if (listingFeeUsd > 0) {
-      if (!user.stripeCustomerId || !user.defaultPaymentIntendId) {
-        return void res.status(400).json({
-          message:
-            "Add a default payment method in your wallet before submitting a paid listing.",
-        });
-      }
-
-      const paymentIntent = await stripe.paymentIntents.create(
-        {
-          amount: Math.round(listingFeeUsd * 100),
-          currency: "usd",
-          customer: user.stripeCustomerId,
-          description: isPrivateListing
-            ? "Listing fee (includes private listing)"
-            : "Listing fee",
-          payment_method: user.defaultPaymentIntendId,
-          capture_method: "automatic",
-          off_session: true,
-          confirm: true,
-          metadata: {
-            listingId: String(listing._id),
-            sellerId: user._id.toString(),
-            paymentType: "listing-fee",
-            isPrivateListing: isPrivateListing ? "true" : "false",
-          },
-        },
-        {
-          idempotencyKey: `${String(listing._id)}::stripe:payment-intent:create`,
-        },
-      );
-
-      listing.paymentIntentId = paymentIntent.id;
-    }
-
-    // Submission always enters moderation queue first.
-    listing.status = "pending_review";
     listing.rejectionReason = undefined;
     listing.sellerCommittedAt = new Date();
-    if (isPrivateListing) {
-      listing.privateListingFeePaid = true;
-    }
-    await listing.save();
 
-    return void res.status(existingDraftId ? 200 : 201).json(
-      sanitizeListingDescriptionFields(
-        listing.toObject() as Record<string, unknown>,
-      ),
+    if (listingFeeUsd > 0) {
+      const customerId = await ensureStripeCustomerForUser(user);
+      listing.status = "pending_listing_fee";
+      listing.privateListingFeePaid = isPrivateListing ? false : listing.privateListingFeePaid;
+      await listing.save();
+
+      listingFeeCheckoutUrl = await createListingFeeCheckoutSession({
+        customerId,
+        listingId: String(listing._id),
+        sellerId: user._id.toString(),
+        amountUsd: listingFeeUsd,
+        description: isPrivateListing
+          ? "Listing fee (includes private listing)"
+          : "Listing fee",
+        listingFeeKind: "submit",
+        cardlessCheckout: isCardlessListingFeeCheckout(user),
+        isPrivateListing,
+        idempotencyKey: `${String(listing._id)}::listing-fee-checkout::submit`,
+      });
+    } else {
+      listing.status = "pending_review";
+      if (isPrivateListing) {
+        listing.privateListingFeePaid = true;
+      }
+      await listing.save();
+    }
+
+    const listingJson = sanitizeListingDescriptionFields(
+      listing.toObject() as Record<string, unknown>,
     );
+    return void res.status(existingDraftId ? 200 : 201).json({
+      ...listingJson,
+      ...(listingFeeCheckoutUrl ? { listingFeeCheckoutUrl } : {}),
+    });
   } catch (err) {
     console.log("createListing error:", err);
     return void res.status(500).json({ message: "Failed to create listing" });

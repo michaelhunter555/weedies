@@ -234,6 +234,7 @@ const ListingSchema = new mongoose.Schema<Listing>(
       required: true,
       enum: [
         "draft",
+        "pending_listing_fee",
         "pending_review",
         "live",
         "reserved",

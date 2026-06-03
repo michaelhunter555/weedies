@@ -3,6 +3,7 @@ import getPubKey from "../controllers/stripe/getPubKey";
 import appWebhook from "../controllers/stripe/webhooks/app-webhook";
 import v2Webhook from "../controllers/stripe/webhooks/v2-webhook";
 import createCheckoutSession from "../controllers/stripe/create-checkout-session";
+import createListingFeeCheckoutSessionHandler from "../controllers/stripe/create-listing-fee-checkout-session";
 import createConnectAccount from "../controllers/stripe/create-connect-account";
 import refreshedOnboardingLink from "../controllers/stripe/refreshed-onboarding-link";
 import deleteConnectedAccount from "../controllers/stripe/delete-connected-account";
@@ -70,6 +71,11 @@ router.post("/setup-intent", setupIntent);
 
 // Buyer checkout — Checkout Session creates a PI with manual capture + Connect metadata
 router.post("/create-checkout-session", paymentUpdateLimiter, createCheckoutSession);
+router.post(
+  "/create-listing-fee-checkout-session",
+  paymentUpdateLimiter,
+  createListingFeeCheckoutSessionHandler,
+);
 
 // Seller Connect onboarding
 router.post("/create-connect-account", paymentUpdateLimiter, createConnectAccount);

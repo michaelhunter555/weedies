@@ -31,6 +31,7 @@ export type ListingDifficulty = "beginner" | "intermediate" | "advanced";
  */
 export type ListingStatus =
     | "draft"
+    | "pending_listing_fee"
     | "pending_review"
     | "live"
     | "reserved"

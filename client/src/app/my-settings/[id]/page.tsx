@@ -84,6 +84,7 @@ const statusChipProps: Record<
 > = {
   live: { label: "Live", color: "success" },
   reserved: { label: "Reserved", color: "warning" },
+  pending_listing_fee: { label: "Payment due", color: "warning" },
   pending_review: { label: "In review", color: "warning" },
   draft: { label: "Draft", color: "default" },
   rejected: { label: "Rejected", color: "error" },

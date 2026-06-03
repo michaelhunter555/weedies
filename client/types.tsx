@@ -275,8 +275,14 @@ export type AuctionAcceptedBidPublic = {
   createdAt?: string | Date;
 };
 
+/** Listing API may include a Stripe Checkout URL when a listing fee is due. */
+export type ListingWithFeeCheckout = Listing & {
+  listingFeeCheckoutUrl?: string | null;
+};
+
 export type ListingStatus =
   | "draft"
+  | "pending_listing_fee"
   | "pending_review"
   | "live"
   | "reserved"

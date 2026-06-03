@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import Stripe from "stripe";
 import mongoose from "mongoose";
 import stripe from "../../../utils/stripe";
+import { finalizeListingFeeFromPaymentIntent } from "../../../lib/finalize-listing-fee-payment";
 import { checkRoom } from "../../../utils/check-socket-room";
 import { io } from "../../../app";
 import Listing from "../../../models/listing";
@@ -190,7 +191,18 @@ export default async function appWebhook(req: Request, res: Response) {
           break;
         }
         const metadata = pi.metadata || {};
-        if (readPaymentType(metadata) !== "asset-sale") {
+        const paymentType = readPaymentType(metadata);
+
+        if (paymentType === "listing-fee") {
+          try {
+            await finalizeListingFeeFromPaymentIntent(pi);
+          } catch (err) {
+            console.error("checkout.session.completed listing-fee:", err);
+          }
+          break;
+        }
+
+        if (paymentType !== "asset-sale") {
           break;
         }
         const { listingId, buyerId, sellerId, serviceFee } = metadata;
@@ -393,54 +405,14 @@ export default async function appWebhook(req: Request, res: Response) {
           // Listing fee - seller paid the platform to publish a listing.
           // ────────────────────────────────────────────────────────────
           if (paymentType === "listing-fee") {
-            if (!sellerId) {
-              await dbSession.abortTransaction();
-              dbSession.endSession();
-              return void res.status(200).send({ received: true });
-            }
-
-            const transaction = new Transaction({
-              ListingId: listing._id,
-              // Payer is the seller - they ARE the customer on a listing fee.
-              customerId: sellerId,
-              sellerId,
-              stripePaymentIntentId: pi.id,
-              stripeCustomerId: pi.customer,
-              amountCharged: pi.amount,
-              amountPaid: pi.amount,
-              // Listing fees are 100% platform revenue - no seller share.
-              serviceFee: pi.amount,
-              billingReason: "Listing fee",
-              paymentStatus: "succeeded",
-              chargeId,
-              currency: pi.currency,
-            });
-            await transaction.save({ session: dbSession });
-
-            // Never auto-publish from payment webhooks.
-            // Admin moderation is the only path to `live`.
-            listing.status = "pending_review";
-            await listing.save({ session: dbSession });
-
-            // totalListings is incremented when the draft is created (create-listing),
-            // not here, so we do not $inc again on listing-fee success.
-
-            await dbSession.commitTransaction();
+            await dbSession.abortTransaction();
             dbSession.endSession();
-
-            if (checkRoom(io, String(sellerId))) {
-              io.to(String(sellerId)).emit(Events.LISTING_FEE_PAID, {
-                message: `"${listing.appName}" submitted for review`,
-                text: "Your payment succeeded. Admin review is required before this goes live.",
-                listingId: String(listing._id),
-                transactionId: String(transaction._id),
-                amount: amountFmt,
-                currency: pi.currency,
-              });
+            try {
+              await finalizeListingFeeFromPaymentIntent(pi);
+            } catch (err) {
+              console.error("payment_intent.succeeded listing-fee:", err);
             }
-
-            // TODO(brevo): send listing-live confirmation email to seller
-            break;
+            return void res.status(200).send({ received: true });
           }
 
           // ────────────────────────────────────────────────────────────

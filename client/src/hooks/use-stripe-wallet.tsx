@@ -184,6 +184,18 @@ export const useStripeWallet = () => {
     [apiFetch],
   );
 
+  const createListingFeeCheckoutSession = useCallback(
+    async (listingId: string): Promise<string> => {
+      const data = await apiFetch<{ url?: string }>(
+        "/stripe/create-listing-fee-checkout-session",
+        "POST",
+        { listingId },
+      );
+      return String(data?.url ?? "");
+    },
+    [apiFetch],
+  );
+
   const managePaymentCapture = useCallback( async (listingId: string, sellerAction: "capture" | "cancel") => {
       const data = await apiFetch<{ ok: boolean }>("/stripe/handle-payment-intent", "POST", { listingId, sellerAction });
       return data.ok;
@@ -226,6 +238,7 @@ export const useStripeWallet = () => {
     deletePaymentMethods,
     startSellerOnboarding,
     createCheckoutSession,
+    createListingFeeCheckoutSession,
     managePaymentCapture,
     getConnectBalance,
     getPayoutBatches,

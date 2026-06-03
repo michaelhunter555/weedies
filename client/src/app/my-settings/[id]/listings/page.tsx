@@ -45,6 +45,7 @@ const statusChip: Record<
 > = {
   live: { label: "Live", color: "success" },
   reserved: { label: "Reserved", color: "warning" },
+  pending_listing_fee: { label: "Payment due", color: "warning" },
   pending_review: { label: "In review", color: "warning" },
   draft: { label: "Draft", color: "default" },
   rejected: { label: "Rejected", color: "error" },
@@ -148,8 +149,12 @@ export default function MyListingsPage() {
       setRelistingId(listingId);
       setRelistError(null);
     },
-    onSuccess: async (_data, listingId) => {
+    onSuccess: async (data, listingId) => {
       await queryClient.invalidateQueries({ queryKey: ["my-listings", sessionUserId] });
+      if (data?.listingFeeCheckoutUrl) {
+        window.location.assign(data.listingFeeCheckoutUrl);
+        return;
+      }
       router.push(
         `/products?list=edit&listingId=${encodeURIComponent(listingId)}`,
       );

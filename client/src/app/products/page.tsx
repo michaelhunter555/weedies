@@ -50,6 +50,7 @@ import {
 import { AuthContext } from "@/context/auth-context";
 import { useForm } from "@/hooks/useForm";
 import { useListings } from "@/hooks/use-listings";
+import { useStripeWallet } from "@/hooks/use-stripe-wallet";
 import {
   BRAND_PALETTE,
   brandContainedButtonSx,
@@ -77,7 +78,6 @@ import type {
   ListingTurnaround,
 } from "../../../types";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useStripeWallet } from "@/hooks/use-stripe-wallet";
 
 const MAX_PHOTOS = 6;
 // Mirror the backend multer limit so we reject giant files client-side
@@ -173,6 +173,7 @@ export default function ProductsPage() {
 
   const { uploadPhotos, createListing, saveDraft, getListing, updateListing } =
     useListings();
+  const { createListingFeeCheckoutSession } = useStripeWallet();
   const queryClient = useQueryClient();
 
   const draftParam = params.get("draft");
@@ -183,6 +184,9 @@ export default function ProductsPage() {
   const [isSaveDrafting, setIsSaveDrafting] = useState(false);
   const [editBlocked, setEditBlocked] = useState(false);
   const [editListingWasPrivate, setEditListingWasPrivate] = useState(false);
+  const [listingPendingFeePayment, setListingPendingFeePayment] =
+    useState(false);
+  const [resumeFeeSubmitting, setResumeFeeSubmitting] = useState(false);
 
   useLayoutEffect(() => {
     if (!listingFormMode) {
@@ -253,8 +257,12 @@ export default function ProductsPage() {
           return;
         }
 
+        const pendingFee = found.status === "pending_listing_fee";
+        setListingPendingFeePayment(pendingFee);
         const isPublished =
-          Boolean(editParam?.trim()) && found.status !== "draft";
+          Boolean(editParam?.trim()) &&
+          found.status !== "draft" &&
+          !pendingFee;
         setPublishedEdit(isPublished);
         setEditBlocked(Boolean(isPublished && found.sellerCanEdit === false));
         setEditListingWasPrivate(Boolean(found.isPrivateListing));
@@ -558,12 +566,9 @@ export default function ProductsPage() {
     .filter(([id, input]) => !input?.isValid && FIELD_LABELS[id])
     .map(([id]) => FIELD_LABELS[id]);
 
-  const stripeMissing =
-    (listingFee > 0 || needsPrivateFeeOnEdit) && !auth?.user?.stripeCustomerId;
-
   const canSubmit = publishedEdit
-    ? formState.isValid && !isSubmitting && !editBlocked && !stripeMissing
-    : formState.isValid && !isSubmitting && !stripeMissing;
+    ? formState.isValid && !isSubmitting && !editBlocked
+    : formState.isValid && !isSubmitting;
 
   const meta = useMemo(() => {
     if (!category) {
@@ -581,6 +586,22 @@ export default function ProductsPage() {
       }
     );
   }, [category, searchQuery]);
+
+  const handleResumeListingFee = async () => {
+    if (!workListingId || resumeFeeSubmitting) return;
+    setSubmitError(null);
+    setResumeFeeSubmitting(true);
+    try {
+      const url = await createListingFeeCheckoutSession(workListingId);
+      if (!url) throw new Error("Stripe did not return a checkout URL.");
+      window.location.assign(url);
+    } catch (e) {
+      setSubmitError(
+        e instanceof Error ? e.message : "Could not start listing fee checkout.",
+      );
+      setResumeFeeSubmitting(false);
+    }
+  };
 
   const mergeAndUploadPhotos = useCallback(async (): Promise<string[]> => {
     const newFiles = photoSlots
@@ -656,7 +677,11 @@ export default function ProductsPage() {
           );
           return;
         }
-        await updateListing(workListingId, basePayload);
+        const updated = await updateListing(workListingId, basePayload);
+        if (updated.listingFeeCheckoutUrl) {
+          window.location.assign(updated.listingFeeCheckoutUrl);
+          return;
+        }
         await queryClient.invalidateQueries({
           queryKey: ["my-listings", auth.user?.id],
         });
@@ -671,19 +696,22 @@ export default function ProductsPage() {
         return;
       }
 
-      if (stripeMissing) {
-        setSubmitError(
-          "Add a default payment method in your wallet before submitting this listing.",
-        );
-        return;
-      }
-
       const payload: Partial<Listing> & { existingDraftId?: string } = {
         ...basePayload,
         ...(workListingId ? { existingDraftId: workListingId } : {}),
       };
 
       const created = await createListing(payload);
+      if (created.listingFeeCheckoutUrl) {
+        if (auth.user) {
+          auth.update({
+            ...auth.user,
+            totalListings: Number(auth.user.totalListings ?? 0) + 1,
+          });
+        }
+        window.location.assign(created.listingFeeCheckoutUrl);
+        return;
+      }
       if (auth.user) {
         auth.update({
           ...auth.user,
@@ -911,6 +939,24 @@ export default function ProductsPage() {
                 Loading your listing…
               </Alert>
             )}
+            {listingPendingFeePayment && workListingId ? (
+              <Alert severity="warning" sx={{ borderRadius: 2 }}>
+                <Typography variant="body2" sx={{ mb: 1.5 }}>
+                  This listing is waiting for the listing fee payment. Complete checkout
+                  to send it for admin review.
+                </Typography>
+                <Button
+                  variant="contained"
+                  disabled={resumeFeeSubmitting}
+                  onClick={() => void handleResumeListingFee()}
+                  sx={{ textTransform: "none", fontWeight: 700 }}
+                >
+                  {resumeFeeSubmitting
+                    ? "Opening Stripe…"
+                    : "Pay listing fee in Stripe Checkout"}
+                </Button>
+              </Alert>
+            ) : null}
             {publishedEdit && editBlocked && (
               <Alert severity="warning" sx={{ borderRadius: 2 }}>
                 This listing can&apos;t be edited while there are bids or a
@@ -1761,18 +1807,6 @@ export default function ProductsPage() {
             </Paper>
             )}
 
-            {stripeMissing && (
-              <Alert severity="error" sx={{ borderRadius: 2 }}>
-                Add a default payment method in your wallet to pay the listing
-                fee
-                {needsPrivateFeeOnEdit
-                  ? " ($4.99 private listing add-on)."
-                  : isPrivateListing
-                    ? " (includes $4.99 private listing)."
-                    : "."}
-              </Alert>
-            )}
-
             {!formState.isValid && missingFields.length > 0 && (
               <Alert severity="info" sx={{ borderRadius: 2 }}>
                 <Typography variant="body2" fontWeight={700} gutterBottom>
@@ -1792,21 +1826,11 @@ export default function ProductsPage() {
               </Alert>
             )}
 
-            <Stack direction="row" justifyContent="flex-end" spacing={1}>
-              {!publishedEdit && (
-              <>
-              <Typography variant="subtitle2" color="text.secondary">
-                payment method:
+            {!publishedEdit && listingFee > 0 ? (
+              <Typography variant="body2" color="text.secondary" sx={{ textAlign: "right" }}>
+                Listing fee is paid on Stripe&apos;s secure checkout page — no saved card required.
               </Typography>
-            {paymentMethods?.hasCard && card && <Typography variant="subtitle2" color="text.secondary">
-                  &bull;&bull;&bull;&bull; {card?.last4} - {card?.exp_month}/{card?.exp_year}
-                  </Typography>}
-                  {!paymentMethods?.hasCard && <Typography variant="subtitle2" color="text.secondary">
-                    No payment method connected
-                  </Typography>}
-              </>
-              )}
-            </Stack>
+            ) : null}
 
             <Stack
               direction={{ xs: "column", sm: "row" }}
