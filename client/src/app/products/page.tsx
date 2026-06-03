@@ -1858,7 +1858,7 @@ export default function ProductsPage() {
               <Button
                 variant="contained"
                 type="submit"
-                disabled={!canSubmit}
+                disabled={!canSubmit || !auth.isLoggedIn}
                 startIcon={
                   isSubmitting ? (
                     <CircularProgress size={16} sx={{ color: "inherit" }} />
@@ -1873,7 +1873,7 @@ export default function ProductsPage() {
                   },
                 }}
               >
-                {isSubmitting
+              {!auth?.isLoggedIn ? "Sign in" :isSubmitting
                   ? photoSlots.length > 0
                     ? "Uploading photos…"
                     : publishedEdit

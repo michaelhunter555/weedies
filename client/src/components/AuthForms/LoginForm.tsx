@@ -28,7 +28,7 @@ import RocketLaunchRoundedIcon from "@mui/icons-material/RocketLaunchRounded";
 import VisibilityOffRoundedIcon from "@mui/icons-material/VisibilityOffRounded";
 import VisibilityRoundedIcon from "@mui/icons-material/VisibilityRounded";
 import VerifiedRoundedIcon from "@mui/icons-material/VerifiedRounded";
-
+import LockIcon from "@mui/icons-material/Lock";
 import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
@@ -47,6 +47,8 @@ import Stack from "@mui/material/Stack";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import { styled } from "@mui/material/styles";
+import Lottie from "lottie-react";
+import dapandflip from "@/lib/lottiejson/dapandflip.json";
 
 import { needsEmailVerification, type UserProps } from "../../../types";
 import { VERIFY_EMAIL_PATH } from "@/lib/email-verification";
@@ -303,10 +305,10 @@ const LoginForm = () => {
   };
 
   const marketingPoints = [
-    { icon: <BoltRoundedIcon fontSize="small" />, text: "Ship your app in 5 minutes" },
-    { icon: <RocketLaunchRoundedIcon fontSize="small" />, text: "Keep up to 94% of revenue" },
-    { icon: <VerifiedRoundedIcon fontSize="small" />, text: "Verified creator program" },
-    { icon: <AutoAwesomeIcon fontSize="small" />, text: "Curated discovery" },
+    { icon: <BoltRoundedIcon fontSize="small" />, text: "List your app in 5 minutes. Let the world know you have something to offer." },
+    { icon: <RocketLaunchRoundedIcon fontSize="small" />, text: "Painless onboarding with stripe. Keep up to 94% of revenue." },
+    { icon: <VerifiedRoundedIcon fontSize="small" />, text: "Your first 3 listings are 100% free. No card on file required." },
+    { icon: <LockIcon fontSize="small" />, text: "Safely purchase apps with curated handover flows designed to minimize risk." },
   ];
 
   return (
@@ -345,25 +347,25 @@ const LoginForm = () => {
           >
             <Stack spacing={2} sx={{ height: "100%" }}>
               <Stack direction="row" alignItems="center" spacing={1}>
+                
+                <Typography variant="h6" sx={{ fontWeight: 800, color: BRAND_PALETTE.charcoal }}>
+                  Dap & Flip
+                </Typography>
                 <Box
                   sx={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: 2,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    ...brandLogoMarkSx,
+                    width: 78,
+                    height: 70,
+                    flexShrink: 0,
+                    lineHeight: 0,
+                    "& > div": { width: "100% !important", height: "100% !important" },
                   }}
                 >
-                  <AutoAwesomeIcon sx={{ fontSize: 20 }} />
+                  <Lottie
+                    animationData={dapandflip}
+                    loop
+                    style={{ width: "100%", height: "100%" }}
+                  />
                 </Box>
-                <Typography variant="h6" sx={{ fontWeight: 800, color: BRAND_PALETTE.charcoal }}>
-                  <Box component="span" sx={{ color: BRAND_PALETTE.seafoam }}>
-                    Dap
-                  </Box>
-                  {" & Flip"}
-                </Typography>
               </Stack>
 
               <Typography
@@ -395,7 +397,7 @@ const LoginForm = () => {
                   : `Join indie creators shipping apps on ${APP_NAME}. 5 minutes to list your first app.`}
               </Typography>
 
-              <Stack spacing={1.25} sx={{ mt: 2 }}>
+              <Stack spacing={1.25} sx={{ mt: 1.5 }}>
                 {marketingPoints.map((p) => (
                   <Stack
                     key={p.text}
@@ -417,7 +419,7 @@ const LoginForm = () => {
                     >
                       {p.icon}
                     </Box>
-                    <Typography sx={{ color: BRAND_PALETTE.seafoam }}>
+                    <Typography>
                       {p.text}
                     </Typography>
                   </Stack>
