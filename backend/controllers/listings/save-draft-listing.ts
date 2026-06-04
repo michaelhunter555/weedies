@@ -12,28 +12,12 @@ import {
   prepareAppDescriptionForWrite,
   sanitizeListingDescriptionFields,
 } from "../../lib/listing-description";
+import { pickListingCategory } from "../../lib/listing-categories";
 import type {
-  ListingCategory,
   ListingDifficulty,
   ListingSaleType,
   ListingTurnaround,
 } from "../../types";
-
-const CATEGORIES: ListingCategory[] = [
-  "ai-tools",
-  "productivity",
-  "games",
-  "dev-tools",
-  "design",
-  "extensions",
-];
-
-function pickCategory(raw: unknown): ListingCategory {
-  const s = String(raw ?? "").trim();
-  return CATEGORIES.includes(s as ListingCategory)
-    ? (s as ListingCategory)
-    : "ai-tools";
-}
 
 function pickDifficulty(raw: unknown): ListingDifficulty {
   const s = String(raw ?? "").trim();
@@ -99,7 +83,7 @@ export async function saveDraftListing(req: Request, res: Response) {
     const buyItNowPrice = isBuyItNow
       ? Math.max(0, Number(body.buyItNowPrice) || 0)
       : undefined;
-    const category = pickCategory(body.category);
+    const category = pickListingCategory(body.category);
     const difficulty = pickDifficulty(body.difficulty);
     const turnaround = pickTurnaround(body.turnaround);
     const ageOfBusinessMonths = Math.max(

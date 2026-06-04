@@ -6,6 +6,7 @@ import {
   ListingSaleType,
   ListingStatus,
   ListingTurnaround,
+  Platforms,
 } from "../types";
 
 /**
@@ -56,6 +57,7 @@ export interface Listing {
   // Freeform metadata (used for search + filters)
   tags: string[];
   techStack: string[];
+  platforms: Platforms[];
 
   // Seller-reported traction - verified via analytics integrations
   monthlyRevenue?: number;
@@ -139,7 +141,7 @@ const ListingSchema = new mongoose.Schema<Listing>(
 
     appName: { type: String, required: true, trim: true, maxlength: 80 },
     tagline: { type: String, required: true, trim: true, maxlength: 140 },
-    appDescription: { type: String, required: true, maxlength: 32000 },
+    appDescription: { type: String, required: true, maxlength: 16000 },
     category: {
       type: String,
       required: true,
@@ -148,8 +150,10 @@ const ListingSchema = new mongoose.Schema<Listing>(
         "productivity",
         "games",
         "dev-tools",
-        "design",
         "extensions",
+        "service",
+        "saas",
+        "marketplace",
       ],
       index: true,
     },
@@ -191,7 +195,7 @@ const ListingSchema = new mongoose.Schema<Listing>(
 
     tags: { type: [String], required: true, default: [], index: true },
     techStack: { type: [String], required: true, default: [] },
-
+    platforms: { type: [String], required: true, default: [], enum: ["ios", "android", "web", "macOs", "windows", "chromeExtension", "other"] },
     monthlyRevenue: { type: Number, required: false, min: 0 },
     monthlyActiveUsers: { type: Number, required: false, min: 0 },
 

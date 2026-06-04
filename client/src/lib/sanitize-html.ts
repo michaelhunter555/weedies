@@ -34,25 +34,38 @@ export function sanitizeAppDescriptionHtml(dirty: string): string {
   return DOMPurify.sanitize(dirty, PURIFY_CONFIG).trim();
 }
 
-export function descriptionPlainTextLength(html: string): number {
+function descriptionPlainText(html: string): string {
   const clean = sanitizeAppDescriptionHtml(html);
-  if (!clean) return 0;
-  const text = clean
+  if (!clean) return "";
+  return clean
     .replace(/<br\s*\/?>/gi, "\n")
     .replace(/<\/p>/gi, "\n")
     .replace(/<[^>]+>/g, "")
     .replace(/&nbsp;/gi, " ")
     .replace(/\s+/g, " ")
     .trim();
-  return text.length;
+}
+
+export function descriptionPlainTextLength(html: string): number {
+  return descriptionPlainText(html).length;
+}
+
+export function descriptionPlainTextWordCount(html: string): number {
+  const text = descriptionPlainText(html);
+  if (!text) return 0;
+  return text.split(/\s+/).filter(Boolean).length;
 }
 
 export const APP_DESCRIPTION_MIN_PLAIN_TEXT = 40;
+export const APP_DESCRIPTION_MAX_WORDS = 600;
 
 export function isAppDescriptionValid(
   html: string,
   minPlainText = APP_DESCRIPTION_MIN_PLAIN_TEXT,
+  maxWords = APP_DESCRIPTION_MAX_WORDS,
 ): boolean {
+  const words = descriptionPlainTextWordCount(html);
+  if (words > maxWords) return false;
   return descriptionPlainTextLength(html) >= minPlainText;
 }
 
@@ -63,11 +76,10 @@ function looksLikeHtml(value: string): boolean {
 }
 
 /**
- * Legacy listings sometimes store a plain-text prefix before HTML markup
- * (e.g. "About\\n\\n<p>…</p>"). TipTap shows the tags as literal text unless
- * the prefix is wrapped in block elements first.
+ * Legacy listings may have plain text before the first HTML tag.
+ * Wrap only that prefix in one paragraph (line breaks → <br>), leave the rest untouched.
  */
-export function wrapLeadingPlainTextBeforeHtml(html: string): string {
+function wrapLeadingPlainTextBeforeHtml(html: string): string {
   const match = html.match(HTML_TAG_START);
   if (!match || match.index == null || match.index === 0) return html;
 
@@ -78,13 +90,28 @@ export function wrapLeadingPlainTextBeforeHtml(html: string): string {
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
-  const prefix = escaped
-    .split(/\n\n+/)
-    .filter(Boolean)
-    .map((p) => `<p>${p.replace(/\n/g, "<br>")}</p>`)
-    .join("");
+  const prefix = `<p>${escaped.replace(/\n/g, "<br>")}</p>`;
 
   return prefix + html.slice(match.index);
+}
+
+/** Split sanitized HTML into optional plain prefix + HTML body (no body rewriting). */
+export function splitDescriptionLeadingPlain(safeHtml: string): {
+  leadingPlain?: string;
+  html: string;
+} {
+  const match = safeHtml.match(HTML_TAG_START);
+  if (!match || match.index == null || match.index === 0) {
+    return { html: safeHtml };
+  }
+  const leading = safeHtml.slice(0, match.index).trim();
+  if (!leading || leading.includes("<")) {
+    return { html: safeHtml };
+  }
+  return {
+    leadingPlain: leading,
+    html: safeHtml.slice(match.index),
+  };
 }
 
 /** Load legacy plain-text descriptions into TipTap as HTML. */

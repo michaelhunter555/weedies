@@ -15,7 +15,11 @@ import { useAuth } from "@/context/auth-context";
 import { mongoIdString } from "@/utils/mongo-id";
 import { useListings } from "@/hooks/use-listings";
 import { useStripeWallet } from "@/hooks/use-stripe-wallet";
-import { DIFFICULTY_OPTIONS, TURNAROUND_OPTIONS } from "@/utils/listingOptions";
+import {
+  DIFFICULTY_OPTIONS,
+  TURNAROUND_OPTIONS,
+  getCategoryLabel,
+} from "@/utils/listingOptions";
 
 import EditRoundedIcon from "@mui/icons-material/EditRounded";
 import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
@@ -54,6 +58,7 @@ import useMediaQuery from "@mui/material/useMediaQuery";
 import useTheme from "@mui/material/styles/useTheme";
 
 import { AppDescriptionHtml } from "@/components/Listings/AppDescriptionHtml";
+import { ListingPlatformsRow } from "@/components/Listings/ListingPlatformsRow";
 import { brandContainedButtonSx } from "@/theme/brand-palette";
 import type { Listing, ListingSellerPublic, ListingSellerRef } from "../../../types";
 import {
@@ -69,14 +74,6 @@ export type ProductDetailsClientProps = {
   fetchBy: string;
 };
 
-function formatCategory(raw?: string) {
-  if (!raw) return "App";
-  return raw
-    .split("-")
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(" ");
-}
-
 function formatMoney(amount: number, currency = "USD") {
   return new Intl.NumberFormat(undefined, {
     style: "currency",
@@ -89,6 +86,32 @@ function isPopulatedListingSeller(
   sellerId: ListingSellerRef | undefined,
 ): sellerId is ListingSellerPublic {
   return typeof sellerId === "object" && sellerId !== null && "_id" in sellerId;
+}
+
+function developerAccountTransferModalCopy(
+  platforms: string[] | undefined,
+): { title: string; body: string } {
+  const ios = platforms?.includes("ios");
+  const android = platforms?.includes("android");
+  if (ios && android) {
+    return {
+      title: "Apple & Google developer accounts",
+      body:
+        "In order to transfer this app, you will need to already have or create an Apple Developer account and a Google Play Developer account.",
+    };
+  }
+  if (ios) {
+    return {
+      title: "Apple Developer account",
+      body:
+        "In order to transfer this app, you will need to already have or create an Apple Developer account.",
+    };
+  }
+  return {
+    title: "Google Play Developer account",
+    body:
+      "In order to transfer this app, you will need to already have or create a Google Play Developer account.",
+  };
 }
 
 function extractSeller(sellerId: ListingSellerRef | undefined): {
@@ -244,6 +267,8 @@ export function ProductDetailsClient({ fetchBy }: ProductDetailsClientProps) {
   const [privateAccessNote, setPrivateAccessNote] = useState("");
   const [privateAccessSellerModalOpen, setPrivateAccessSellerModalOpen] =
     useState(false);
+  const [developerAccountsModalOpen, setDeveloperAccountsModalOpen] =
+    useState(false);
   const [privateAccessResolveKey, setPrivateAccessResolveKey] = useState<
     string | null
   >(null);
@@ -327,7 +352,7 @@ export function ProductDetailsClient({ fetchBy }: ProductDetailsClientProps) {
     if (listing?.isPrivateListing && listing?.privateAccess?.canView === false) {
       return "Request access from the seller first.";
     }
-    if (isAuction) return "This listing is an auction — use Place bid.";
+    if (isAuction) return "This listing is an auction. Use Place bid.";
     if (listing?.status === "reserved") {
       return "A buyer is completing checkout for this listing.";
     }
@@ -590,7 +615,7 @@ export function ProductDetailsClient({ fetchBy }: ProductDetailsClientProps) {
 
         <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap">
           <Chip
-            label={formatCategory(listing.category)}
+            label={getCategoryLabel(listing.category)}
             size="small"
             color="secondary"
             sx={{ fontWeight: 700 }}
@@ -623,6 +648,7 @@ export function ProductDetailsClient({ fetchBy }: ProductDetailsClientProps) {
               {formatMoney(listing.monthlyRevenue, currency)}/mo reported revenue
             </Typography>
           ) : null}
+         
           <Stack spacing={1.25} sx={{ mt: 0.5 }}>
             <Stack
               direction="row"
@@ -726,8 +752,7 @@ export function ProductDetailsClient({ fetchBy }: ProductDetailsClientProps) {
                   ) : (
                     <AppDescriptionHtml
                       html={listing.appDescription ?? ""}
-                      variant="body1"
-                      sx={{ mt: 0.5 }}
+                      scrollable
                     />
                   )}
                 </Box>
@@ -738,6 +763,47 @@ export function ProductDetailsClient({ fetchBy }: ProductDetailsClientProps) {
                   <Typography variant="overline" color="text.secondary" fontWeight={700}>
                     Details
                   </Typography>
+
+                  {!isPrivateRestricted &&
+                  listing?.platforms &&
+                  (listing.platforms.includes("ios") ||
+                    listing.platforms.includes("android")) ? (
+                    <Alert
+                      icon={false}
+                      severity="info"
+                      sx={{ fontSize: 12, mt: 0.5, mb: 0.5 }}
+                      action={
+                        <Chip
+                          clickable
+                          size="small"
+                          label="Learn more"
+                          variant="outlined"
+                          color="info"
+                          onClick={() => setDeveloperAccountsModalOpen(true)}
+                        />
+                      }
+                    >
+                      {listing.platforms.includes("ios") &&
+                        !listing.platforms.includes("android") &&
+                        "iOS apps require an Apple Developer account."}
+                      {listing.platforms.includes("android") &&
+                        !listing.platforms.includes("ios") &&
+                        "Android apps require a Google Play Developer account."}
+                      {listing.platforms.includes("ios") &&
+                        listing.platforms.includes("android") &&
+                        "iOS and Android apps require Apple and Google Play Developer accounts."}
+                    </Alert>
+                  ) : null}
+
+                  {!isPrivateRestricted &&
+          listing.platforms &&
+          listing.platforms.length > 0 ? (
+            <ListingPlatformsRow
+              platforms={listing.platforms}
+              size="detail"
+              sx={{ mt: 0.5 }}
+            />
+          ) : null}
                   <Stack spacing={1.5} sx={{ mt: 1 }}>
                     <Box>
                       <Typography variant="body2" component="div" fontWeight={700}>
@@ -1101,10 +1167,10 @@ export function ProductDetailsClient({ fetchBy }: ProductDetailsClientProps) {
                   sx={{
                     width: "100%",
                     height: isMobile ? 260 : 320,
-                    objectFit: "cover",
+                    objectFit: "contain",
                     borderRadius: 3,
-                    border: "1px solid",
-                    borderColor: "divider",
+                    // border: "1px solid",
+                    // borderColor: "divider",
                   }}
                 />
               )}
@@ -1509,7 +1575,7 @@ export function ProductDetailsClient({ fetchBy }: ProductDetailsClientProps) {
                     <Alert severity="warning" sx={{ mt: 0.5 }}>
                       <Typography variant="body2">
                         We could not verify your saved cards. You can still continue in Stripe
-                        Checkout — open <Link href={walletHref}>Wallet</Link> if you want to fix
+                        Checkout. Open <Link href={walletHref}>Wallet</Link> if you want to fix
                         billing.
                       </Typography>
                     </Alert>
@@ -1524,7 +1590,7 @@ export function ProductDetailsClient({ fetchBy }: ProductDetailsClientProps) {
                   !hasDefaultPaymentMethod ? (
                     <Alert severity="info" sx={{ mt: 0.5 }}>
                       <Typography variant="body2">
-                        No default card on file yet — you can still pay on the next screen with{" "}
+                        No default card on file yet. You can still pay on the next screen with{" "}
                         <b>Stripe Checkout</b>. Add cards in{" "}
                         <Link href={walletHref}>Wallet</Link> so they stay on your Stripe customer
                         for Checkout.
@@ -1575,6 +1641,37 @@ export function ProductDetailsClient({ fetchBy }: ProductDetailsClientProps) {
           loadingKey={privateAccessResolveKey}
         />
       ) : null}
+
+      <Dialog
+        open={developerAccountsModalOpen}
+        onClose={() => setDeveloperAccountsModalOpen(false)}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle sx={{ fontWeight: 800 }}>
+          {
+            developerAccountTransferModalCopy(listing?.platforms).title
+          }
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.6 }}>
+            {developerAccountTransferModalCopy(listing?.platforms).body}
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 2, lineHeight: 1.6 }}>
+            The seller will guide you through handover after purchase, but store transfers
+            cannot be completed without the correct developer accounts in your name.
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button
+            variant="contained"
+            onClick={() => setDeveloperAccountsModalOpen(false)}
+            sx={{ textTransform: "none", fontWeight: 700, ...brandContainedButtonSx }}
+          >
+            Got it
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog
         open={privateAccessDialogOpen}

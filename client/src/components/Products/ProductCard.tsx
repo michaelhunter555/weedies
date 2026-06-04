@@ -8,8 +8,10 @@ import {
   Button,
   CardMedia,
   Chip,
+  Divider,
   Paper,
   Stack,
+  Tooltip,
   Typography,
 } from "@mui/material";
 import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
@@ -17,7 +19,9 @@ import LockRoundedIcon from "@mui/icons-material/LockRounded";
 import VisibilityRoundedIcon from "@mui/icons-material/VisibilityRounded";
 import VerifiedRoundedIcon from "@mui/icons-material/VerifiedRounded";
 import { BRAND_PALETTE } from "@/theme/brand-palette";
-import type { Listing } from "../../../types";
+import { getCategoryLabel } from "@/utils/listingOptions";
+import type { Listing, Platforms } from "../../../types";
+import { PLATFORM_MAPPING } from "@/utils/listingOptions";
 
 interface IProductCard {
   /** Preferred: the full listing document from the API. */
@@ -46,14 +50,6 @@ function hashIndex(id: string | undefined, mod: number) {
   let h = 0;
   for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) | 0;
   return Math.abs(h) % mod;
-}
-
-function formatCategory(raw?: string) {
-  if (!raw) return "App";
-  return raw
-    .split("-")
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(" ");
 }
 
 function formatMoney(amount: number, currency = "USD") {
@@ -92,7 +88,7 @@ export default function ProductCard({ listing, id }: IProductCard) {
           listing?.currency ?? "USD",
         )
       : null;
-  const category = formatCategory(listing?.category);
+  const category = getCategoryLabel(listing?.category);
   const cover = useMemo(() => {
     if (!listing?.photos || listing.photos.length === 0) return PLACEHOLDER_COVER;
     const idx = Math.min(
@@ -109,16 +105,20 @@ export default function ProductCard({ listing, id }: IProductCard) {
 
   const price = Number(listing?.startingPrice ?? 0);
   const isFree = price === 0;
-  const tier: "Free" | "Pro" | "One-time" = isFree
+  const tier: "Free" | "Pro" | "Auction" | "Buy it Now" = isFree
     ? "Free"
     : listing?.saleType === "auction"
-      ? "One-time"
-      : "Pro";
+      ? "Auction"
+      : "Buy it Now";
   const tierColor: Record<string, "success" | "secondary" | "warning"> = {
     Free: "success",
     Pro: "secondary",
-    "One-time": "warning",
+    Auction: "secondary",
+    "Buy it Now": "secondary",
   };
+
+  const availablePlatforms =PLATFORM_MAPPING.filter(
+    (platform) => listing?.platforms?.includes(platform.value) && platform.iconCard);
 
   const creator = extractSellerName(listing?.sellerId);
   const installs = listing?.views ?? 0;
@@ -205,13 +205,10 @@ export default function ProductCard({ listing, id }: IProductCard) {
         <Chip
           size="small"
           color={tierColor[tier]}
-          icon={
-            tier === "Pro" ? (
-              <AutoAwesomeIcon sx={{ fontSize: 14 }} />
-            ) : undefined
-          }
           label={tier}
           sx={{
+            backgroundColor: "#000",
+            color: "#fff",
             position: "absolute",
             top: 8,
             right: 8,
@@ -272,6 +269,21 @@ export default function ProductCard({ listing, id }: IProductCard) {
 
       <Stack direction="column" spacing={1.25} sx={{ padding: 2 }}>
         <Stack spacing={0.25}>
+          <Stack direction="row" alignItems="center" spacing={1}>
+              {availablePlatforms?.map((platform, platformIndex) => (
+              <Stack key={platform.value} direction="row" alignItems="center" spacing={0.5}>
+                <Stack direction="column" alignItems="center" spacing={0.5} sx={{ minWidth: 40}}>
+              <Tooltip title={`Sale comes with ${platform.label} version`}>
+                {platform.iconCard}
+              </Tooltip>
+                  <Typography variant="caption" color="text.secondary" sx={{ fontSize: 8 }}>
+                    {platform.label}
+                  </Typography>
+                </Stack>
+                  {platformIndex < availablePlatforms.length - 1 && <Divider orientation="vertical" sx={{ height: 20 }}/>}
+                </Stack>
+            ))}
+          </Stack>
           <Typography
             variant="body2"
             color="text.secondary"

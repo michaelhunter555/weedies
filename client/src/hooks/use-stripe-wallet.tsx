@@ -196,6 +196,20 @@ export const useStripeWallet = () => {
     [apiFetch],
   );
 
+  /** After listing-fee Checkout success — records payment if webhooks did not. */
+  const confirmListingFeeCheckout = useCallback(
+    async (
+      listingId: string,
+      sessionId?: string,
+    ): Promise<{ ok: boolean; status?: string; message?: string }> =>
+      apiFetch<{ ok: boolean; status?: string; message?: string }>(
+        "/stripe/confirm-listing-fee-checkout",
+        "POST",
+        { listingId, sessionId: sessionId ?? "" },
+      ),
+    [apiFetch],
+  );
+
   const managePaymentCapture = useCallback( async (listingId: string, sellerAction: "capture" | "cancel") => {
       const data = await apiFetch<{ ok: boolean }>("/stripe/handle-payment-intent", "POST", { listingId, sellerAction });
       return data.ok;
@@ -239,6 +253,7 @@ export const useStripeWallet = () => {
     startSellerOnboarding,
     createCheckoutSession,
     createListingFeeCheckoutSession,
+    confirmListingFeeCheckout,
     managePaymentCapture,
     getConnectBalance,
     getPayoutBatches,

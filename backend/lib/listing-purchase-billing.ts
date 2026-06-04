@@ -1,3 +1,5 @@
+import { defaultEscrowWebOrigin } from "./escrow-api";
+
 /** Marketplace listing checkout rows in `Transaction` (Stripe or Escrow). */
 export const LISTING_PURCHASE_STRIPE = "Listing purchase";
 export const LISTING_PURCHASE_ESCROW = "Listing purchase (Escrow)";
@@ -19,9 +21,8 @@ export function isListingPurchaseBillingReason(
 
 /** Escrow.com dashboard URL for parties to agree / pay / inspect. */
 export function escrowWebTransactionUrl(escrowTransactionId: string): string {
-  const base =
-    process.env.ESCROW_WEB_ORIGIN?.trim() || "https://www.escrow-sandbox.com";
-  return `${base.replace(/\/$/, "")}/transaction/${encodeURIComponent(
+  const base = defaultEscrowWebOrigin();
+  return `${base}/transaction/${encodeURIComponent(
     escrowTransactionId,
   )}`;
 }

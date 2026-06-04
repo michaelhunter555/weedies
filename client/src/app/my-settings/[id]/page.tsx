@@ -68,8 +68,8 @@ import type {
   AuctionBidStatus,
   Listing,
   ListingAuctionBid,
-  ListingCategory,
 } from "../../../../types";
+import { getCategoryLabel } from "@/utils/listingOptions";
 import {
   countPendingPrivateAccessRequests,
   getPendingPrivateAccessRequests,
@@ -92,15 +92,6 @@ const statusChipProps: Record<
   paused: { label: "Paused", color: "default" },
   removed: { label: "Removed", color: "default" },
   expired: { label: "Expired", color: "error" },
-};
-
-const categoryLabels: Record<ListingCategory, string> = {
-  "ai-tools": "AI tools",
-  productivity: "Productivity",
-  games: "Games",
-  "dev-tools": "Dev tools",
-  design: "Design",
-  extensions: "Extensions",
 };
 
 const FALLBACK_COVER = "/3.jpg";
@@ -1114,7 +1105,7 @@ export default function DashboardPage() {
             const statusKey: ListingStatus = (l.status ??
               "pending_review") as ListingStatus;
             const categoryLabel =
-              categoryLabels[l.category] ?? l.category;
+              getCategoryLabel(l.category);
             const listingPath = (() => {
               const mongoId = l._id ? String(l._id) : "";
               const slug = l.slug ? String(l.slug).trim() : "";

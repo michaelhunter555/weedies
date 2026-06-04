@@ -77,7 +77,7 @@ export async function createListingFeeCheckoutSession(params: {
       payment_method_types: ["card"],
       mode: "payment",
       cancel_url: `${origin}/products?list=edit&listingId=${encodeURIComponent(listingId)}&listing_fee=cancelled`,
-      success_url: `${origin}/products?listed=1&listing_id=${encodeURIComponent(listingId)}`,
+      success_url: `${origin}/products?listed=1&listing_id=${encodeURIComponent(listingId)}&session_id={CHECKOUT_SESSION_ID}`,
       client_reference_id: listingId,
       metadata: meta,
       line_items: [

@@ -4,15 +4,15 @@ import Container from "@mui/material/Container";
 import { styled } from "@mui/material/styles";
 
 type HeaderProps = {
-  isMobile: boolean;
+  compactNav: boolean;
 };
 
 export const StyledContainer = styled(Container, {
-  shouldForwardProp: (prop) => prop !== "isMobile",
-})<HeaderProps>(({ theme, isMobile }) => ({
+  shouldForwardProp: (prop) => prop !== "compactNav",
+})<HeaderProps>(({ compactNav }) => ({
   width: "100%",
   minWidth: 0,
-  ...(isMobile && {
+  ...(compactNav && {
     display: "flex",
     flexDirection: "row",
     gap: 1,
@@ -21,7 +21,7 @@ export const StyledContainer = styled(Container, {
   }),
 }));
 
-export const StyledBox = styled(Box)(({ theme }) => ({
+export const StyledBox = styled(Box)(() => ({
   display: "flex",
   flexDirection: "row",
   justifyContent: "center",
@@ -29,7 +29,4 @@ export const StyledBox = styled(Box)(({ theme }) => ({
   mb: 2,
   backgroundColor: "fff",
   gap: "5px",
-  [theme.breakpoints.down("sm")]: {
-    display: "none",
-  },
 }));

@@ -1,20 +1,65 @@
 import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
 import BoltRoundedIcon from "@mui/icons-material/BoltRounded";
 import ExtensionRoundedIcon from "@mui/icons-material/ExtensionRounded";
-import PaletteRoundedIcon from "@mui/icons-material/PaletteRounded";
+import CloudRoundedIcon from "@mui/icons-material/CloudRounded";
+import HandymanRoundedIcon from "@mui/icons-material/HandymanRounded";
 import SchoolRoundedIcon from "@mui/icons-material/SchoolRounded";
+import StorefrontRoundedIcon from "@mui/icons-material/StorefrontRounded";
 import SportsEsportsRoundedIcon from "@mui/icons-material/SportsEsportsRounded";
 import TerminalRoundedIcon from "@mui/icons-material/TerminalRounded";
 import TuneRoundedIcon from "@mui/icons-material/TuneRounded";
 import WorkspacePremiumRoundedIcon from "@mui/icons-material/WorkspacePremiumRounded";
 
-export type ListingCategory =
-  | "ai-tools"
-  | "productivity"
-  | "games"
-  | "dev-tools"
-  | "design"
-  | "extensions";
+
+// platform icons
+import AppleIcon from '@mui/icons-material/Apple';
+import AndroidIcon from '@mui/icons-material/Android';
+import WebIcon from '@mui/icons-material/Web';
+import LaptopMacIcon from '@mui/icons-material/LaptopMac';
+import WindowIcon from '@mui/icons-material/Window';
+import ExtensionIcon from '@mui/icons-material/Extension';
+import type { ListingCategory, Platforms } from "../../types";
+import { BRAND_PALETTE } from "@/theme/brand-palette";
+
+export type { ListingCategory };
+
+/** Legacy slugs → current taxonomy (e.g. listings saved as `design`). */
+const LEGACY_CATEGORY_ALIASES: Record<string, ListingCategory> = {
+  design: "service",
+};
+
+const LISTING_CATEGORY_VALUES: ListingCategory[] = [
+  "ai-tools",
+  "productivity",
+  "games",
+  "dev-tools",
+  "extensions",
+  "service",
+  "saas",
+  "marketplace",
+];
+
+export const CATEGORY_LABELS: Record<ListingCategory, string> = {
+  "ai-tools": "AI tools",
+  productivity: "Productivity",
+  games: "Games",
+  "dev-tools": "Dev tools",
+  extensions: "Extensions",
+  service: "Services",
+  saas: "SaaS",
+  marketplace: "Marketplace",
+};
+
+/** Human-readable label for chips, cards, and dashboards. */
+export function getCategoryLabel(raw?: string | null): string {
+  const normalized = normalizeListingCategorySlug(raw);
+  if (normalized) return CATEGORY_LABELS[normalized];
+  if (!raw?.trim()) return "App";
+  return raw
+    .split("-")
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+}
 
 export type ListingDifficulty = "beginner" | "intermediate" | "advanced";
 
@@ -41,13 +86,26 @@ export const CATEGORY_META: Record<string, { title: string; subtitle: string }> 
     title: "Dev Tools",
     subtitle: "Boilerplates, CLIs and utilities for shippers.",
   },
-  design: {
-    title: "Design",
-    subtitle: "Palettes, moodboards and design copilots.",
-  },
   extensions: {
     title: "Extensions",
     subtitle: "Browser and editor extensions the community loves.",
+  },
+  service: {
+    title: "Services",
+    subtitle: "Agencies, consulting, and done-for-you digital services.",
+  },
+  saas: {
+    title: "SaaS",
+    subtitle: "Subscription software with recurring revenue.",
+  },
+  marketplace: {
+    title: "Marketplace",
+    subtitle: "Two-sided platforms, directories, and app stores.",
+  },
+  /** @deprecated Use `service` — kept for old URLs/bookmarks. */
+  design: {
+    title: "Services",
+    subtitle: "Agencies, consulting, and done-for-you digital services.",
   },
   new: {
     title: "Fresh drops",
@@ -68,9 +126,22 @@ export const LISTING_CATEGORIES: {
   { label: "Productivity", value: "productivity", icon: <BoltRoundedIcon fontSize="small" /> },
   { label: "Games", value: "games", icon: <SportsEsportsRoundedIcon fontSize="small" /> },
   { label: "Dev Tools", value: "dev-tools", icon: <TerminalRoundedIcon fontSize="small" /> },
-  { label: "Design", value: "design", icon: <PaletteRoundedIcon fontSize="small" /> },
   { label: "Extensions", value: "extensions", icon: <ExtensionRoundedIcon fontSize="small" /> },
+  { label: "Services", value: "service", icon: <HandymanRoundedIcon fontSize="small" /> },
+  { label: "SaaS", value: "saas", icon: <CloudRoundedIcon fontSize="small" /> },
+  { label: "Marketplace", value: "marketplace", icon: <StorefrontRoundedIcon fontSize="small" /> },
 ];
+
+export function normalizeListingCategorySlug(
+  raw?: string | null,
+): ListingCategory | null {
+  const slug = String(raw ?? "").trim();
+  if (!slug) return null;
+  const normalized = LEGACY_CATEGORY_ALIASES[slug] ?? slug;
+  return LISTING_CATEGORY_VALUES.includes(normalized as ListingCategory)
+    ? (normalized as ListingCategory)
+    : null;
+}
 
 export const TURNAROUND_OPTIONS: {
   label: string;
@@ -201,3 +272,58 @@ export const computeListingFee = (
   const privateAddon = isPrivateListing ? PRIVATE_LISTING_FEE : 0;
   return base + privateAddon;
 };
+
+
+/** Platform checkboxes on the listing form (values match API / `Platforms` type). */
+export type PlatformMap = {
+  value: Platforms;
+  label: string;
+  icon: React.ReactElement;
+  checkedIcon: React.ReactElement;
+  iconCard: React.ReactElement;
+};
+
+export const PLATFORM_MAPPING: PlatformMap[] = [
+  {
+    value: "ios",
+    label: "iOS",
+    icon: <AppleIcon />,
+    checkedIcon: <AppleIcon sx={{ color: BRAND_PALETTE.seafoam }} />,
+    iconCard: <AppleIcon sx={{ fontSize: 14, color: "#000000" }} />,
+  },
+  {
+    value: "android",
+    label: "Android",
+    icon: <AndroidIcon />,
+    iconCard: <AndroidIcon sx={{ fontSize: 14, color:  "#3DDC84" }} />,
+    checkedIcon: <AndroidIcon sx={{ color: BRAND_PALETTE.seafoam }} />,
+  },
+  {
+    value: "web",
+    label: "Web",
+    icon: <WebIcon />,
+    iconCard: <WebIcon sx={{ fontSize: 14, color: "#888" }} />,
+    checkedIcon: <WebIcon sx={{ color: BRAND_PALETTE.seafoam }} />,
+  },
+  {
+    value: "macOs",
+    label: "macOS",
+    icon: <LaptopMacIcon />,
+    iconCard: <LaptopMacIcon sx={{ fontSize: 14, color: "#000" }} />,
+    checkedIcon: <LaptopMacIcon sx={{ color: BRAND_PALETTE.seafoam }} />,
+  },
+  {
+    value: "windows",
+    label: "WindowsOS",
+    icon: <WindowIcon />,
+    iconCard: <WindowIcon sx={{ fontSize: 14, color: "#0078D7" }} />,
+    checkedIcon: <WindowIcon sx={{ color: BRAND_PALETTE.seafoam }} />,
+  },
+  {
+    value: "chromeExtension",
+    label: "Chrome ext.",
+    icon: <ExtensionIcon />,
+    iconCard: <ExtensionIcon sx={{ fontSize: 14, color: "#4285F4" }} />,
+    checkedIcon: <ExtensionIcon sx={{ color: BRAND_PALETTE.seafoam }} />,
+  },
+];

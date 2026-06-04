@@ -199,13 +199,24 @@ export type Product = {
 // Marketplace listing (form + API payload)
 // =========================
 
+export type Platforms = 
+"ios" 
+| "android"
+| "web"
+| "macOs" 
+| "windows"
+| "chromeExtension"
+| "other";
+
 export type ListingCategory =
   | "ai-tools"
   | "productivity"
   | "games"
   | "dev-tools"
-  | "design"
-  | "extensions";
+  | "extensions"
+  | "service"
+  | "saas"
+  | "marketplace";
 
 export type ListingTurnaround = "24h" | "3d" | "1w" | "2w" | "1m";
 
@@ -339,6 +350,7 @@ export type Listing = {
 
   tags?: string[];
   techStack?: string[];
+  platforms?: Platforms[];
 
   monthlyRevenue?: number;
   monthlyActiveUsers?: number;

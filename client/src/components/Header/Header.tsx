@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 
 import MenuIcon from "@mui/icons-material/Menu";
-import { Box, Chip, ListItemIcon } from "@mui/material";
+import { Chip, ListItemIcon } from "@mui/material";
 import Drawer from "@mui/material/Drawer";
 import IconButton from "@mui/material/IconButton";
 import List from "@mui/material/List";
@@ -19,20 +19,10 @@ import { useAuth } from "@/context/auth-context";
 import { StyledBox, StyledContainer } from "./HeaderStyles";
 import { getMainMenuItems } from "./menuItems";
 
-const logoStyle = {
-  width: "250px",
-  height: "auto",
-  cursor: "pointer",
-};
-
-type OpenMenuProps = {
-  onMobileMenuClick: () => void;
-};
-
 const Header = () => {
   const [openDrawer, setOpenDrawer] = useState(false);
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
+  const isCompactNav = useMediaQuery(theme.breakpoints.down("md"));
   const [mounted, setMounted] = useState(false);
 
   const { user, isLoggedIn, hydrated } = useAuth();
@@ -41,28 +31,23 @@ const Header = () => {
     setMounted(true);
   }, []);
 
-  const effectiveIsMobile = mounted ? isMobile : false;
+  const showCompactNav = mounted ? isCompactNav : false;
 
   const mainMenuItems = getMainMenuItems(
     hydrated && isLoggedIn && user?.id ? { userId: String(user.id) } : undefined,
   );
-
-  // const handleLogout = () => {
-  //   auth.logout();
-  // };
 
   const handleOpenMenu = () => {
     setOpenDrawer((prev) => !prev);
   };
 
   return (
-    <StyledContainer isMobile={effectiveIsMobile}>
-      {effectiveIsMobile && (
-        <IconButton onClick={handleOpenMenu}>
+    <StyledContainer compactNav={showCompactNav}>
+      {showCompactNav ? (
+        <IconButton onClick={handleOpenMenu} aria-label="Open menu">
           <MenuIcon />
         </IconButton>
-      )}
-      {!effectiveIsMobile && (
+      ) : (
         <StyledBox>
           <List sx={{ display: "flex", alignItems: "center" }}>
             {mainMenuItems.map((menu) => (
@@ -80,10 +65,12 @@ const Header = () => {
                       "&:hover": {
                         color: "#b1b1b1",
                       },
-                      fontSize: 14,
+                      "& .MuiListItemText-primary": {
+                        fontSize: 13,
+                      },
                     }}
                   />
-                  {menu.icon && <ListItemIcon>{menu.icon}</ListItemIcon>}
+                  {menu.icon ? <ListItemIcon>{menu.icon}</ListItemIcon> : null}
                 </ListItem>
               </MenuItem>
             ))}
@@ -91,69 +78,68 @@ const Header = () => {
         </StyledBox>
       )}
 
-        {effectiveIsMobile && (
-          <Drawer open={openDrawer} onClose={handleOpenMenu}>
-            <List
-              sx={{
-                display: "flex",
-                alignItems: "center",
-                flexDirection: "column",
-              }}
-            >
-              {mainMenuItems.map((menu) => (
-                <MenuItem
-                  key={menu.href}
-                  component={Link}
-                  href={menu.href}
-                  onClick={() => setOpenDrawer(false)}
-                >
-                  <ListItem>
-                    <ListItemText
-                      primary={menu.text}
-                      sx={{
-                        color: "text.secondary",
-                        "&:hover": {
-                          color: "#b1b1b1",
-                        },
-                        fontSize: 12,
-                      }}
-                    />
-                    {menu.icon && <ListItemIcon>{menu.icon}</ListItemIcon>}
-                  </ListItem>
-                </MenuItem>
-              ))}
+      {showCompactNav ? (
+        <Drawer open={openDrawer} onClose={handleOpenMenu}>
+          <List
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              flexDirection: "column",
+            }}
+          >
+            {mainMenuItems.map((menu) => (
               <MenuItem
+                key={menu.href}
                 component={Link}
-                href={
-                  hydrated && isLoggedIn && user?.id
-                    ? `/my-settings/${encodeURIComponent(String(user.id))}`
-                    : "/signup"
-                }
+                href={menu.href}
                 onClick={() => setOpenDrawer(false)}
               >
                 <ListItem>
                   <ListItemText
-                    primary={hydrated && isLoggedIn ? "Account" : "Sign in"}
+                    primary={menu.text}
                     sx={{
                       color: "text.secondary",
+                      "&:hover": {
+                        color: "#b1b1b1",
+                      },
                       fontSize: 12,
-                      fontWeight: 700,
                     }}
                   />
+                  {menu.icon ? <ListItemIcon>{menu.icon}</ListItemIcon> : null}
                 </ListItem>
               </MenuItem>
-              <Chip
-                clickable
-                label="Contact"
-                color="primary"
-                onClick={() => {
-                  window.location.href = "/contact-us";
-                }}
-              />
-            </List>
-          </Drawer>
-        )}
-      
+            ))}
+            <MenuItem
+              component={Link}
+              href={
+                hydrated && isLoggedIn && user?.id
+                  ? `/my-settings/${encodeURIComponent(String(user.id))}`
+                  : "/signup"
+              }
+              onClick={() => setOpenDrawer(false)}
+            >
+              <ListItem>
+                <ListItemText
+                  primary={hydrated && isLoggedIn ? "Account" : "Sign in"}
+                  sx={{
+                    color: "text.secondary",
+                    fontSize: 12,
+                    fontWeight: 700,
+                  }}
+                />
+              </ListItem>
+            </MenuItem>
+            <Chip
+              clickable
+              label="Contact"
+              color="primary"
+              onClick={() => {
+                window.location.href = "/contact-us";
+              }}
+            />
+          </List>
+        </Drawer>
+      ) : null}
     </StyledContainer>
   );
 };

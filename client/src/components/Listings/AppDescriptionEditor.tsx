@@ -15,6 +15,9 @@ import Stack from "@mui/material/Stack";
 import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
 import {
+  APP_DESCRIPTION_MAX_WORDS,
+  APP_DESCRIPTION_MIN_PLAIN_TEXT,
+  descriptionPlainTextWordCount,
   isAppDescriptionValid,
   toEditorHtml,
 } from "@/lib/sanitize-html";
@@ -35,6 +38,7 @@ export function AppDescriptionEditor({
   const onChangeRef = React.useRef(onChange);
   onChangeRef.current = onChange;
   const lastEmittedHtml = React.useRef<string | null>(null);
+  const [wordCount, setWordCount] = React.useState(0);
 
   const editor = useEditor({
     extensions: [
@@ -50,6 +54,7 @@ export function AppDescriptionEditor({
     onUpdate: ({ editor: ed }) => {
       const html = ed.getHTML();
       lastEmittedHtml.current = html;
+      setWordCount(descriptionPlainTextWordCount(html));
       onChangeRef.current(html, isAppDescriptionValid(html, minPlainText));
     },
   });
@@ -65,8 +70,15 @@ export function AppDescriptionEditor({
     const next = toEditorHtml(value);
     if (next === editor.getHTML()) return;
     editor.commands.setContent(next, { emitUpdate: false });
-    lastEmittedHtml.current = editor.getHTML();
+    const html = editor.getHTML();
+    lastEmittedHtml.current = html;
+    setWordCount(descriptionPlainTextWordCount(html));
   }, [editor, value]);
+
+  React.useEffect(() => {
+    if (!editor) return;
+    setWordCount(descriptionPlainTextWordCount(editor.getHTML()));
+  }, [editor]);
 
   if (!editor) {
     return (
@@ -191,8 +203,13 @@ export function AppDescriptionEditor({
         />
       </Box>
 
-      <Typography variant="caption" color="text.secondary" sx={{ px: 2, pb: 1, display: "block" }}>
-        Use the toolbar for basic formatting. Links to your app/website are ok. Scripts are not allowed.
+      <Typography
+        variant="caption"
+        color={wordCount > APP_DESCRIPTION_MAX_WORDS ? "error" : "text.secondary"}
+        sx={{ px: 2, pb: 1, display: "block" }}
+      >
+        {wordCount} / {APP_DESCRIPTION_MAX_WORDS} words (min {APP_DESCRIPTION_MIN_PLAIN_TEXT}{" "}
+        characters). Use the toolbar for basic formatting; scripts are not allowed.
       </Typography>
     </Box>
   );

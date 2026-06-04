@@ -7,6 +7,7 @@ import { adminListingApprovalOrDenialNotificationEmail } from "../../../lib/emai
 
 const PENDING_LIKE = new Set([
   "draft",
+  "pending_listing_fee",
   "pending_review",
   "paused",
   "rejected",
@@ -61,6 +62,13 @@ export async function moderateListing(req: Request, res: Response) {
       if (!PENDING_LIKE.has(status)) {
         return void res.status(400).json({
           message: "Only draft / pending / paused / rejected listings can be approved",
+        });
+      }
+
+      if (status === "pending_listing_fee") {
+        return void res.status(409).json({
+          message:
+            "Seller has not completed the listing fee payment yet. It cannot go live until status is pending review.",
         });
       }
 

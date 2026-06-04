@@ -16,8 +16,10 @@ export type ListingCategory =
     | "productivity"
     | "games"
     | "dev-tools"
-    | "design"
-    | "extensions";
+    | "extensions"
+    | "service"
+    | "saas"
+    | "marketplace";
 
 export type ListingTurnaround = "24h" | "3d" | "1w" | "2w" | "1m";
 
@@ -57,3 +59,16 @@ export type AnalyticsProvider =
     | "stripe"
     | "mixpanel"
     | "plausible";
+
+/**
+ * Platforms a listing is available on, meaning a working version.
+ *  i.e. if a user has an app on ios, android and web, they would select all three.
+ */
+export type Platforms = 
+"ios" 
+| "android"
+| "web"
+| "macOs" 
+| "windows"
+| "chromeExtension"
+| "other";

@@ -3,6 +3,7 @@ import Listing from "../../../models/listing";
 
 const PENDING_STATUSES = [
   "draft",
+  "pending_listing_fee",
   "pending_review",
   "paused",
   "rejected",

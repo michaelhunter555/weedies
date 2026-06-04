@@ -1,12 +1,21 @@
 "use client";
 
 import * as React from "react";
+import Box from "@mui/material/Box";
 import Typography, { type TypographyProps } from "@mui/material/Typography";
-import { sanitizeAppDescriptionHtml } from "@/lib/sanitize-html";
+import {
+  sanitizeAppDescriptionHtml,
+  splitDescriptionLeadingPlain,
+} from "@/lib/sanitize-html";
+
+/** ~14–16 lines of body text; scroll for longer copy. */
+export const APP_DESCRIPTION_DISPLAY_MAX_HEIGHT = 360;
 
 type Props = TypographyProps & {
   html: string;
   emptyFallback?: string;
+  /** Cap height and scroll when content is long (product page). */
+  scrollable?: boolean;
 };
 
 const descriptionSx = {
@@ -35,10 +44,15 @@ const descriptionSx = {
 export function AppDescriptionHtml({
   html,
   emptyFallback = "—",
+  scrollable = false,
   sx,
   ...rest
 }: Props) {
   const safe = React.useMemo(() => sanitizeAppDescriptionHtml(html), [html]);
+  const { leadingPlain, html: bodyHtml } = React.useMemo(
+    () => splitDescriptionLeadingPlain(safe),
+    [safe],
+  );
 
   if (!safe) {
     return (
@@ -48,13 +62,48 @@ export function AppDescriptionHtml({
     );
   }
 
+  const content = (
+    <>
+      {leadingPlain ? (
+        <Typography
+          component="div"
+          color="text.secondary"
+          sx={{ whiteSpace: "pre-wrap", mb: bodyHtml ? 1 : 0 }}
+        >
+          {leadingPlain}
+        </Typography>
+      ) : null}
+      {bodyHtml ? (
+        <Typography
+          component="div"
+          color="text.secondary"
+          sx={descriptionSx}
+          dangerouslySetInnerHTML={{ __html: bodyHtml }}
+        />
+      ) : null}
+    </>
+  );
+
+  if (!scrollable) {
+    return (
+      <Box sx={sx} {...(rest as object)}>
+        {content}
+      </Box>
+    );
+  }
+
   return (
-    <Typography
-      component="div"
-      color="text.secondary"
-      sx={{ ...descriptionSx, ...sx }}
-      dangerouslySetInnerHTML={{ __html: safe }}
-      {...rest}
-    />
+    <Box
+      sx={{
+        mt: 0.5,
+        maxHeight: APP_DESCRIPTION_DISPLAY_MAX_HEIGHT,
+        overflowY: "auto",
+        pr: 0.5,
+        ...sx,
+      }}
+      {...(rest as object)}
+    >
+      {content}
+    </Box>
   );
 }

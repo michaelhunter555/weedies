@@ -62,6 +62,7 @@ import {
   FLAT_LISTING_FEE,
   FREE_LISTINGS_COUNT,
   LISTING_CATEGORIES,
+  normalizeListingCategorySlug,
   PRIVATE_LISTING_FEE,
   TURNAROUND_OPTIONS,
   computeListingFee,
@@ -76,8 +77,10 @@ import type {
   ListingCategory,
   ListingDifficulty,
   ListingTurnaround,
+  Platforms,
 } from "../../../types";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { PlatformCheckbox } from "@/components/PlatformCheckbox/PlatformCheckbox";
 
 const MAX_PHOTOS = 6;
 // Mirror the backend multer limit so we reject giant files client-side
@@ -150,6 +153,7 @@ function emptyNewListingInputs(): Record<string, Inputs> {
     startDate: { value: new Date().toISOString(), isValid: true },
     endDate: { value: new Date().toISOString(), isValid: true },
     isPrivateListing: { value: false, isValid: true },
+    platforms: { value: [], isValid: false },
   };
 }
 
@@ -173,7 +177,8 @@ export default function ProductsPage() {
 
   const { uploadPhotos, createListing, saveDraft, getListing, updateListing } =
     useListings();
-  const { createListingFeeCheckoutSession } = useStripeWallet();
+  const { createListingFeeCheckoutSession, confirmListingFeeCheckout } =
+    useStripeWallet();
   const queryClient = useQueryClient();
 
   const draftParam = params.get("draft");
@@ -186,7 +191,12 @@ export default function ProductsPage() {
   const [editListingWasPrivate, setEditListingWasPrivate] = useState(false);
   const [listingPendingFeePayment, setListingPendingFeePayment] =
     useState(false);
+  const [selectedPlatforms, setSelectedPlatforms] = useState<Platforms[]>([]);
   const [resumeFeeSubmitting, setResumeFeeSubmitting] = useState(false);
+  const [listingSubmitNotice, setListingSubmitNotice] = useState<
+    null | "review" | "fee_pending"
+  >(null);
+  const listingFeeConfirmStarted = useRef(false);
 
   useLayoutEffect(() => {
     if (!listingFormMode) {
@@ -212,6 +222,7 @@ export default function ProductsPage() {
         /* */
       }
       setFormData(emptyNewListingInputs(), false);
+      setSelectedPlatforms([]);
       setPhotoSlots((prev) => {
         prev.forEach((s) => {
           if (s.kind === "file") URL.revokeObjectURL(s.preview);
@@ -275,7 +286,8 @@ export default function ProductsPage() {
         const isBuyItNow = Boolean(
           found.buyItNowPrice != null && buyItNowPrice > 0,
         );
-        const category = String(found.category ?? "");
+        const category =
+          normalizeListingCategorySlug(String(found.category ?? "")) ?? "";
         const turnaround = String(found.turnaround ?? "");
         const difficulty = String(found.difficulty ?? "");
         const ageOfBusiness = Number(found.ageOfBusinessMonths ?? 0);
@@ -283,6 +295,7 @@ export default function ProductsPage() {
           found.monthlyRevenue != null ? Number(found.monthlyRevenue) : "";
         const isPrivateListingDraft = Boolean(found.isPrivateListing);
         const isAuction = found.saleType === "auction";
+        const loadedPlatforms = (found.platforms ?? []) as Platforms[];
 
         const draftInputs = {
           appName: {
@@ -292,6 +305,10 @@ export default function ProductsPage() {
           tagline: {
             value: tagline,
             isValid: tagline.trim().length >= 6,
+          },
+          platforms: {
+            value: loadedPlatforms,
+            isValid: loadedPlatforms.length > 0,
           },
           startingPrice: {
             value: startingPrice,
@@ -363,6 +380,7 @@ export default function ProductsPage() {
           draftInputs,
           Object.values(draftInputs).every((i) => i.isValid),
         );
+        setSelectedPlatforms(loadedPlatforms);
 
         const urls = (found.photos ?? []).filter(Boolean);
         setPhotoSlots(
@@ -400,6 +418,52 @@ export default function ProductsPage() {
     setFormData,
     draftParam,
     editParam,
+  ]);
+
+  /** Stripe Checkout success: confirm fee server-side (webhooks often miss in local dev). */
+  useEffect(() => {
+    if (listingFormMode) return;
+    if (params.get("listed") !== "1") return;
+    const listingId = params.get("listing_id")?.trim();
+    if (!listingId || listingFeeConfirmStarted.current) return;
+    if (!auth.hydrated || !auth.user?.id) return;
+
+    listingFeeConfirmStarted.current = true;
+    const sessionId = params.get("session_id")?.trim() || undefined;
+
+    void (async () => {
+      try {
+        const result = await confirmListingFeeCheckout(listingId, sessionId);
+        setListingSubmitNotice(
+          result.ok && result.status === "pending_review"
+            ? "review"
+            : "fee_pending",
+        );
+        await queryClient.invalidateQueries({ queryKey: ["my-listings"] });
+        if (auth.user?.id) {
+          await queryClient.invalidateQueries({
+            queryKey: ["my-listings", auth.user.id],
+          });
+        }
+      } catch {
+        setListingSubmitNotice("fee_pending");
+      }
+
+      const next = new URLSearchParams(params.toString());
+      next.delete("listed");
+      next.delete("listing_id");
+      next.delete("session_id");
+      const qs = next.toString();
+      router.replace(qs ? `/products?${qs}` : "/products");
+    })();
+  }, [
+    listingFormMode,
+    params,
+    auth.hydrated,
+    auth.user?.id,
+    confirmListingFeeCheckout,
+    queryClient,
+    router,
   ]);
 
   // ── Photo upload state ────────────────────────────────────────────────────
@@ -558,7 +622,8 @@ export default function ProductsPage() {
     category: "Category",
     turnaround: "Turnaround time",
     difficulty: "Level of difficulty",
-    appDescription: "Description (min 40 characters)",
+    platforms: "Platforms",
+    appDescription: "Description (min 40 characters, max 600 words)",
     agreeToTerms: "Agree to terms and conditions",
   };
 
@@ -599,6 +664,35 @@ export default function ProductsPage() {
       setSubmitError(
         e instanceof Error ? e.message : "Could not start listing fee checkout.",
       );
+      setResumeFeeSubmitting(false);
+    }
+  };
+
+  const handleSyncListingFeePayment = async () => {
+    if (!workListingId || resumeFeeSubmitting) return;
+    setSubmitError(null);
+    setResumeFeeSubmitting(true);
+    try {
+      const result = await confirmListingFeeCheckout(workListingId);
+      if (!result.ok || result.status !== "pending_review") {
+        throw new Error(
+          result.message ??
+            "Payment not confirmed yet. If you already paid, wait a moment and try again.",
+        );
+      }
+      setListingPendingFeePayment(false);
+      await queryClient.invalidateQueries({ queryKey: ["my-listings"] });
+      if (auth.user?.id) {
+        await queryClient.invalidateQueries({
+          queryKey: ["my-listings", auth.user.id],
+        });
+      }
+      setSubmitError(null);
+    } catch (e) {
+      setSubmitError(
+        e instanceof Error ? e.message : "Could not confirm listing fee payment.",
+      );
+    } finally {
       setResumeFeeSubmitting(false);
     }
   };
@@ -648,6 +742,7 @@ export default function ProductsPage() {
       const basePayload: Partial<Listing> = {
         appName: String(formState.inputs.appName?.value ?? ""),
         tagline: String(formState.inputs.tagline?.value ?? ""),
+        platforms: selectedPlatforms,
         appDescription: String(formState.inputs.appDescription?.value ?? ""),
         startingPrice: startingPriceNum,
         buyItNowPrice: isBuyItNow ? buyItNowPriceNum : undefined,
@@ -795,6 +890,7 @@ export default function ProductsPage() {
         const updated = await updateListing(workListingId, {
           appName: String(formState.inputs.appName?.value ?? ""),
           tagline: String(formState.inputs.tagline?.value ?? ""),
+          platforms: selectedPlatforms,
           appDescription: String(formState.inputs.appDescription?.value ?? ""),
           startingPrice: startingPriceNum,
           buyItNowPrice: isBuyItNow ? buyItNowPriceNum : undefined,
@@ -862,6 +958,7 @@ export default function ProductsPage() {
         isBuyItNow: Boolean(formState.inputs.isBuyItNow?.value),
         appName: String(formState.inputs.appName?.value ?? ""),
         tagline: String(formState.inputs.tagline?.value ?? ""),
+        platforms: selectedPlatforms,
         appDescription: String(formState.inputs.appDescription?.value ?? ""),
         startingPrice: startingPriceNum,
         buyItNowPrice: isBuyItNow ? buyItNowPriceNum : undefined,
@@ -918,6 +1015,14 @@ export default function ProductsPage() {
     }
   };
 
+  const handlePlatformCheckSelection = (platform: Platforms) => {
+    const next = selectedPlatforms.includes(platform)
+      ? selectedPlatforms.filter((p) => p !== platform)
+      : [...selectedPlatforms, platform];
+    setSelectedPlatforms(next);
+    inputHandler("platforms", next, next.length > 0);
+  };
+
   if (listingFormMode) {
     return (
       <>
@@ -945,16 +1050,26 @@ export default function ProductsPage() {
                   This listing is waiting for the listing fee payment. Complete checkout
                   to send it for admin review.
                 </Typography>
-                <Button
-                  variant="contained"
-                  disabled={resumeFeeSubmitting}
-                  onClick={() => void handleResumeListingFee()}
-                  sx={{ textTransform: "none", fontWeight: 700 }}
-                >
-                  {resumeFeeSubmitting
-                    ? "Opening Stripe…"
-                    : "Pay listing fee in Stripe Checkout"}
-                </Button>
+                <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+                  <Button
+                    variant="contained"
+                    disabled={resumeFeeSubmitting}
+                    onClick={() => void handleResumeListingFee()}
+                    sx={{ textTransform: "none", fontWeight: 700 }}
+                  >
+                    {resumeFeeSubmitting
+                      ? "Working…"
+                      : "Pay listing fee in Stripe Checkout"}
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    disabled={resumeFeeSubmitting}
+                    onClick={() => void handleSyncListingFeePayment()}
+                    sx={{ textTransform: "none", fontWeight: 700 }}
+                  >
+                    I already paid, sync status
+                  </Button>
+                </Stack>
               </Alert>
             ) : null}
             {publishedEdit && editBlocked && (
@@ -1201,7 +1316,7 @@ export default function ProductsPage() {
             {/* Turnaround time */}
             <FormControl>
               <FormLabel sx={{ mb: 1, fontWeight: 600 }}>
-                Turnaround time
+                Handover Time
               </FormLabel>
               <Typography variant="caption" color="text.secondary" sx={{ mb: 1 }}>
                 How long you&apos;ll need to prepare all materials (code, credentials,
@@ -1239,6 +1354,17 @@ export default function ProductsPage() {
                   }
                 </Typography>
               )}
+            </FormControl>
+
+            <FormControl>
+              <FormLabel sx={{ mb: 1, fontWeight: 600 }}>Platforms</FormLabel>
+              <Typography variant="caption" color="text.secondary" sx={{ mb: 1.5, display: "block" }}>
+                Select every platform where your app is available (select at least one - <b>{selectedPlatforms.length}</b> selected).
+              </Typography>
+              <PlatformCheckbox
+                selectedPlatforms={selectedPlatforms || []}
+                onCheckSelection={handlePlatformCheckSelection}
+              />
             </FormControl>
 
             {/* Difficulty / level of management */}
@@ -1828,7 +1954,8 @@ export default function ProductsPage() {
 
             {!publishedEdit && listingFee > 0 ? (
               <Typography variant="body2" color="text.secondary" sx={{ textAlign: "right" }}>
-                Listing fee is paid on Stripe&apos;s secure checkout page — no saved card required.
+                Listing fee is paid on Stripe&apos;s secure checkout page. No saved card
+                required.
               </Typography>
             ) : null}
 
@@ -1915,10 +2042,19 @@ export default function ProductsPage() {
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
       <Stack spacing={3}>
-        {params.get("listed") === "1" && (
+        {listingSubmitNotice === "review" && (
           <Alert severity="success" sx={{ borderRadius: 2 }}>
-            Your listing was submitted - we&apos;ll review it and push it live within
-            24 hours.
+            Listing fee received. Your app is in the admin review queue. We
+            typically review within 24 hours.
+          </Alert>
+        )}
+        {listingSubmitNotice === "fee_pending" && (
+          <Alert severity="warning" sx={{ borderRadius: 2 }}>
+            Payment may still be processing. Open{" "}
+            <Link href={`/my-settings/${encodeURIComponent(auth.user?.id ?? "")}`}>
+              My listings
+            </Link>{" "}
+            and use &quot;Pay listing fee&quot;, or refresh this page in a minute.
           </Alert>
         )}
         <Stack spacing={1}>
@@ -1985,6 +2121,30 @@ export default function ProductsPage() {
               collectionName="Dev Tools"
               subtitle="For builders who like shipping."
               category="dev-tools"
+              count={8}
+            />
+            <Collection
+              collectionName="SaaS"
+              subtitle="Subscription apps with recurring revenue."
+              category="saas"
+              count={8}
+            />
+            <Collection
+              collectionName="Marketplace"
+              subtitle="Platforms, directories, and two-sided apps."
+              category="marketplace"
+              count={8}
+            />
+            <Collection
+              collectionName="Services"
+              subtitle="Agencies and done-for-you digital work."
+              category="service"
+              count={8}
+            />
+            <Collection
+              collectionName="Extensions"
+              subtitle="Browser and editor add-ons."
+              category="extensions"
               count={8}
             />
           </>

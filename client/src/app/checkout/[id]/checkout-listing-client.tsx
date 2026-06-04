@@ -656,7 +656,7 @@ export function CheckoutListingClient() {
         {isAuctionListing ? (
           <Box component="ul" sx={{ m: 0, pl: 2.5 }}>
             <Typography component="li" variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-              Sellers have the right to refuse bids.
+              Sellers have the right to refuse bids at their discretion.
             </Typography>
             <Typography component="li" variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
               If your bid is not accepted within three (3) days, it will automatically void.
@@ -677,21 +677,18 @@ export function CheckoutListingClient() {
         ) : (
           <Box component="ul" sx={{ m: 0, pl: 2.5 }}>
             <Typography component="li" variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-              The seller has the right to refuse this purchase and cancel the transaction before
-              handover is complete.
+              The seller has the right to refuse this purchase and cancel the transaction before handover of deliverables begins.
             </Typography>
             <Typography component="li" variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-              If the seller does not respond within three (3) business days, the sale will
-              automatically be voided and your full payment will be refunded.
+              If the seller does not respond within two (2) business days, a cancel button will appear where you can cancel the transaction. Your full payment will be refunded (100%).
             </Typography>
             <Typography component="li" variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
               It is important to speak with the seller before you buy. Use{" "}
               <b>Message seller</b> if you still have questions.
             </Typography>
             <Typography component="li" variant="body2" color="text.secondary">
-              If you complete payment and cancel within the seller&apos;s grace handoff period, you may
-              be charged a flat fee of 10% of the purchase price.{" "}
-              <b>Pending investigation.</b>
+              If payment is accepted by the seller, you will enter the handoff phase. The seller will not receive any payment until you confirm the handoff is complete. If any issues arise, you can raise a dispute and we will step in.{" "}
+              
             </Typography>
           </Box>
         )}

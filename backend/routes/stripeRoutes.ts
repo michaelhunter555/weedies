@@ -4,6 +4,7 @@ import appWebhook from "../controllers/stripe/webhooks/app-webhook";
 import v2Webhook from "../controllers/stripe/webhooks/v2-webhook";
 import createCheckoutSession from "../controllers/stripe/create-checkout-session";
 import createListingFeeCheckoutSessionHandler from "../controllers/stripe/create-listing-fee-checkout-session";
+import confirmListingFeeCheckout from "../controllers/stripe/confirm-listing-fee-checkout";
 import createConnectAccount from "../controllers/stripe/create-connect-account";
 import refreshedOnboardingLink from "../controllers/stripe/refreshed-onboarding-link";
 import deleteConnectedAccount from "../controllers/stripe/delete-connected-account";
@@ -75,6 +76,11 @@ router.post(
   "/create-listing-fee-checkout-session",
   paymentUpdateLimiter,
   createListingFeeCheckoutSessionHandler,
+);
+router.post(
+  "/confirm-listing-fee-checkout",
+  paymentUpdateLimiter,
+  confirmListingFeeCheckout,
 );
 
 // Seller Connect onboarding

@@ -28,6 +28,14 @@ export const baseMainMenuItems: MenuItemsProps[] = [
     text: "Games",
     href: "/products?category=games",
   },
+  {
+    text: "SaaS",
+    href: "/products?category=saas",
+  },
+  {
+    text: "Marketplace",
+    href: "/products?category=marketplace",
+  },
 ];
 
 export function getMainMenuItems(opts?: { userId?: string }): MenuItemsProps[] {

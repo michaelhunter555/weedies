@@ -24,7 +24,7 @@ export async function escrowWebhook(req: Request, res: Response) {
 
   try {
     const body = req.body as EscrowWebhookPayload;
-    console.log(`${LOG_PREFIX} hit ${receivedAt}`, JSON.stringify(body));
+    // console.log(`${LOG_PREFIX} hit ${receivedAt}`, JSON.stringify(body));
 
     if (
       !body ||
@@ -48,9 +48,9 @@ export async function escrowWebhook(req: Request, res: Response) {
         "code" in err &&
         (err as { code?: number }).code === 11000
       ) {
-        console.log(
-          `${LOG_PREFIX} duplicate tx=${escrowTransactionId} event=${body.event}`,
-        );
+        // console.log(
+        //   `${LOG_PREFIX} duplicate tx=${escrowTransactionId} event=${body.event}`,
+        // );
         return void res.status(200).json({ ok: true, duplicate: true });
       }
       throw err;
@@ -62,18 +62,18 @@ export async function escrowWebhook(req: Request, res: Response) {
     });
 
     if (!localTx) {
-      console.log(
-        `${LOG_PREFIX} tx=${escrowTransactionId} event=${body.event} — no local transaction`,
-      );
+      // console.log(
+      //   `${LOG_PREFIX} tx=${escrowTransactionId} event=${body.event} — no local transaction`,
+      // );
       return void res.status(200).json({ ok: true, skipped: "no_local_transaction" });
     }
 
     const escrowTx = await getEscrowTransaction(escrowTransactionId);
     const action = await syncEscrowTransactionFromWebhook(localTx, escrowTx, body.event);
 
-    console.log(
-      `${LOG_PREFIX} tx=${escrowTransactionId} event=${body.event} action=${action} localTx=${String(localTx._id)}`,
-    );
+    // console.log(
+    //   `${LOG_PREFIX} tx=${escrowTransactionId} event=${body.event} action=${action} localTx=${String(localTx._id)}`,
+    // );
 
     return void res.status(200).json({ ok: true, action, event: body.event });
   } catch (err) {

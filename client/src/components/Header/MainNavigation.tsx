@@ -14,14 +14,13 @@ import {
   IconButton,
   Tooltip,
   Typography,
-  useMediaQuery,
-  useTheme,
 } from "@mui/material";
 import Stack from "@mui/material/Stack";
 
 import { useUnreadMessages } from "@/hooks/use-unread-messages";
 import { APP_TAGLINE } from "@/brand";
 
+import { useDeviceCheck } from "@/hooks/device-hook";
 import Header from "./Header";
 import {
   BRAND_PALETTE,
@@ -33,9 +32,7 @@ import { useRouter } from "next/navigation";
 const MainNavigation = () => {
   const router = useRouter();
   const auth = useContext(AuthContext);
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
-  const isTablet = useMediaQuery(theme.breakpoints.down("md"));
+  const { isMobile, isTablet, isDesktop } = useDeviceCheck();
   const [mounted, setMounted] = useState(false);
   const { unreadCount } = useUnreadMessages();
 
@@ -45,6 +42,7 @@ const MainNavigation = () => {
 
   const effectiveIsMobile = mounted ? isMobile : false;
   const effectiveIsTablet = mounted ? isTablet : false;
+  const effectiveIsDesktop = mounted ? isDesktop : true;
 
   return (
     <Box
@@ -104,7 +102,7 @@ const MainNavigation = () => {
                 </Typography>
               </Stack>
             </Stack>
-            {!effectiveIsTablet && !effectiveIsMobile ? (
+            {effectiveIsDesktop ? (
               <Typography variant="subtitle2" color="text.secondary">
                 {APP_TAGLINE}
               </Typography>
@@ -129,7 +127,7 @@ const MainNavigation = () => {
             spacing={0.5}
             sx={{ flexShrink: 0 }}
           >
-            {effectiveIsMobile && mounted ? (
+            {mounted && (effectiveIsMobile || effectiveIsTablet) ? (
               <Button
                 variant="text"
                 size="small"
@@ -152,7 +150,7 @@ const MainNavigation = () => {
                 {auth.isLoggedIn ? "Account" : "Sign in"}
               </Button>
             ) : null}
-            {!effectiveIsMobile && (
+            {effectiveIsDesktop ? (
               <Button
                 variant="contained"
                 size="small"
@@ -162,7 +160,7 @@ const MainNavigation = () => {
               >
                 List your app
               </Button>
-            )}
+            ) : null}
 
             {mounted && auth.isLoggedIn ? (
               <Tooltip title="Messages">
@@ -189,7 +187,7 @@ const MainNavigation = () => {
               </Tooltip>
             ) : null}
 
-            {!effectiveIsMobile && mounted && (
+            {effectiveIsDesktop && mounted ? (
               <Button
                 variant="text"
                 onClick={() => {
@@ -203,7 +201,7 @@ const MainNavigation = () => {
               >
                 {auth.isLoggedIn ? "Account" : "Sign in"}
               </Button>
-            )}
+            ) : null}
           </Stack>
         </Stack>
       </Container>

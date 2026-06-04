@@ -1,13 +1,40 @@
 /**
- * Escrow.com API client (sandbox by default).
+ * Escrow.com API client.
+ * - Development: sandbox API + integration helper by default.
+ * - Production (`NODE_ENV=production`): live API + www.escrow.com unless overridden.
+ * @see https://www.escrow.com/api/docs/basics
  * @see https://www.escrow-sandbox.com/api/docs/create-transaction
- * @see https://www.escrow-sandbox.com/api/docs/agree-to-a-transaction
- * @see https://www.escrow-sandbox.com/api/docs/integration-helper/approving-payments
  */
 
-const DEFAULT_API_BASE = "https://api.escrow-sandbox.com/2017-09-01";
-const DEFAULT_INTEGRATION_BASE =
+const SANDBOX_API_BASE = "https://api.escrow-sandbox.com/2017-09-01";
+const PRODUCTION_API_BASE = "https://api.escrow.com/2017-09-01";
+
+/** Sandbox-only — simulates funding in dev; not used for live buyer payments. */
+const SANDBOX_INTEGRATION_BASE =
   "https://integrationhelper.escrow-sandbox.com/v1";
+
+export const ESCROW_SANDBOX_WEB_ORIGIN = "https://www.escrow-sandbox.com";
+export const ESCROW_PRODUCTION_WEB_ORIGIN = "https://www.escrow.com";
+
+/** API host when `ESCROW_API_BASE_URL` is unset. */
+export function defaultEscrowApiBaseUrl(): string {
+  if (process.env.ESCROW_API_BASE_URL?.trim()) {
+    return process.env.ESCROW_API_BASE_URL.trim();
+  }
+  return process.env.NODE_ENV === "production"
+    ? PRODUCTION_API_BASE
+    : SANDBOX_API_BASE;
+}
+
+/** Party dashboard links when `ESCROW_WEB_ORIGIN` is unset. */
+export function defaultEscrowWebOrigin(): string {
+  if (process.env.ESCROW_WEB_ORIGIN?.trim()) {
+    return process.env.ESCROW_WEB_ORIGIN.trim().replace(/\/$/, "");
+  }
+  return process.env.NODE_ENV === "production"
+    ? ESCROW_PRODUCTION_WEB_ORIGIN
+    : ESCROW_SANDBOX_WEB_ORIGIN;
+}
 
 // --- Request / response shapes (Escrow API 2017-09-01) ---
 
@@ -239,10 +266,10 @@ function getEscrowConfig(): EscrowApiConfig {
     apiKey,
     integrationPassword:
       process.env.ESCROW_INTEGRATION_PASSWORD?.trim() || apiKey,
-    apiBaseUrl: process.env.ESCROW_API_BASE_URL?.trim() || DEFAULT_API_BASE,
+    apiBaseUrl: defaultEscrowApiBaseUrl(),
     integrationBaseUrl:
       process.env.ESCROW_INTEGRATION_BASE_URL?.trim() ||
-      DEFAULT_INTEGRATION_BASE,
+      SANDBOX_INTEGRATION_BASE,
   };
 }
 
@@ -302,11 +329,11 @@ async function escrowRequest<T>(
 }
 
 function apiBase(config: EscrowApiConfig): string {
-  return (config.apiBaseUrl ?? DEFAULT_API_BASE).replace(/\/$/, "");
+  return (config.apiBaseUrl ?? defaultEscrowApiBaseUrl()).replace(/\/$/, "");
 }
 
 function integrationBase(config: EscrowApiConfig): string {
-  return (config.integrationBaseUrl ?? DEFAULT_INTEGRATION_BASE).replace(
+  return (config.integrationBaseUrl ?? SANDBOX_INTEGRATION_BASE).replace(
     /\/$/,
     "",
   );

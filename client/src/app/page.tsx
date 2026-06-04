@@ -23,9 +23,8 @@ import SupportAgentIcon from '@mui/icons-material/SupportAgent';
 import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
 import BoltRoundedIcon from "@mui/icons-material/BoltRounded";
 import VisibilityRoundedIcon from "@mui/icons-material/VisibilityRounded";
-import ExtensionRoundedIcon from "@mui/icons-material/ExtensionRounded";
-import PaletteRoundedIcon from "@mui/icons-material/PaletteRounded";
 import RocketLaunchRoundedIcon from "@mui/icons-material/RocketLaunchRounded";
+import { getCategoryLabel, LISTING_CATEGORIES } from "@/utils/listingOptions";
 import SearchRoundedIcon from "@mui/icons-material/SearchRounded";
 import SportsEsportsRoundedIcon from "@mui/icons-material/SportsEsportsRounded";
 import StorefrontRoundedIcon from "@mui/icons-material/StorefrontRounded";
@@ -55,22 +54,7 @@ const HIGHLIGHT_CARDS = [
   { image: "homepage_pack/3.png", caption: "We provide the platform and security to guarantee a safe & secure exchange." },
 ] as const;
 
-const HERO_CATEGORIES = [
-  { label: "AI Tools", icon: <AutoAwesomeIcon fontSize="small" />, value: "ai-tools" },
-  { label: "Productivity", icon: <BoltRoundedIcon fontSize="small" />, value: "productivity" },
-  { label: "Games", icon: <SportsEsportsRoundedIcon fontSize="small" />, value: "games" },
-  { label: "Dev Tools", icon: <TerminalRoundedIcon fontSize="small" />, value: "dev-tools" },
-  { label: "Design", icon: <PaletteRoundedIcon fontSize="small" />, value: "design" },
-  { label: "Extensions", icon: <ExtensionRoundedIcon fontSize="small" />, value: "extensions" },
-];
-
-function formatCategory(raw?: string) {
-  if (!raw) return "App";
-  return raw
-    .split("-")
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(" ");
-}
+const HERO_CATEGORIES = LISTING_CATEGORIES;
 
 function listingProductPath(listing: Listing) {
   const id = listing._id ? String(listing._id) : "";
@@ -474,7 +458,7 @@ export default function Home() {
                 <Stack spacing={1.5}>
                   <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
                     <Chip
-                      label={formatCategory(spotlight.category)}
+                      label={getCategoryLabel(spotlight.category)}
                       size="small"
                       sx={{
                         fontWeight: 700,

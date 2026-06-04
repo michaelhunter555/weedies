@@ -25,19 +25,11 @@ import {
   Typography,
 } from "@mui/material";
 
-import type { Listing, ListingCategory } from "../../../../../types";
+import type { Listing } from "../../../../../types";
+import { getCategoryLabel } from "@/utils/listingOptions";
 
 const PAGE_SIZE = 20;
 const FALLBACK_COVER = "/3.jpg";
-
-const categoryLabels: Record<ListingCategory, string> = {
-  "ai-tools": "AI tools",
-  productivity: "Productivity",
-  games: "Games",
-  "dev-tools": "Dev tools",
-  design: "Design",
-  extensions: "Extensions",
-};
 
 const statusChip: Record<
   string,
@@ -332,7 +324,7 @@ export default function MyListingsPage() {
                 (l.photos && l.photos[l.coverIndex ?? 0]) || l.photos?.[0] || FALLBACK_COVER;
               const st = String(l.status ?? "draft");
               const chip = statusChip[st] ?? { label: st, color: "default" as const };
-              const categoryLabel = categoryLabels[l.category] ?? l.category;
+              const categoryLabel = getCategoryLabel(l.category);
               const productHref = listingHref(l);
               const editHref = l._id
                 ? `/products?list=edit&listingId=${encodeURIComponent(String(l._id))}`

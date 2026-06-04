@@ -1,15 +1,19 @@
 import {
-  APP_DESCRIPTION_MAX_HTML,
+  APP_DESCRIPTION_MAX_STORED_CHARS,
+  APP_DESCRIPTION_MAX_WORDS,
   APP_DESCRIPTION_MIN_PLAIN_TEXT,
   htmlPlainTextLength,
+  htmlPlainTextWordCount,
   isValidAppDescriptionHtml,
   sanitizeHtml,
 } from "./sanitize-html";
 
 export {
-  APP_DESCRIPTION_MAX_HTML,
+  APP_DESCRIPTION_MAX_STORED_CHARS,
+  APP_DESCRIPTION_MAX_WORDS,
   APP_DESCRIPTION_MIN_PLAIN_TEXT,
   htmlPlainTextLength,
+  htmlPlainTextWordCount,
   isValidAppDescriptionHtml,
   sanitizeHtml,
 };
@@ -21,10 +25,18 @@ export function prepareAppDescriptionForWrite(
   const min = options?.minPlainText ?? 0;
   const value = sanitizeHtml(String(raw ?? ""));
 
-  if (value.length > APP_DESCRIPTION_MAX_HTML) {
+  if (value.length > APP_DESCRIPTION_MAX_STORED_CHARS) {
     return {
       ok: false,
-      message: `Description is too long (max ${APP_DESCRIPTION_MAX_HTML} characters of HTML).`,
+      message: "Description is too long. Please shorten formatting or text.",
+    };
+  }
+
+  const words = htmlPlainTextWordCount(value);
+  if (words > APP_DESCRIPTION_MAX_WORDS) {
+    return {
+      ok: false,
+      message: `Description is too long (max ${APP_DESCRIPTION_MAX_WORDS} words, currently ${words}).`,
     };
   }
 
