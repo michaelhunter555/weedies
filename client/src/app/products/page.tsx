@@ -68,15 +68,17 @@ import {
   computeListingFee,
   determineApplicationFee,
   freeListingsRemaining,
+  isWithinFreeListingTier,
+} from "@/utils/listingOptions";
+import {
   isListingAppNameValid,
   isListingTaglineValid,
-  isWithinFreeListingTier,
   LISTING_APP_NAME_MAX,
   LISTING_APP_NAME_MIN,
   LISTING_TAGLINE_MAX,
   LISTING_TAGLINE_MIN,
   listingFieldCharCountLabel,
-} from "@/utils/listingOptions";
+} from "@/lib/listing-field-limits";
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import type {
   Inputs,

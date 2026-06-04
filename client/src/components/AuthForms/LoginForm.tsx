@@ -103,14 +103,13 @@ const LoginForm = () => {
 
   const [formState, inputHandler, setFormData] = useForm(loginFields, false);
 
-  // If the user is already signed in (e.g. refreshed /signup directly),
-  // bounce them home. `hydrated` guards against acting on stale initial
-  // state before the provider has read from localStorage.
+  // Already signed in on /signup → home, or verify-email if inbox not confirmed.
   useEffect(() => {
-    if (authCtx.hydrated && authCtx.isLoggedIn) {
-      router.replace("/");
-    }
-  }, [authCtx.hydrated, authCtx.isLoggedIn, router]);
+    if (!authCtx.hydrated || !authCtx.isLoggedIn || !authCtx.user) return;
+    router.replace(
+      needsEmailVerification(authCtx.user) ? VERIFY_EMAIL_PATH : "/",
+    );
+  }, [authCtx.hydrated, authCtx.isLoggedIn, authCtx.user, router]);
 
   const passwordValue = String(formState?.inputs?.password?.value || "");
   const pwMeter = useMemo(() => passwordStrength(passwordValue), [passwordValue]);
