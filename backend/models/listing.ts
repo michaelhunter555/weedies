@@ -140,7 +140,7 @@ const ListingSchema = new mongoose.Schema<Listing>(
     paymentIntentId: { type: String, required: false, default: null, index: true },
 
     appName: { type: String, required: true, trim: true, maxlength: 80 },
-    tagline: { type: String, required: true, trim: true, maxlength: 140 },
+    tagline: { type: String, required: true, trim: true, maxlength: 80 },
     appDescription: { type: String, required: true, maxlength: 16000 },
     category: {
       type: String,

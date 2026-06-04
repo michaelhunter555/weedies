@@ -68,7 +68,14 @@ import {
   computeListingFee,
   determineApplicationFee,
   freeListingsRemaining,
+  isListingAppNameValid,
+  isListingTaglineValid,
   isWithinFreeListingTier,
+  LISTING_APP_NAME_MAX,
+  LISTING_APP_NAME_MIN,
+  LISTING_TAGLINE_MAX,
+  LISTING_TAGLINE_MIN,
+  listingFieldCharCountLabel,
 } from "@/utils/listingOptions";
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import type {
@@ -299,12 +306,12 @@ export default function ProductsPage() {
 
         const draftInputs = {
           appName: {
-            value: appName,
-            isValid: appName.trim().length >= 2,
+            value: appName.slice(0, LISTING_APP_NAME_MAX),
+            isValid: isListingAppNameValid(appName),
           },
           tagline: {
-            value: tagline,
-            isValid: tagline.trim().length >= 6,
+            value: tagline.slice(0, LISTING_TAGLINE_MAX),
+            isValid: isListingTaglineValid(tagline),
           },
           platforms: {
             value: loadedPlatforms,
@@ -615,8 +622,8 @@ export default function ProductsPage() {
   // initial state above. If a field's `isValid` is still false when the
   // user clicks submit, we surface its label so they know what's missing.
   const FIELD_LABELS: Record<string, string> = {
-    appName: "App name (min 2 characters)",
-    tagline: "Tagline (min 6 characters)",
+    appName: `App name (${LISTING_APP_NAME_MIN}–${LISTING_APP_NAME_MAX} characters)`,
+    tagline: `Tagline (${LISTING_TAGLINE_MIN}–${LISTING_TAGLINE_MAX} characters)`,
     startingPrice: "Starting price",
     buyItNowPrice: "Buy-it-now price (must be ≥ starting price)",
     category: "Category",
@@ -1193,31 +1200,47 @@ export default function ProductsPage() {
 
             {/* Basics */}
             <TextField
+              label="App name"
               placeholder="App name"
               fullWidth
               value={formState?.inputs?.appName?.value || ""}
-              onChange={(e) =>
-                inputHandler(
-                  "appName",
-                  e.target.value,
-                  e.target.value.trim().length >= 2
-                )
+              onChange={(e) => {
+                const next = e.target.value.slice(0, LISTING_APP_NAME_MAX);
+                inputHandler("appName", next, isListingAppNameValid(next));
+              }}
+              inputProps={{ maxLength: LISTING_APP_NAME_MAX }}
+              helperText={listingFieldCharCountLabel(
+                String(formState?.inputs?.appName?.value ?? "").length,
+                LISTING_APP_NAME_MAX,
+                LISTING_APP_NAME_MIN,
+              )}
+              error={
+                String(formState?.inputs?.appName?.value ?? "").length > 0 &&
+                !formState?.inputs?.appName?.isValid
               }
               sx={listFormOutlinedFieldSx}
               InputProps={{ sx: { borderRadius: 2 } }}
             />
 
             <TextField
+              label="Tagline"
               placeholder="One-line tagline (what does it do?)"
               fullWidth
               value={formState?.inputs?.tagline?.value || ""}
               sx={listFormOutlinedFieldSx}
-              onChange={(e) =>
-                inputHandler(
-                  "tagline",
-                  e.target.value,
-                  e.target.value.trim().length >= 6
-                )
+              onChange={(e) => {
+                const next = e.target.value.slice(0, LISTING_TAGLINE_MAX);
+                inputHandler("tagline", next, isListingTaglineValid(next));
+              }}
+              inputProps={{ maxLength: LISTING_TAGLINE_MAX }}
+              helperText={listingFieldCharCountLabel(
+                String(formState?.inputs?.tagline?.value ?? "").length,
+                LISTING_TAGLINE_MAX,
+                LISTING_TAGLINE_MIN,
+              )}
+              error={
+                String(formState?.inputs?.tagline?.value ?? "").length > 0 &&
+                !formState?.inputs?.tagline?.isValid
               }
               InputProps={{ sx: { borderRadius: 2 } }}
             />

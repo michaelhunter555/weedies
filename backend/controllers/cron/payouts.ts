@@ -5,7 +5,7 @@ import PayoutBatch from "../../models/payoutBatch";
 import Transaction from "../../models/transactions";
 import stripe from "../../utils/stripe";
 
-/** Hold completed sales at least this long before paying out (dispute window). */
+/** Hold after buyer confirms receipt (dispute window before Connect payout). */
 const PAYOUT_HOLD_MS = 24 * 60 * 60 * 1000;
 
 /** Minimum Stripe payout amount in cents ($1.00). */
@@ -22,22 +22,38 @@ type SellerPayoutGroup = {
 
 /**
  * Bi-weekly seller payouts (Connect Express).
- * Groups unpaid `Listing purchase` transactions by seller, skips restricted
- * accounts, and creates Stripe payouts on each connected account.
+ * Groups unpaid Stripe `Listing purchase` transactions by seller only when
+ * the buyer confirmed receipt on the exchange, then skips restricted accounts.
  */
 export default async function initiatePayout(): Promise<void> {
   try {
-    const cutoff = new Date(Date.now() - PAYOUT_HOLD_MS);
+    const buyerConfirmCutoff = new Date(Date.now() - PAYOUT_HOLD_MS);
 
     const groups = (await Transaction.aggregate([
       {
         $match: {
-          createdAt: { $lte: cutoff },
           hasDispute: { $ne: true },
           paidOut: { $ne: true },
           paymentStatus: "succeeded",
           stripePaymentIntentId: { $exists: true, $ne: null },
           billingReason: "Listing purchase",
+        },
+      },
+      {
+        $lookup: {
+          from: "listingexchanges",
+          localField: "ListingId",
+          foreignField: "listingId",
+          as: "exchange",
+        },
+      },
+      { $unwind: "$exchange" },
+      {
+        $match: {
+          "exchange.buyerConfirmedAt": { $exists: true, $ne: null, $lte: buyerConfirmCutoff },
+          "exchange.paymentStatus": {
+            $nin: ["canceled", "cancelled", "failed", "disputed"],
+          },
         },
       },
       {

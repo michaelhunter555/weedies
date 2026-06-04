@@ -371,19 +371,14 @@ const LoginForm = () => {
               >
                 {isLogin ? (
                   <>
-                    Welcome back,{" "}
-                    <Box component="span" sx={{ color: BRAND_PALETTE.seafoam }}>
-                      builder
-                    </Box>
-                    .
+                    Welcome back,
+                    
                   </>
                 ) : (
                   <>
-                    Start selling your{" "}
-                    <Box component="span" sx={{ color: BRAND_PALETTE.seafoam }}>
-                      indie
-                    </Box>{" "}
-                    apps.
+                    Buy and Sell{" "}
+                    
+                    Apps.
                   </>
                 )}
               </Typography>
