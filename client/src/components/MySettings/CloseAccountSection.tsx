@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { getAuth } from 'firebase/auth'
 import {
   Alert,
   Box,
@@ -30,6 +31,7 @@ const CONFIRM_PHRASE = "CLOSE";
 
 export function CloseAccountSection() {
   const router = useRouter();
+  const auth = getAuth();
   const { logout } = useAuth();
   const { apiFetch } = useApiFetchOrThrow();
 
@@ -54,6 +56,7 @@ export function CloseAccountSection() {
     try {
       await apiFetch<DeleteAccountResponse>("/user/me", "DELETE");
       handleCloseDialog();
+      await auth.currentUser?.delete();
       await logout();
       router.replace("/");
     } catch (err) {

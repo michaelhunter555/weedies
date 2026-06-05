@@ -8,6 +8,7 @@ import { SecureCheckoutNote } from "@/components/Checkout/SecureCheckoutNote";
 import Collection from "@/components/Collections/Collection";
 import { PlatformSecurityModal } from "@/components/Marketing/PlatformSecurityModal";
 import { ListingCoverImage } from "@/components/Listings/ListingCoverImage";
+import { ListingPlatformsRow } from "@/components/Listings/ListingPlatformsRow";
 import { useListings } from "@/hooks/use-listings";
 import {
   PLACEHOLDER_APP_COVER,
@@ -38,7 +39,6 @@ import Divider from "@mui/material/Divider";
 import Grid from "@mui/material/Grid2";
 import InputAdornment from "@mui/material/InputAdornment";
 import Paper from "@mui/material/Paper";
-import Rating from "@mui/material/Rating";
 import Skeleton from "@mui/material/Skeleton";
 import Stack from "@mui/material/Stack";
 import TextField from "@mui/material/TextField";
@@ -468,7 +468,6 @@ export default function Home() {
                     />
                     {Number(spotlight.startingPrice ?? 0) > 0 ? (
                       <Chip
-                        icon={<AutoAwesomeIcon sx={{ fontSize: 14 }} />}
                         label="Pro"
                         size="small"
                         variant="outlined"
@@ -492,16 +491,17 @@ export default function Home() {
                     by <b>{sellerLabel(spotlight)}</b>
                   </Typography>
 
-                  <Rating
-                    readOnly
-                    precision={0.5}
-                    value={Number(spotlight.averageRating ?? 0)}
-                    size="small"
-                  />
-
                   <Typography variant="h4" sx={{ fontWeight: 800, color: PALETTE.charcoal }}>
                     {formatPrice(spotlight)}
                   </Typography>
+
+                  {spotlight.platforms && spotlight.platforms.length > 0 ? (
+                    <ListingPlatformsRow
+                      platforms={spotlight.platforms}
+                      size="card"
+                      sx={{ mt: 0.25 }}
+                    />
+                  ) : null}
 
                   <Typography variant="body2" color="text.secondary">
                     {spotlight.tagline || "Explore this listing on Dap & Flip."}
