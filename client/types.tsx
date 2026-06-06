@@ -459,6 +459,7 @@ export type ListingExchangeSnapshot = {
   deliverables: ListingExchangeDeliverable[];
   buyerConfirmedAt: string | null;
   updatedAt?: string | null;
+  createdAt?: string | null;
   sellerCapturedPayment?: boolean;
   paymentCaptureExpiration?: string | Date | null;
   paymentStatus?: "succeeded" | "failed" | "canceled" | "pending" | "disputed";

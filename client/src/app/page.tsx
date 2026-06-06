@@ -403,17 +403,17 @@ export default function Home() {
                     height: { xs: 220, md: 320 },
                     borderRadius: 3,
                     overflow: "hidden",
-                    border: `1px solid ${PALETTE.sage}`,
-                    backgroundColor: PALETTE.mint,
+                   
                   }}
                 >
                   <ListingCoverImage
                     listing={spotlight}
                     alt={`${spotlight.appName} cover`}
                     sx={{
+                      
                       width: "100%",
                       height: "100%",
-                      objectFit: "cover",
+                      objectFit: "contain",
                       display: "block",
                     }}
                   />
@@ -484,9 +484,23 @@ export default function Home() {
                     )}
                   </Stack>
 
+                  <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+              
+                  <ListingCoverImage
+                    listing={spotlight}
+                    alt={`${spotlight.appName} cover`}
+                    sx={{
+                      borderRadius: 2,
+                      width: 40,
+                      height: 40,
+                      objectFit: "contain",
+                      display: "block",
+                    }}
+                  />
                   <Typography variant="h5" sx={{ fontWeight: 800, color: PALETTE.charcoal }}>
                     {spotlight.appName}
                   </Typography>
+                  </Stack>
                   <Typography variant="body2" color="text.secondary">
                     by <b>{sellerLabel(spotlight)}</b>
                   </Typography>
@@ -506,8 +520,9 @@ export default function Home() {
                   <Typography variant="body2" color="text.secondary">
                     {spotlight.tagline || "Explore this listing on Dap & Flip."}
                   </Typography>
+                  <Divider sx={{ width: '100%', borderColor: PALETTE.sage, my: 2 }} />
 
-                  {monthlyRevenueLabel(spotlight) ? (
+                  {monthlyRevenueLabel(spotlight) && Number(monthlyRevenueLabel(spotlight)) > 0 ? (
                     <Typography
                       variant="body2"
                       color="text.secondary"

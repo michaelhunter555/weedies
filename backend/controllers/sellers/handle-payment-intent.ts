@@ -8,6 +8,9 @@ import ListingExchange from "../../models/exchange";
 import Transaction from "../../models/transactions";
 import stripe from "../../utils/stripe";
 
+/** Buyer may release an uncaptured authorization after this hold (ms). */
+const BUYER_CANCEL_AFTER_MS = 2 * 24 * 60 * 60 * 1000;
+
 function emitExchangeUpdated(
   participantIds: string[],
   payload: Record<string, unknown>,
@@ -51,7 +54,7 @@ export default async function handlePaymentIntent(req: Request, res: Response) {
   }
 
   try {
-    const listing = await Listing.findById(listingId).select("sellerId status");
+    const listing = await Listing.findById(listingId).select("sellerId buyerId status");
     if (!listing || listing.status !== "sold") {
       return void res.status(404).json({ message: "Listing not found or not sold." });
     }
@@ -64,16 +67,35 @@ export default async function handlePaymentIntent(req: Request, res: Response) {
           ? String((sellerOid as { _id: unknown })._id)
           : String(sellerOid ?? "");
 
-    if (sellerStr !== userId) {
-      return void res.status(403).json({ message: "Only the seller can capture or cancel." });
+    const buyerOid = listing.buyerId;
+    const buyerStr =
+      buyerOid instanceof mongoose.Types.ObjectId
+        ? String(buyerOid)
+        : buyerOid && typeof buyerOid === "object" && "_id" in buyerOid
+          ? String((buyerOid as { _id: unknown })._id)
+          : String(buyerOid ?? "");
+
+    const isSeller = sellerStr === userId;
+    const isBuyer = buyerStr === userId;
+
+    if (sellerAction === "capture" && !isSeller) {
+      return void res.status(403).json({ message: "Only the seller can capture payment." });
     }
 
+    if (sellerAction === "cancel" && !isSeller && !isBuyer) {
+      return void res.status(403).json({
+        message: "Only the buyer or seller can cancel this authorization.",
+      });
+    }
+
+    const listingOid = new mongoose.Types.ObjectId(listingId);
+
     const tx = (await Transaction.findOne({
-      ListingId: new mongoose.Types.ObjectId(listingId),
+      ListingId: listingOid,
       billingReason: "Listing purchase",
     })
       .sort({ createdAt: -1 })
-      .lean()) as { stripePaymentIntentId?: string } | null;
+      .lean()) as { stripePaymentIntentId?: string; createdAt?: Date } | null;
 
     const piId = tx?.stripePaymentIntentId;
     if (!piId) {
@@ -81,7 +103,6 @@ export default async function handlePaymentIntent(req: Request, res: Response) {
     }
 
     const intent = await stripe.paymentIntents.retrieve(piId);
-    const listingOid = new mongoose.Types.ObjectId(listingId);
 
     if (sellerAction === "capture") {
       if (intent.status !== "requires_capture") {
@@ -148,39 +169,76 @@ export default async function handlePaymentIntent(req: Request, res: Response) {
       return void res.status(200).json({ ok: true, paymentStatus: "succeeded" });
     }
 
-    const cancelable =
-      intent.status === "requires_capture" ||
-      intent.status === "requires_payment_method" ||
-      intent.status === "requires_confirmation" ||
-      intent.status === "requires_action";
-    if (!cancelable) {
-      return void res.status(400).json({
-        message: `Payment intent cannot be canceled from status ${intent.status}.`,
-      });
+    const exchangeDoc = (await ListingExchange.findOne({
+      listingId: listingOid,
+    })
+      .select("buyerId sellerId createdAt sellerCapturedPayment")
+      .lean()) as {
+      buyerId?: unknown;
+      sellerId?: unknown;
+      createdAt?: Date;
+      sellerCapturedPayment?: boolean;
+    } | null;
+
+    if (isBuyer) {
+      const exchangeBuyerStr =
+        exchangeDoc?.buyerId != null ? String(exchangeDoc.buyerId) : buyerStr;
+      if (exchangeBuyerStr !== userId) {
+        return void res.status(403).json({ message: "Only the buyer can cancel here." });
+      }
+      if (exchangeDoc?.sellerCapturedPayment) {
+        return void res.status(400).json({ message: "Payment has already been captured." });
+      }
+      const createdAt = exchangeDoc?.createdAt ?? tx?.createdAt;
+      if (!createdAt) {
+        return void res.status(400).json({
+          message: "Could not determine when this exchange started.",
+        });
+      }
+      if (Date.now() - new Date(createdAt).getTime() < BUYER_CANCEL_AFTER_MS) {
+        return void res.status(400).json({
+          message:
+            "Buyers can cancel an uncaptured authorization only after 2 days without seller capture.",
+        });
+      }
+      if (intent.status !== "requires_capture") {
+        return void res.status(400).json({
+          message: `Payment is not awaiting capture (status: ${intent.status}).`,
+        });
+      }
+    } else {
+      const cancelable =
+        intent.status === "requires_capture" ||
+        intent.status === "requires_payment_method" ||
+        intent.status === "requires_confirmation" ||
+        intent.status === "requires_action";
+      if (!cancelable) {
+        return void res.status(400).json({
+          message: `Payment intent cannot be canceled from status ${intent.status}.`,
+        });
+      }
     }
+
     await stripe.paymentIntents.cancel(piId);
     await ListingExchange.updateOne(
       { listingId: listingOid },
       { $set: { paymentStatus: "canceled", sellerCapturedPayment: false } },
     );
 
-    const exchangeDoc = (await ListingExchange.findOne({
-      listingId: listingOid,
-    })
-      .select("buyerId sellerId")
-      .lean()) as { buyerId?: unknown; sellerId?: unknown } | null;
-
     emitExchangeUpdated(
       [
-        exchangeDoc?.buyerId != null ? String(exchangeDoc.buyerId) : "",
-        exchangeDoc?.sellerId != null ? String(exchangeDoc.sellerId) : "",
+        exchangeDoc?.buyerId != null ? String(exchangeDoc.buyerId) : buyerStr,
+        exchangeDoc?.sellerId != null ? String(exchangeDoc.sellerId) : sellerStr,
         sellerStr,
+        buyerStr,
       ],
       {
         listingId,
         action: "canceled",
         paymentStatus: "canceled",
-        message: "Authorization canceled.",
+        message: isBuyer
+          ? "Buyer canceled uncaptured authorization."
+          : "Authorization canceled.",
       },
     );
 

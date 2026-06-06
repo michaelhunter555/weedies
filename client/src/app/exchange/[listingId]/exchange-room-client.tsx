@@ -70,6 +70,9 @@ const EXCHANGE_STEPS_ESCROW = [
   "Optional review",
 ] as const;
 
+/** Buyer may cancel an uncaptured Stripe authorization after this hold. */
+const BUYER_UNCAPTURED_CANCEL_AFTER_MS = 2 * 24 * 60 * 60 * 1000;
+
 export function ExchangeRoomClient() {
   const params = useParams<{ listingId: string }>();
   const router = useRouter();
@@ -227,6 +230,20 @@ export function ExchangeRoomClient() {
     },
   });
 
+  const buyerCancelTransactionMutation = useMutation({
+    mutationFn: async () => {
+      return await managePaymentCapture(listingId, "cancel");
+    },
+    onSuccess: async () => {
+      setPaymentActionError(null);
+      setRecentCaptureAction("cancel");
+      await queryClient.invalidateQueries({ queryKey: ["listing-exchange", listingId] });
+    },
+    onError: (e: Error) => {
+      setPaymentActionError(e?.message ?? "Could not cancel authorization");
+    },
+  });
+
   const handlePickFiles = () => fileRef.current?.click();
 
   const handleFilesSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -351,6 +368,21 @@ export function ExchangeRoomClient() {
     exchange.paymentCaptureExpiration != null
       ? new Date(exchange.paymentCaptureExpiration).toLocaleString()
       : null;
+  const exchangeCreatedMs = exchange.createdAt
+    ? new Date(exchange.createdAt).getTime()
+    : NaN;
+  const buyerCancelHoldElapsed =
+    Number.isFinite(exchangeCreatedMs) &&
+    Date.now() >= exchangeCreatedMs + BUYER_UNCAPTURED_CANCEL_AFTER_MS;
+  const canBuyerCancelUncaptured =
+    role === "buyer" &&
+    !isEscrow &&
+    paymentAuthorized &&
+    !fundsCaptured &&
+    !saleCanceled &&
+    buyerCancelHoldElapsed;
+
+    const isTrue = role === 'buyer';
 
   const reviewDone = role !== "buyer" || Boolean(buyerReviewSnapshot);
   const stepPaymentReady = paymentAuthorized;
@@ -707,9 +739,39 @@ export function ExchangeRoomClient() {
               : "Payment has been finalized and is on its way to the seller."}
           </Alert>
         ) : role === "buyer" ? (
-          <Alert severity="success" variant="outlined">
-            Payment authorized. Waiting for the seller to capture funds.
-          </Alert>
+          <Stack spacing={2}>
+            <Alert severity="success" variant="outlined">
+              Payment authorized. Waiting for the seller to capture funds.
+            </Alert>
+            {canBuyerCancelUncaptured ? (
+              <>
+                <Typography variant="body2" color="text.secondary">
+                  It has been at least 2 days since checkout and the seller has not captured
+                  payment. You can cancel the authorization to release the hold on your card.
+                </Typography>
+                {paymentActionError ? (
+                  <Alert severity="error" onClose={() => setPaymentActionError(null)}>
+                    {paymentActionError}
+                  </Alert>
+                ) : null}
+                {buyerCancelTransactionMutation.isPending ? (
+                  <Alert severity="info" icon={false}>
+                    Canceling authorization…
+                  </Alert>
+                ) : (
+                  <Button
+                    color="error"
+                    variant="outlined"
+                    disabled={buyerCancelTransactionMutation.isPending}
+                    onClick={() => buyerCancelTransactionMutation.mutate()}
+                    sx={{ alignSelf: "flex-start", textTransform: "none", fontWeight: 700 }}
+                  >
+                    Cancel authorization
+                  </Button>
+                )}
+              </>
+            ) : null}
+          </Stack>
         ) : (
           <Stack spacing={2}>
             <Alert severity="info">

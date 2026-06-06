@@ -14,7 +14,6 @@ import {
   Tooltip,
   Typography,
 } from "@mui/material";
-import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
 import LockRoundedIcon from "@mui/icons-material/LockRounded";
 import VisibilityRoundedIcon from "@mui/icons-material/VisibilityRounded";
 import VerifiedRoundedIcon from "@mui/icons-material/VerifiedRounded";
@@ -299,7 +298,7 @@ export default function ProductCard({ listing, id }: IProductCard) {
               ? "Request access to unlock full listing details."
               : resolvedTagline}
           </Typography>
-          {monthlyRevenueLabel ? (
+          {monthlyRevenueLabel && Number(listing?.monthlyRevenue ) > 0 ? (
             <Typography
               variant="caption"
               sx={{ fontWeight: 600, lineHeight: 1.2 }}

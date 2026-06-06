@@ -20,6 +20,9 @@ import RocketLaunchRoundedIcon from "@mui/icons-material/RocketLaunchRounded";
 import ShieldRoundedIcon from "@mui/icons-material/ShieldRounded";
 import TrendingUpRoundedIcon from "@mui/icons-material/TrendingUpRounded";
 import VerifiedRoundedIcon from "@mui/icons-material/VerifiedRounded";
+import GoogleIcon from '@mui/icons-material/Google';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 
 import { APP_NAME, STORAGE_PREFIX } from "@/brand";
 import { useAuth } from "@/context/auth-context";
@@ -375,6 +378,10 @@ export default function VerifyListingContent() {
 
   const handleSkip = () => router.push("/products?listed=1");
 
+  const handleOpenPropertyPicker = () => {
+    setShowGaPropertyPicker(prev => !prev);
+  }
+
   const showSalesSection = pending?.hasSalesToVerify !== false;
   const showAnalyticsSection =
     Boolean(bootListingId) || pending?.hasAnalyticsToVerify !== false;
@@ -538,6 +545,15 @@ export default function VerifyListingContent() {
                   onDisconnect={() => void handleDisconnect(p.id)}
                 />
               ))}
+              <Stack direction="row" spacing={1}>
+              <Button endIcon={showGaPropertyPicker ? <ExpandMoreIcon /> :  <ExpandLessIcon />} startIcon={<GoogleIcon />} variant="outlined" sx={{ color: '#000', borderColor: '#000'}} size="small" onClick={handleOpenPropertyPicker}>
+                Select Analytics Property
+              </Button>
+              {/* <Divider orientation="vertical" flexItem />
+              <Button variant="outlined" sx={{ color: '#000', borderColor: '#000'}} size="small" onClick={handleOpenPropertyPicker}>
+                Select RevenueCat Project
+              </Button> */}
+              </Stack>
             </Stack>
           </Stack>
         )}

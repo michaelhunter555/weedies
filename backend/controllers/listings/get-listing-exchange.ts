@@ -205,6 +205,7 @@ export async function getListingExchange(req: Request, res: Response) {
       paymentReceivedAt?: Date | null;
       buyerConfirmedAt?: Date | null;
       deliverables?: { url: string; originalName?: string; uploadedAt?: Date }[];
+      createdAt?: Date;
       updatedAt?: Date;
       sellerCapturedPayment?: boolean;
       paymentCaptureExpiration?: Date | null;
@@ -412,10 +413,16 @@ export async function getListingExchange(req: Request, res: Response) {
         buyerConfirmedAt: ex.buyerConfirmedAt
           ? new Date(ex.buyerConfirmedAt).toISOString()
           : null,
+        createdAt:
+          ex.createdAt instanceof Date
+            ? ex.createdAt.toISOString()
+            : saleTx?.createdAt instanceof Date
+              ? saleTx.createdAt.toISOString()
+              : ex.paymentReceivedAt
+                ? new Date(ex.paymentReceivedAt).toISOString()
+                : null,
         updatedAt:
-          (ex as { updatedAt?: Date }).updatedAt instanceof Date
-            ? (ex as { updatedAt: Date }).updatedAt.toISOString()
-            : null,
+          ex.updatedAt instanceof Date ? ex.updatedAt.toISOString() : null,
         sellerCapturedPayment: Boolean(ex.sellerCapturedPayment),
         paymentCaptureExpiration: ex.paymentCaptureExpiration
           ? new Date(ex.paymentCaptureExpiration).toISOString()

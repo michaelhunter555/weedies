@@ -680,7 +680,7 @@ export function CheckoutListingClient() {
               The seller has the right to refuse this purchase and cancel the transaction before handover of deliverables begins.
             </Typography>
             <Typography component="li" variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-              If the seller does not respond within two (2) business days, a cancel button will appear where you can cancel the transaction. Your full payment will be refunded (100%).
+              If the seller does not respond within two (2) business days, a cancel button will appear where you can cancel the transaction. If you decide to cancel, your full payment will be refunded (100%).
             </Typography>
             <Typography component="li" variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
               It is important to speak with the seller before you buy. Use{" "}
