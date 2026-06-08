@@ -8,6 +8,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { AuctionBidModal } from "@/components/Auction/AuctionBidModal";
 import { ListingGaMetricsPanel } from "@/components/Analytics/ListingGaMetricsPanel";
+import { ListingRevenueCatMetricsPanel } from "@/components/Analytics/ListingRevenueCatMetricsPanel";
 import { DeleteListingConfirmModal } from "@/components/Listings/DeleteListingConfirmModal";
 import { PrivateAccessRequestsModal } from "@/components/Listings/PrivateAccessRequestsModal";
 import { ListingReviewsPanel } from "@/components/Reviews/ListingReviewsPanel";
@@ -896,10 +897,11 @@ export function ProductDetailsClient({ fetchBy }: ProductDetailsClientProps) {
                           ) : null}
                           {listing.revenueCatProjectDisplayName ? (
                             <Chip
+                              icon={<Avatar src="/logo-rc-small.svg" variant="square" sx={{ backgroundColor: "#000", width: 16, height: 16, borderRadius: "3px" }} alt="" />}
                               size="small"
                               label={`RevenueCat · ${listing.revenueCatProjectDisplayName}`}
                               variant="outlined"
-                              color="secondary"
+                              sx={{ padding: 1}}
                             />
                           ) : null}
                         </Stack>
@@ -917,6 +919,22 @@ export function ProductDetailsClient({ fetchBy }: ProductDetailsClientProps) {
                         <ListingGaMetricsPanel
                           listingId={listingMongoId}
                           title="Verified traffic (last 30 days)"
+                          isListingOwner={isOwner}
+                          reconnectHref={
+                            isOwner
+                              ? `/products/verify?listingId=${encodeURIComponent(listingMongoId)}`
+                              : undefined
+                          }
+                        />
+                      </>
+                    ) : null}
+                    {!isPrivateRestricted &&
+                    listing.revenueCatProjectId &&
+                    listingMongoId ? (
+                      <>
+                        <Divider sx={{ my: 1 }} />
+                        <ListingRevenueCatMetricsPanel
+                          listingId={listingMongoId}
                           isListingOwner={isOwner}
                           reconnectHref={
                             isOwner

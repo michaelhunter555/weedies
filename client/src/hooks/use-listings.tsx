@@ -5,6 +5,7 @@ import { useCallback } from "react";
 import { useApiFetchOrThrow } from "@/hooks/use-api-fetch";
 import type {
   GaListingMetricsSnapshot,
+  RcListingMetricsSnapshot,
   Listing,
   ListingCategory,
   ListingExchangeBuyerReview,
@@ -403,6 +404,19 @@ export const useListings = () => {
     [apiFetch],
   );
 
+  /**
+   * RevenueCat overview snapshot (MRR, active subscriptions, trials, revenue)
+   * for a listing with a linked project. Same access rules as GA metrics.
+   */
+  const getListingRevenueCatMetrics = useCallback(
+    async (listingId: string): Promise<RcListingMetricsSnapshot> =>
+      apiFetch<RcListingMetricsSnapshot>(
+        `/listings/${encodeURIComponent(listingId)}/revenue-cat/metrics`,
+        "GET",
+      ),
+    [apiFetch],
+  );
+
   /** Start a 1:1 thread with optional listing context (seller privacy masking). */
   const createChat = useCallback(
     async (body: {
@@ -522,6 +536,7 @@ export const useListings = () => {
     requestPrivateListingAccess,
     resolvePrivateListingAccess,
     getListingGoogleAnalyticsMetrics,
+    getListingRevenueCatMetrics,
     placeAuctionBid,
     setAuctionBidStatus,
     getListingExchange,

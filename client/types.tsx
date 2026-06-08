@@ -261,6 +261,26 @@ export type GaListingMetricsSnapshot = {
   totalSessions: number;
 };
 
+/** One RevenueCat overview metric (e.g. mrr, active_subscriptions). */
+export type RevenueCatOverviewMetric = {
+  id: string;
+  name: string;
+  /** "$" for money metrics, "#" for counts. */
+  unit: string;
+  value: number;
+  period: string | null;
+};
+
+/** Response from `GET /listings/:id/revenue-cat/metrics` */
+export type RcListingMetricsSnapshot = {
+  projectName: string | null;
+  metrics: RevenueCatOverviewMetric[];
+  /** MRR x 12 when the mrr metric is present. */
+  impliedArr: number | null;
+  currencySymbol: string;
+  lastUpdatedAtIso: string | null;
+};
+
 /**
  * One `auctionBids` subdocument (same field as Mongo). `bidderId` is a string in JSON.
  * Omitted on public listing GETs (use `auctionCurrentPrice` / `auctionMinimumNextBid` / counts);

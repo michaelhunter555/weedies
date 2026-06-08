@@ -7,6 +7,8 @@ export type RevenueCatOAuthStatePayload = {
   purpose: typeof PURPOSE;
   sub: string;
   listingId?: string;
+  /** redirect_uri from /start; token exchange must use the same value. */
+  redirectUri?: string;
 };
 
 function mustSecret() {
@@ -15,14 +17,20 @@ function mustSecret() {
   return s;
 }
 
-export function signRevenueCatOAuthState(userId: string, listingId?: string) {
+export function signRevenueCatOAuthState(
+  userId: string,
+  listingId?: string,
+  redirectUri?: string,
+) {
   const secret = mustSecret();
   const expiresIn = 600;
   const lid = listingId?.trim();
+  const rd = redirectUri?.trim();
   const payload: RevenueCatOAuthStatePayload = {
     purpose: PURPOSE,
     sub: userId,
     ...(lid && mongoose.isValidObjectId(lid) ? { listingId: lid } : {}),
+    ...(rd ? { redirectUri: rd } : {}),
   };
   return jwt.sign(payload, secret, { expiresIn });
 }

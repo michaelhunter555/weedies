@@ -773,6 +773,7 @@ export default function DashboardPage() {
                       : "Connect your bank to start receiving payouts."}
                 </Typography>
               </Box>
+            </Stack>
               {isStripeConnected ? (
                 <Chip
                   icon={<CheckCircleRoundedIcon />}
@@ -802,7 +803,6 @@ export default function DashboardPage() {
                       : "Onboard with Stripe"}
                 </Button>
               )}
-            </Stack>
           </Stack>
         </Paper>
 

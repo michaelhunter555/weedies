@@ -2,6 +2,7 @@ import type { Request, Response } from "express";
 import {
   getRevenueCatOAuthEnv,
   isRevenueCatOAuthConfigured,
+  logRevenueCatOAuthEnvDiagnostics,
 } from "../../lib/revenue-cat-oauth-env";
 import { revenueCatOAuthScopeString } from "../../lib/revenue-cat-oauth-scopes";
 import { signRevenueCatOAuthState } from "../../lib/revenue-cat-oauth-state";
@@ -38,7 +39,9 @@ export async function startRevenueCatOAuth(req: Request, res: Response) {
         ? req.query.listingId.trim()
         : undefined;
 
-    const state = signRevenueCatOAuthState(userId, listingId);
+    logRevenueCatOAuthEnvDiagnostics("start authorize url");
+
+    const state = signRevenueCatOAuthState(userId, listingId, redirectUri);
 
     const params = new URLSearchParams({
       client_id: clientId,

@@ -21,6 +21,7 @@ import { getListingReviews } from "../controllers/listings/get-listing-reviews";
 import { authenticate, optionalAuthenticate } from "../middleware/auth";
 import { enforceAccountStanding } from "../middleware/account-standing";
 import { getListingGoogleAnalyticsMetrics } from "../controllers/listings/get-listing-google-analytics-metrics";
+import { getListingRevenueCatMetrics } from "../controllers/listings/get-listing-revenue-cat-metrics";
 import { getMyMarketplaceOrders } from "../controllers/listings/get-my-marketplace-orders";
 import { getMyTransactions } from "../controllers/listings/get-my-transactions";
 import { requestPrivateListingAccess } from "../controllers/listings/request-private-listing-access";
@@ -79,6 +80,11 @@ router.get(
   "/:id/google-analytics/metrics",
   optionalAuthenticate,
   getListingGoogleAnalyticsMetrics,
+);
+router.get(
+  "/:id/revenue-cat/metrics",
+  optionalAuthenticate,
+  getListingRevenueCatMetrics,
 );
 router.get("/:id/reviews", getListingReviews);
 router.get("/:id", optionalAuthenticate, getListingById);
