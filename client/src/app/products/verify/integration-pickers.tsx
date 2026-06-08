@@ -10,7 +10,6 @@ import {
   CircularProgress,
   Paper,
   Stack,
-  TextField,
   Typography,
 } from "@mui/material";
 import {
@@ -44,6 +43,7 @@ function selectionToSingleId(model: GridRowSelectionModel): string | null {
 
 /** Pick a GA4 property after OAuth; links it to `listingId` on the server. */
 const GA_NEEDS_RECONNECT = "GA_NEEDS_RECONNECT";
+const RC_NEEDS_RECONNECT = "RC_NEEDS_RECONNECT";
 
 export function GaPropertyPicker(props: {
   listingId: string | null | undefined;
@@ -204,122 +204,65 @@ export function GaPropertyPicker(props: {
               )
             }
           >
-            {error instanceof Error ? error.message : "Could not load properties."}
-          </Alert>
-        ) : null}
-
-        {err ? (
-          <Alert severity="error" onClose={() => setErr(null)}>
-            {err}
+            {(error as Error)?.message ?? "Could not load GA4 properties."}
           </Alert>
         ) : null}
 
         {linkSuccess ? (
-          <Stack spacing={2}>
-            <Alert
-              severity="success"
-              icon={<CheckCircleRoundedIcon fontSize="inherit" />}
-              sx={{ alignItems: "flex-start" }}
-            >
-              <Typography variant="subtitle2" fontWeight={800}>
-                Saved to this listing
-              </Typography>
-              <Typography variant="body2" sx={{ mt: 0.75 }}>
-                Google Analytics property{" "}
-                <strong>{linkSuccess.propertyDisplayName}</strong> is now linked.
-                Buyers will see this name when the listing shows verified analytics.
-              </Typography>
-              <Typography
-                variant="caption"
-                color="text.secondary"
-                component="p"
-                sx={{ mt: 1, mb: 0, fontFamily: "ui-monospace, monospace" }}
-              >
-                {linkSuccess.propertyResourceName}
-              </Typography>
-            </Alert>
-            {listingId ? (
-              <ListingGaMetricsPanel
-                listingId={listingId}
-                title="Last 30 days (preview)"
-                isListingOwner
-              />
-            ) : null}
-            <Stack direction="row" spacing={1} justifyContent="flex-end" flexWrap="wrap">
-              <Button
-                variant="text"
-                onClick={onClose}
-                sx={{ textTransform: "none" }}
-              >
-                Close panel
-              </Button>
-              <Button
-                variant="outlined"
-                onClick={() => setLinkSuccess(null)}
-                sx={{ textTransform: "none", borderRadius: 999 }}
-              >
-                Choose a different property
-              </Button>
-              <Button
-                variant="contained"
-                onClick={() => onLinked()}
-                sx={{ textTransform: "none", borderRadius: 999 }}
-              >
+          <Alert
+            severity="success"
+            icon={<CheckCircleRoundedIcon />}
+            action={
+              <Button color="inherit" size="small" onClick={onLinked}>
                 Done
               </Button>
-            </Stack>
-          </Stack>
+            }
+          >
+            Linked <b>{linkSuccess.propertyDisplayName}</b> to this listing.
+          </Alert>
         ) : (
           <>
-            <Box sx={{ width: "100%", minHeight: 320 }}>
-              {isLoading ? (
-                <Stack alignItems="center" justifyContent="center" sx={{ py: 8 }}>
-                  <CircularProgress size={28} />
-                  <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-                    Loading your GA4 properties…
-                  </Typography>
-                </Stack>
-              ) : (
-                <DataGrid
-                  rows={rows}
-                  columns={columns}
-                  getRowId={(r) => r.id}
-                  checkboxSelection
-                  disableMultipleRowSelection
-                  rowSelectionModel={rowSelectionModel}
-                  onRowSelectionModelChange={setRowSelectionModel}
-                  pageSizeOptions={[10, 25, 50]}
-                  initialState={{
-                    pagination: { paginationModel: { pageSize: 10 } },
-                  }}
-                  sx={{
-                    border: "none",
-                    "& .MuiDataGrid-columnHeaders": { borderRadius: 1 },
-                  }}
-                />
-              )}
+            <Box sx={{ width: "100%", minHeight: 280 }}>
+              <DataGrid
+                rows={rows}
+                columns={columns}
+                getRowId={(r) => r.id}
+                loading={isLoading}
+                checkboxSelection
+                disableMultipleRowSelection
+                rowSelectionModel={rowSelectionModel}
+                onRowSelectionModelChange={setRowSelectionModel}
+                pageSizeOptions={[5, 10]}
+                initialState={{ pagination: { paginationModel: { pageSize: 5 } } }}
+                sx={{ border: "none" }}
+              />
             </Box>
 
-            <Stack
-              direction="row"
-              spacing={1}
-              justifyContent="flex-end"
-              flexWrap="wrap"
-            >
+            {err ? (
+              <Alert severity="error" onClose={() => setErr(null)}>
+                {err}
+              </Alert>
+            ) : null}
+
+            <Stack direction="row" justifyContent="flex-end" spacing={1}>
               <Button variant="text" onClick={onClose} sx={{ textTransform: "none" }}>
-                Later
+                Cancel
               </Button>
               <Button
                 variant="contained"
-                disabled={saving || !listingId || isLoading}
+                disabled={saving || !listingId}
                 onClick={() => void handleSave()}
                 sx={{ textTransform: "none", borderRadius: 999 }}
               >
-                {saving ? "Saving…" : "Save property link"}
+                {saving ? "Saving…" : "Link property"}
               </Button>
             </Stack>
           </>
         )}
+
+        {listingId && linkSuccess ? (
+          <ListingGaMetricsPanel listingId={listingId} />
+        ) : null}
       </Stack>
     </Paper>
   );
@@ -327,27 +270,48 @@ export function GaPropertyPicker(props: {
 
 export type RcProjectRow = { id: string; name: string; description?: string };
 
-/** RevenueCat: empty grid today + manual project id until API/OAuth exists. */
+/** RevenueCat: OAuth project picker after connect. */
 export function RevenueCatLinker(props: {
   listingId: string | null | undefined;
   open: boolean;
   onLinked: () => void;
+  onNeedsReconnect?: () => void;
 }) {
-  const { listingId, open, onLinked } = props;
+  const { listingId, open, onLinked, onNeedsReconnect } = props;
   const { apiFetch } = useApiFetchOrThrow();
-  const [projectId, setProjectId] = useState("");
-  const [displayName, setDisplayName] = useState("");
+  const [rowSelectionModel, setRowSelectionModel] =
+    useState<GridRowSelectionModel>([]);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [linkSuccess, setLinkSuccess] = useState<{
+    projectId: string;
+    projectDisplayName: string;
+  } | null>(null);
 
-  const { data, isLoading } = useQuery({
-    queryKey: ["revenuecat-projects"],
+  useEffect(() => {
+    if (!open) {
+      setLinkSuccess(null);
+      setRowSelectionModel([]);
+      setErr(null);
+    }
+  }, [open]);
+
+  const { data, isLoading, isError, error, refetch } = useQuery({
+    queryKey: ["revenuecat-projects", listingId],
     queryFn: async () => {
-      const res = await apiFetch<{ projects: RcProjectRow[] }>(
-        "/integrations/revenuecat/projects",
-        "GET",
-      );
-      return res?.projects ?? [];
+      try {
+        const res = await apiFetch<{ projects: RcProjectRow[] }>(
+          "/integrations/revenuecat/projects",
+          "GET",
+        );
+        return res?.projects ?? [];
+      } catch (e) {
+        const errObj = e as Error & { status?: number; code?: string };
+        if (errObj.status === 412 || errObj.code === RC_NEEDS_RECONNECT) {
+          onNeedsReconnect?.();
+        }
+        throw e;
+      }
     },
     enabled: Boolean(open && listingId),
   });
@@ -356,7 +320,7 @@ export function RevenueCatLinker(props: {
 
   const columns: GridColDef<RcProjectRow>[] = [
     { field: "name", headerName: "Project", flex: 1, minWidth: 160 },
-    { field: "id", headerName: "Project ID", flex: 0.8, minWidth: 120 },
+    { field: "id", headerName: "Project ID", flex: 0.8, minWidth: 140 },
     {
       field: "description",
       headerName: "Notes",
@@ -366,29 +330,35 @@ export function RevenueCatLinker(props: {
     },
   ];
 
-  const handleSaveManual = async () => {
+  const handleSave = async () => {
     setErr(null);
+    const selectedId = selectionToSingleId(rowSelectionModel);
     if (!listingId) {
       setErr("Missing listing id.");
       return;
     }
-    const pid = projectId.trim();
-    if (!pid) {
-      setErr("Enter a RevenueCat public API project identifier.");
+    if (!selectedId) {
+      setErr("Select one RevenueCat project in the grid.");
+      return;
+    }
+    const row = rows.find((r) => r.id === selectedId);
+    if (!row) {
+      setErr("Could not resolve the selected project.");
       return;
     }
     setSaving(true);
     try {
       await apiFetch("/integrations/revenuecat/link-listing", "POST", {
         listingId,
-        projectId: pid,
-        projectDisplayName: displayName.trim() || pid,
+        projectId: row.id,
+        projectDisplayName: row.name,
       });
-      setProjectId("");
-      setDisplayName("");
-      onLinked();
+      setLinkSuccess({
+        projectId: row.id,
+        projectDisplayName: row.name,
+      });
     } catch (e) {
-      setErr(e instanceof Error ? e.message : "Failed to save RevenueCat link.");
+      setErr(e instanceof Error ? e.message : "Failed to link RevenueCat project.");
     } finally {
       setSaving(false);
     }
@@ -400,77 +370,103 @@ export function RevenueCatLinker(props: {
     <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
       <Stack spacing={2}>
         <Typography variant="subtitle1" fontWeight={800}>
-          RevenueCat project
+          Link a RevenueCat project to this listing
         </Typography>
         <Typography variant="body2" color="text.secondary">
-          API discovery is not wired yet. For now, paste your RevenueCat project
-          identifier so the listing can show the correct account on the product
-          page.
+          Choose the RevenueCat project that matches this app. Buyers will see this
+          label on the product page when sales data is verified.
         </Typography>
 
-        {err ? (
-          <Alert severity="error" onClose={() => setErr(null)}>
-            {err}
+        {!listingId ? (
+          <Alert severity="warning">Missing listing id.</Alert>
+        ) : null}
+
+        {isError ? (
+          <Alert
+            severity="error"
+            action={
+              (error as Error & { status?: number })?.status === 412 ? (
+                <Button
+                  color="inherit"
+                  size="small"
+                  onClick={() => onNeedsReconnect?.()}
+                >
+                  Reconnect
+                </Button>
+              ) : (
+                <Button color="inherit" size="small" onClick={() => void refetch()}>
+                  Retry
+                </Button>
+              )
+            }
+          >
+            {(error as Error)?.message ?? "Could not load RevenueCat projects."}
           </Alert>
         ) : null}
 
-        <Box sx={{ width: "100%", minHeight: 220 }}>
-          <DataGrid
-            rows={rows}
-            columns={columns}
-            getRowId={(r) => r.id}
-            loading={isLoading}
-            disableRowSelectionOnClick
-            pageSizeOptions={[5]}
-            initialState={{ pagination: { paginationModel: { pageSize: 5 } } }}
-            slots={{
-              noRowsOverlay: () => (
-                <Stack
-                  alignItems="center"
-                  justifyContent="center"
-                  sx={{ height: "100%", py: 3, px: 2, textAlign: "center" }}
-                >
-                  <Typography variant="body2" color="text.secondary">
-                    No projects returned from the API yet. Use the fields below to
-                    store a project id manually.
-                  </Typography>
-                </Stack>
-              ),
-            }}
-            sx={{ border: "none" }}
-          />
-        </Box>
-
-        <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
-          <TextField
-            label="RevenueCat project ID"
-            value={projectId}
-            onChange={(e) => setProjectId(e.target.value)}
-            fullWidth
-            size="small"
-            placeholder="e.g. proj_abc123"
-          />
-          <TextField
-            label="Display name (optional)"
-            value={displayName}
-            onChange={(e) => setDisplayName(e.target.value)}
-            fullWidth
-            size="small"
-            placeholder="Shown on product page"
-          />
-        </Stack>
-
-        <Stack direction="row" justifyContent="flex-end">
-          <Button
-            variant="contained"
-            color="secondary"
-            disabled={saving || !listingId}
-            onClick={() => void handleSaveManual()}
-            sx={{ textTransform: "none", borderRadius: 999 }}
+        {linkSuccess ? (
+          <Alert
+            severity="success"
+            icon={<CheckCircleRoundedIcon />}
+            action={
+              <Button color="inherit" size="small" onClick={onLinked}>
+                Done
+              </Button>
+            }
           >
-            {saving ? "Saving…" : "Save RevenueCat link"}
-          </Button>
-        </Stack>
+            Linked <b>{linkSuccess.projectDisplayName}</b> to this listing.
+          </Alert>
+        ) : (
+          <>
+            <Box sx={{ width: "100%", minHeight: 280 }}>
+              <DataGrid
+                rows={rows}
+                columns={columns}
+                getRowId={(r) => r.id}
+                loading={isLoading}
+                checkboxSelection
+                disableMultipleRowSelection
+                rowSelectionModel={rowSelectionModel}
+                onRowSelectionModelChange={setRowSelectionModel}
+                pageSizeOptions={[5, 10]}
+                initialState={{ pagination: { paginationModel: { pageSize: 5 } } }}
+                slots={{
+                  noRowsOverlay: () => (
+                    <Stack
+                      alignItems="center"
+                      justifyContent="center"
+                      sx={{ height: "100%", py: 3, px: 2, textAlign: "center" }}
+                    >
+                      <Typography variant="body2" color="text.secondary">
+                        No projects returned. Confirm your RevenueCat OAuth app has
+                        the project_configuration:projects:read scope.
+                      </Typography>
+                    </Stack>
+                  ),
+                }}
+                sx={{ border: "none" }}
+              />
+            </Box>
+
+            {err ? (
+              <Alert severity="error" onClose={() => setErr(null)}>
+                {err}
+              </Alert>
+            ) : null}
+
+            <Stack direction="row" justifyContent="flex-end">
+              <Button
+                variant="contained"
+                color="secondary"
+                disabled={saving || !listingId || isLoading}
+                onClick={() => void handleSave()}
+                sx={{ textTransform: "none", borderRadius: 999 }}
+              >
+                {saving ? "Saving…" : "Link project"}
+              </Button>
+            </Stack>
+          </>
+        )}
       </Stack>
     </Paper>
   );

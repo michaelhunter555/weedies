@@ -1894,7 +1894,6 @@ export default function ProductsPage() {
 
                 <Stack direction="row" alignItems="center" spacing={1}>
                   <Checkbox
-                  disabled={true}
                     size="small"
                     checked={hasSalesToVerify}
                     onChange={(e) =>
@@ -1906,7 +1905,7 @@ export default function ProductsPage() {
                     }
                   />
                   <Typography color="text.secondary">
-                    I have <b>sales</b> data I can connect (Stripe, RevenueCat…) - coming soon
+                    I have <b>sales</b> data I can connect (RevenueCat)
                   </Typography>
                 </Stack>
                 <Stack direction="row" alignItems="center" spacing={1}>

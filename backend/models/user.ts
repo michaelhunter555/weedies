@@ -57,6 +57,13 @@ export interface User {
     accessTokenExpiresAt: Date | null;
   };
 
+  /** Encrypted RevenueCat OAuth material - only ever ciphertext from `encryptData`. */
+  revenueCatOAuth?: {
+    accessTokenEnc: string | null;
+    refreshTokenEnc: string | null;
+    accessTokenExpiresAt: Date | null;
+  };
+
 }
 
 const UserSchema = new mongoose.Schema<User>(
@@ -120,6 +127,16 @@ const UserSchema = new mongoose.Schema<User>(
     defaultPaymentIntendId: { type: String, required: false, default: null },
 
     googleAnalyticsOAuth: {
+      type: {
+        accessTokenEnc: { type: String, default: null },
+        refreshTokenEnc: { type: String, default: null },
+        accessTokenExpiresAt: { type: Date, default: null },
+      },
+      required: false,
+      default: undefined,
+    },
+
+    revenueCatOAuth: {
       type: {
         accessTokenEnc: { type: String, default: null },
         refreshTokenEnc: { type: String, default: null },
