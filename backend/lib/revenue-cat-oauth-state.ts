@@ -7,8 +7,6 @@ export type RevenueCatOAuthStatePayload = {
   purpose: typeof PURPOSE;
   sub: string;
   listingId?: string;
-  /** Present when using PKCE (public OAuth client). */
-  codeVerifier?: string;
 };
 
 function mustSecret() {
@@ -17,20 +15,14 @@ function mustSecret() {
   return s;
 }
 
-export function signRevenueCatOAuthState(
-  userId: string,
-  listingId?: string,
-  codeVerifier?: string,
-) {
+export function signRevenueCatOAuthState(userId: string, listingId?: string) {
   const secret = mustSecret();
   const expiresIn = 600;
   const lid = listingId?.trim();
-  const verifier = codeVerifier?.trim();
   const payload: RevenueCatOAuthStatePayload = {
     purpose: PURPOSE,
     sub: userId,
     ...(lid && mongoose.isValidObjectId(lid) ? { listingId: lid } : {}),
-    ...(verifier ? { codeVerifier: verifier } : {}),
   };
   return jwt.sign(payload, secret, { expiresIn });
 }

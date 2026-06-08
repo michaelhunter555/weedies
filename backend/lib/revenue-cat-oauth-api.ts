@@ -16,43 +16,75 @@ async function parseTokenResponse(res: Response): Promise<RevenueCatTokenRespons
   try {
     return JSON.parse(text) as RevenueCatTokenResponse;
   } catch {
-    return { error: "invalid_response", error_description: text.slice(0, 200) };
+    return { error: "invalid_response", error_description: text.slice(0, 500) };
   }
+}
+
+/**
+ * Exchange or refresh tokens (confidential client).
+ * RevenueCat docs: client_id + client_secret in the form body (client_secret_post).
+ * Bearer is only used later for API calls with the access token (see revenueCatApiGet).
+ */
+async function postRevenueCatToken(
+  body: URLSearchParams,
+  clientId: string,
+  clientSecret: string,
+): Promise<{ res: Response; data: RevenueCatTokenResponse }> {
+  body.set("client_id", clientId);
+  body.set("client_secret", clientSecret);
+
+  const res = await fetch(TOKEN_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      Accept: "application/json",
+    },
+    body: body.toString(),
+  });
+
+  const data = await parseTokenResponse(res);
+  return { res, data };
+}
+
+export function formatRevenueCatTokenError(data: RevenueCatTokenResponse): string {
+  const raw =
+    data.error_description?.trim() || data.error?.trim() || "Token request failed";
+
+  if (
+    raw.includes("client_secret") ||
+    raw.includes("cannot authenticate") ||
+    raw.includes("invalid_client")
+  ) {
+    return [
+      "RevenueCat rejected the OAuth client credentials at token exchange.",
+      "Confirm REVENUE_CAT_CLIENT_ID and REVENUE_CAT_CLIENT_SECRET on the server that handles /api/integrations/revenuecat/callback.",
+      `Details: ${raw}`,
+    ].join(" ");
+  }
+
+  return raw;
 }
 
 export async function exchangeRevenueCatAuthorizationCode(params: {
   code: string;
   redirectUri: string;
   clientId: string;
-  clientSecret?: string;
-  codeVerifier?: string;
+  clientSecret: string;
 }): Promise<RevenueCatTokenResponse> {
   const body = new URLSearchParams({
     grant_type: "authorization_code",
     code: params.code,
     redirect_uri: params.redirectUri,
-    client_id: params.clientId,
-  });
-  if (params.clientSecret) {
-    body.set("client_secret", params.clientSecret);
-  }
-  if (params.codeVerifier) {
-    body.set("code_verifier", params.codeVerifier);
-  }
-
-  const res = await fetch(TOKEN_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: body.toString(),
   });
 
-  const data = await parseTokenResponse(res);
+  const { res, data } = await postRevenueCatToken(
+    body,
+    params.clientId,
+    params.clientSecret,
+  );
+
   if (!res.ok) {
-    const msg =
-      data.error_description ||
-      data.error ||
-      `RevenueCat token exchange failed (${res.status})`;
-    throw new Error(msg);
+    throw new Error(formatRevenueCatTokenError(data));
   }
   return data;
 }
@@ -60,34 +92,26 @@ export async function exchangeRevenueCatAuthorizationCode(params: {
 export async function refreshRevenueCatTokens(params: {
   refreshToken: string;
   clientId: string;
-  clientSecret?: string;
+  clientSecret: string;
 }): Promise<RevenueCatTokenResponse> {
   const body = new URLSearchParams({
     grant_type: "refresh_token",
     refresh_token: params.refreshToken,
-    client_id: params.clientId,
-  });
-  if (params.clientSecret) {
-    body.set("client_secret", params.clientSecret);
-  }
-
-  const res = await fetch(TOKEN_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: body.toString(),
   });
 
-  const data = await parseTokenResponse(res);
+  const { res, data } = await postRevenueCatToken(
+    body,
+    params.clientId,
+    params.clientSecret,
+  );
+
   if (!res.ok) {
-    const msg =
-      data.error_description ||
-      data.error ||
-      `RevenueCat token refresh failed (${res.status})`;
-    throw new Error(msg);
+    throw new Error(formatRevenueCatTokenError(data));
   }
   return data;
 }
 
+/** API requests after OAuth: Authorization: Bearer atk_... */
 export async function revenueCatApiGet<T>(
   path: string,
   accessToken: string,

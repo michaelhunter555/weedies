@@ -39,8 +39,8 @@ async function clearRevenueCatCredentials(userId: string) {
 export async function getValidRevenueCatAccessToken(
   userId: string,
 ): Promise<string> {
-  const { clientId, clientSecret, publicClient } = getRevenueCatOAuthEnv();
-  if (!clientId) {
+  const { clientId, clientSecret } = getRevenueCatOAuthEnv();
+  if (!clientId || !clientSecret) {
     throw new RevenueCatReconnectError("RevenueCat OAuth is not configured.");
   }
 
@@ -67,7 +67,7 @@ export async function getValidRevenueCatAccessToken(
     tokens = await refreshRevenueCatTokens({
       refreshToken: refresh_token,
       clientId,
-      clientSecret: publicClient ? undefined : clientSecret || undefined,
+      clientSecret,
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);

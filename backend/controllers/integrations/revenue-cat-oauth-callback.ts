@@ -71,10 +71,9 @@ export async function revenueCatOAuthCallback(req: Request, res: Response) {
     const userId = oauthState.sub;
     listingId = oauthState.listingId ?? listingId;
 
-    const { clientId, clientSecret, redirectUri, publicClient } =
-      getRevenueCatOAuthEnv();
+    const { clientId, clientSecret, redirectUri } = getRevenueCatOAuthEnv();
 
-    if (!clientId || !redirectUri) {
+    if (!clientId || !clientSecret || !redirectUri) {
       return void res.redirect(
         302,
         errorRedirectUrl("server_not_configured", listingId),
@@ -85,8 +84,7 @@ export async function revenueCatOAuthCallback(req: Request, res: Response) {
       code,
       redirectUri,
       clientId,
-      clientSecret: publicClient ? undefined : clientSecret || undefined,
-      codeVerifier: oauthState.codeVerifier,
+      clientSecret,
     });
 
     await storeRevenueCatOAuthTokens(userId, tokens);

@@ -2,8 +2,6 @@ export type RevenueCatOAuthEnv = {
   clientId: string;
   clientSecret: string;
   redirectUri: string;
-  /** When true, use PKCE (no client_secret on token exchange). */
-  publicClient: boolean;
 };
 
 export function getRevenueCatOAuthEnv(): RevenueCatOAuthEnv {
@@ -19,17 +17,11 @@ export function getRevenueCatOAuthEnv(): RevenueCatOAuthEnv {
     process.env.REVENUE_CAT_REDIRECT_URI?.trim() ||
     process.env.REVENUECAT_REDIRECT_URI?.trim() ||
     "";
-  const publicClient =
-    process.env.REVENUE_CAT_OAUTH_PUBLIC_CLIENT === "true" ||
-    process.env.REVENUECAT_OAUTH_PUBLIC_CLIENT === "true";
 
-  return { clientId, clientSecret, redirectUri, publicClient };
+  return { clientId, clientSecret, redirectUri };
 }
 
 export function isRevenueCatOAuthConfigured(): boolean {
-  const { clientId, redirectUri, clientSecret, publicClient } =
-    getRevenueCatOAuthEnv();
-  if (!clientId || !redirectUri) return false;
-  if (publicClient) return true;
-  return Boolean(clientSecret);
+  const { clientId, clientSecret, redirectUri } = getRevenueCatOAuthEnv();
+  return Boolean(clientId && clientSecret && redirectUri);
 }

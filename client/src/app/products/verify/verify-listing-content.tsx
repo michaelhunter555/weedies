@@ -324,7 +324,11 @@ export default function VerifyListingContent() {
         setRcOauthError(
           decoded === "no_refresh_token"
             ? "RevenueCat did not return a refresh token. Disconnect and connect again."
-            : decoded,
+            : decoded.includes("cannot authenticate") ||
+                decoded.includes("client_secret") ||
+                decoded.includes("invalid_client")
+              ? "RevenueCat rejected the client ID or secret at token exchange. Double-check REVENUE_CAT_CLIENT_ID and REVENUE_CAT_CLIENT_SECRET on the server that handles the callback (Heroku)."
+              : decoded,
         );
       }
     }
