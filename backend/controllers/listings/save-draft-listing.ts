@@ -13,10 +13,12 @@ import {
   sanitizeListingDescriptionFields,
 } from "../../lib/listing-description";
 import { pickListingCategory } from "../../lib/listing-categories";
+import { applyListingLinkFields } from "../../lib/listing-link-urls";
 import type {
   ListingDifficulty,
   ListingSaleType,
   ListingTurnaround,
+  Platforms,
 } from "../../types";
 
 function pickDifficulty(raw: unknown): ListingDifficulty {
@@ -108,6 +110,28 @@ export async function saveDraftListing(req: Request, res: Response) {
     const auctionEndDate = body.auctionEndDate
       ? new Date(String(body.auctionEndDate))
       : undefined;
+    const platforms = Array.isArray(body.platforms)
+      ? (body.platforms as unknown[])
+          .map((p) => String(p).trim())
+          .filter(Boolean)
+      : [];
+    const linkApplied = applyListingLinkFields(
+      {
+        platforms,
+        platformUrls: body.platformUrls,
+        socialMedia: body.socialMedia,
+        socialMediaUrls: body.socialMediaUrls,
+      },
+      { requirePlatformUrls: false },
+    );
+    const linkFields = linkApplied.ok
+      ? linkApplied.data
+      : {
+          platforms: platforms as Platforms[],
+          platformUrls: [],
+          socialMedia: [],
+          socialMediaUrls: [],
+        };
 
     const fromClient =
       typeof body.slug === "string" && body.slug.trim().length > 0
@@ -147,6 +171,10 @@ export async function saveDraftListing(req: Request, res: Response) {
         hasSalesToVerify,
         hasAnalyticsToVerify,
         isPrivateListing,
+        platforms: linkFields.platforms ?? [],
+        platformUrls: linkFields.platformUrls ?? [],
+        socialMedia: linkFields.socialMedia ?? [],
+        socialMediaUrls: linkFields.socialMediaUrls ?? [],
         ...(monthlyRevenue !== undefined ? { monthlyRevenue } : {}),
         saleType,
         slug,
@@ -199,6 +227,10 @@ export async function saveDraftListing(req: Request, res: Response) {
       currency: "USD",
       tags: [],
       techStack: [],
+      platforms: linkFields.platforms ?? [],
+      platformUrls: linkFields.platformUrls ?? [],
+      socialMedia: linkFields.socialMedia ?? [],
+      socialMediaUrls: linkFields.socialMediaUrls ?? [],
       verifiedProviders: [],
       isListingVerified: false,
       isAnalyticsVerified: false,

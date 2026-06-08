@@ -64,11 +64,14 @@ export type AnalyticsProvider =
  * Platforms a listing is available on, meaning a working version.
  *  i.e. if a user has an app on ios, android and web, they would select all three.
  */
-export type Platforms = 
-"ios" 
-| "android"
-| "web"
-| "macOs" 
-| "windows"
-| "chromeExtension"
-| "other";
+export type Platforms =
+    "ios"
+    | "android"
+    | "web"
+    | "macOs"
+    | "windows"
+    | "chromeExtension"
+    | "other";
+
+
+export type SocialMediaPlatform = "instagram" | "x" | "youtube" | "facebook" | "tiktok" | "linkedin" | "discord" | "other";

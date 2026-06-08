@@ -255,10 +255,12 @@ export default function ProductCard({ listing, id }: IProductCard) {
                 >
                   {creator}
                 </Typography>
-                {listing?.isListingVerified && (
-                  <VerifiedRoundedIcon
-                    sx={{ fontSize: 12, color: "#a7f3d0" }}
-                  />
+                {listing?.ownershipVerification?.isVerified && (
+                  <Tooltip title="Seller ownership verified" arrow placement="top">
+                    <VerifiedRoundedIcon
+                      sx={{ fontSize: 15, color: "#000" }}
+                    />
+                  </Tooltip>
                 )}
               </Stack>
             )}

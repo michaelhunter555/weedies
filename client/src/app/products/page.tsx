@@ -62,6 +62,8 @@ import {
   FLAT_LISTING_FEE,
   FREE_LISTINGS_COUNT,
   LISTING_CATEGORIES,
+  PLATFORM_MAPPING,
+  SOCIAL_MEDIA_MAPPING,
   normalizeListingCategorySlug,
   PRIVATE_LISTING_FEE,
   TURNAROUND_OPTIONS,
@@ -70,6 +72,18 @@ import {
   freeListingsRemaining,
   isWithinFreeListingTier,
 } from "@/utils/listingOptions";
+import { ListingLinkUrlFields } from "@/components/Listings/ListingLinkUrlFields";
+import { SocialMediaCheckbox } from "@/components/SocialMediaCheckbox/SocialMediaCheckbox";
+import {
+  isValidFreeformListingUrl,
+  isValidPrefixedListingPath,
+  linkUrlEntriesFromRecord,
+  linkUrlRecordFromEntries,
+  normalizeSocialMediaList,
+  normalizeSocialMediaPlatform,
+  platformUrlPrefix,
+  socialUrlPrefix,
+} from "@/lib/listing-link-urls";
 import {
   isListingAppNameValid,
   isListingTaglineValid,
@@ -87,6 +101,7 @@ import type {
   ListingDifficulty,
   ListingTurnaround,
   Platforms,
+  SocialMediaPlatform,
 } from "../../../types";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { PlatformCheckbox } from "@/components/PlatformCheckbox/PlatformCheckbox";
@@ -201,6 +216,15 @@ export default function ProductsPage() {
   const [listingPendingFeePayment, setListingPendingFeePayment] =
     useState(false);
   const [selectedPlatforms, setSelectedPlatforms] = useState<Platforms[]>([]);
+  const [platformUrlByPlatform, setPlatformUrlByPlatform] = useState<
+    Partial<Record<Platforms, string>>
+  >({});
+  const [selectedSocialMedia, setSelectedSocialMedia] = useState<
+    SocialMediaPlatform[]
+  >([]);
+  const [socialUrlByPlatform, setSocialUrlByPlatform] = useState<
+    Partial<Record<SocialMediaPlatform, string>>
+  >({});
   const [resumeFeeSubmitting, setResumeFeeSubmitting] = useState(false);
   const [listingSubmitNotice, setListingSubmitNotice] = useState<
     null | "review" | "fee_pending"
@@ -232,6 +256,9 @@ export default function ProductsPage() {
       }
       setFormData(emptyNewListingInputs(), false);
       setSelectedPlatforms([]);
+      setPlatformUrlByPlatform({});
+      setSelectedSocialMedia([]);
+      setSocialUrlByPlatform({});
       setPhotoSlots((prev) => {
         prev.forEach((s) => {
           if (s.kind === "file") URL.revokeObjectURL(s.preview);
@@ -305,6 +332,7 @@ export default function ProductsPage() {
         const isPrivateListingDraft = Boolean(found.isPrivateListing);
         const isAuction = found.saleType === "auction";
         const loadedPlatforms = (found.platforms ?? []) as Platforms[];
+        const loadedSocial = normalizeSocialMediaList(found.socialMedia);
 
         const draftInputs = {
           appName: {
@@ -390,6 +418,17 @@ export default function ProductsPage() {
           Object.values(draftInputs).every((i) => i.isValid),
         );
         setSelectedPlatforms(loadedPlatforms);
+        setPlatformUrlByPlatform(
+          linkUrlRecordFromEntries(found.platformUrls, (platform) =>
+            platformUrlPrefix(platform as Platforms),
+          ),
+        );
+        setSelectedSocialMedia(loadedSocial);
+        setSocialUrlByPlatform(
+          linkUrlRecordFromEntries(found.socialMediaUrls, (platform) =>
+            socialUrlPrefix(normalizeSocialMediaPlatform(platform)),
+          ),
+        );
 
         const urls = (found.photos ?? []).filter(Boolean);
         setPhotoSlots(
@@ -719,9 +758,64 @@ export default function ProductsPage() {
     );
   }, [photoSlots, uploadPhotos]);
 
+  const buildListingLinkPayload = () => ({
+    platforms: selectedPlatforms,
+    platformUrls: linkUrlEntriesFromRecord(
+      selectedPlatforms,
+      platformUrlByPlatform,
+      (platform) => platformUrlPrefix(platform as Platforms),
+    ),
+    socialMedia: selectedSocialMedia,
+    socialMediaUrls: linkUrlEntriesFromRecord(
+      selectedSocialMedia,
+      socialUrlByPlatform,
+      (platform) => socialUrlPrefix(platform),
+    ),
+  });
+
+  const validatePlatformUrlsForSubmit = (): string | null => {
+    for (const platform of selectedPlatforms) {
+      const meta = PLATFORM_MAPPING.find((p) => p.value === platform);
+      const path = String(platformUrlByPlatform[platform] ?? "").trim();
+      const label = meta?.label ?? platform;
+      if (!path) {
+        return `Add a public URL for ${label}.`;
+      }
+      if (meta?.urlPrefix) {
+        if (!isValidPrefixedListingPath(meta.urlPrefix, path)) {
+          return `Enter the ${label} path after ${meta.urlPrefix}`;
+        }
+      } else if (!isValidFreeformListingUrl(path)) {
+        return `Enter a valid URL for ${label}.`;
+      }
+    }
+
+    for (const platform of selectedSocialMedia) {
+      const meta = SOCIAL_MEDIA_MAPPING.find((p) => p.value === platform);
+      const path = String(socialUrlByPlatform[platform] ?? "").trim();
+      if (!path) continue;
+      const label = meta?.label ?? platform;
+      if (meta?.urlPrefix) {
+        if (!isValidPrefixedListingPath(meta.urlPrefix, path)) {
+          return `Enter the ${label} path after ${meta.urlPrefix}`;
+        }
+      } else if (!isValidFreeformListingUrl(path)) {
+        return `Enter a valid URL for ${label}.`;
+      }
+    }
+
+    return null;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formState.isValid || isSubmitting) return;
+
+    const platformUrlError = validatePlatformUrlsForSubmit();
+    if (platformUrlError) {
+      setSubmitError(platformUrlError);
+      return;
+    }
 
     setSubmitError(null);
     setIsSubmitting(true);
@@ -751,7 +845,7 @@ export default function ProductsPage() {
       const basePayload: Partial<Listing> = {
         appName: String(formState.inputs.appName?.value ?? ""),
         tagline: String(formState.inputs.tagline?.value ?? ""),
-        platforms: selectedPlatforms,
+        ...buildListingLinkPayload(),
         appDescription: String(formState.inputs.appDescription?.value ?? ""),
         startingPrice: startingPriceNum,
         buyItNowPrice: isBuyItNow ? buyItNowPriceNum : undefined,
@@ -899,7 +993,7 @@ export default function ProductsPage() {
         const updated = await updateListing(workListingId, {
           appName: String(formState.inputs.appName?.value ?? ""),
           tagline: String(formState.inputs.tagline?.value ?? ""),
-          platforms: selectedPlatforms,
+          ...buildListingLinkPayload(),
           appDescription: String(formState.inputs.appDescription?.value ?? ""),
           startingPrice: startingPriceNum,
           buyItNowPrice: isBuyItNow ? buyItNowPriceNum : undefined,
@@ -967,7 +1061,7 @@ export default function ProductsPage() {
         isBuyItNow: Boolean(formState.inputs.isBuyItNow?.value),
         appName: String(formState.inputs.appName?.value ?? ""),
         tagline: String(formState.inputs.tagline?.value ?? ""),
-        platforms: selectedPlatforms,
+        ...buildListingLinkPayload(),
         appDescription: String(formState.inputs.appDescription?.value ?? ""),
         startingPrice: startingPriceNum,
         buyItNowPrice: isBuyItNow ? buyItNowPriceNum : undefined,
@@ -1029,7 +1123,28 @@ export default function ProductsPage() {
       ? selectedPlatforms.filter((p) => p !== platform)
       : [...selectedPlatforms, platform];
     setSelectedPlatforms(next);
+    if (!next.includes(platform)) {
+      setPlatformUrlByPlatform((prev) => {
+        const copy = { ...prev };
+        delete copy[platform];
+        return copy;
+      });
+    }
     inputHandler("platforms", next, next.length > 0);
+  };
+
+  const handleSocialMediaCheckSelection = (platform: SocialMediaPlatform) => {
+    const next = selectedSocialMedia.includes(platform)
+      ? selectedSocialMedia.filter((p) => p !== platform)
+      : [...selectedSocialMedia, platform];
+    setSelectedSocialMedia(next);
+    if (!next.includes(platform)) {
+      setSocialUrlByPlatform((prev) => {
+        const copy = { ...prev };
+        delete copy[platform];
+        return copy;
+      });
+    }
   };
 
   if (listingFormMode) {
@@ -1389,6 +1504,46 @@ export default function ProductsPage() {
               <PlatformCheckbox
                 selectedPlatforms={selectedPlatforms || []}
                 onCheckSelection={handlePlatformCheckSelection}
+              />
+              <ListingLinkUrlFields
+                items={PLATFORM_MAPPING.map((platform) => ({
+                  value: platform.value,
+                  label: platform.label,
+                  icon: platform.icon,
+                  urlPrefix: platform.urlPrefix,
+                }))}
+                selected={selectedPlatforms}
+                urls={platformUrlByPlatform}
+                onUrlChange={(platform, url) =>
+                  setPlatformUrlByPlatform((prev) => ({ ...prev, [platform]: url }))
+                }
+                required
+              />
+            </FormControl>
+
+            <FormControl>
+              <FormLabel sx={{ mb: 1, fontWeight: 600 }}>
+                Social media (optional)
+              </FormLabel>
+              <Typography variant="caption" color="text.secondary" sx={{ mb: 1.5, display: "block" }}>
+                Select accounts included in the sale. Add URLs to show clickable icons on your product page.
+              </Typography>
+              <SocialMediaCheckbox
+                selected={selectedSocialMedia}
+                onCheckSelection={handleSocialMediaCheckSelection}
+              />
+              <ListingLinkUrlFields
+                items={SOCIAL_MEDIA_MAPPING.map((platform) => ({
+                  value: platform.value,
+                  label: platform.label,
+                  icon: platform.icon,
+                  urlPrefix: platform.urlPrefix,
+                }))}
+                selected={selectedSocialMedia}
+                urls={socialUrlByPlatform}
+                onUrlChange={(platform, url) =>
+                  setSocialUrlByPlatform((prev) => ({ ...prev, [platform]: url }))
+                }
               />
             </FormControl>
 

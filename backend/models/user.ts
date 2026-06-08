@@ -56,6 +56,7 @@ export interface User {
     refreshTokenEnc: string | null;
     accessTokenExpiresAt: Date | null;
   };
+
 }
 
 const UserSchema = new mongoose.Schema<User>(
@@ -127,6 +128,7 @@ const UserSchema = new mongoose.Schema<User>(
       required: false,
       default: undefined,
     },
+
   },
   { timestamps: true }
 );

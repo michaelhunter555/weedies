@@ -209,6 +209,32 @@ const baseColumns: GridColDef[] = [
   },
 ];
 
+const storeLinksColumn: GridColDef = {
+  field: "storeLinks",
+  headerName: "Store links",
+  width: 110,
+  valueGetter: (_v, row) => {
+    const r = row as Record<string, unknown>;
+    const platforms = Array.isArray(r.platforms) ? r.platforms.length : 0;
+    const urls = Array.isArray(r.platformUrls) ? r.platformUrls.length : 0;
+    return platforms ? `${urls}/${platforms}` : "—";
+  },
+};
+
+const paymentColumn: GridColDef = {
+  field: "payment",
+  headerName: "Listing fee",
+  width: 130,
+  valueGetter: (_v, row) => {
+    const r = row as Record<string, unknown>;
+    const status = String(r.status ?? "");
+    if (status === "pending_listing_fee") return "Fee pending";
+    if (r.sellerCommittedAt) return "Committed";
+    if (status === "draft") return "Draft";
+    return "—";
+  },
+};
+
 const verificationColumn: GridColDef = {
   field: "verification",
   headerName: "Verification",
@@ -385,8 +411,21 @@ export default function AdminListingsPage() {
   const columns = React.useMemo(
     () =>
       tab === "pending"
-        ? [...baseColumns, createdColumn, actionsColumnPending]
-        : [...baseColumns, publishedColumn, verificationColumn, actionsColumnActive],
+        ? [
+            ...baseColumns,
+            storeLinksColumn,
+            paymentColumn,
+            createdColumn,
+            actionsColumnPending,
+          ]
+        : [
+            ...baseColumns,
+            storeLinksColumn,
+            paymentColumn,
+            publishedColumn,
+            verificationColumn,
+            actionsColumnActive,
+          ],
     [tab, actionsColumnPending, actionsColumnActive],
   );
 

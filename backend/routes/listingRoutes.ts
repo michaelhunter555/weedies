@@ -28,6 +28,8 @@ import { resolvePrivateListingAccess } from "../controllers/listings/resolve-pri
 import { writeLimiter } from "../middleware/rate-limiter";
 import { followListing } from "../controllers/listings/follow-listing";
 import { relistListing } from "../controllers/listings/relist-listing";
+import { getOwnershipVerification } from "../controllers/listings/get-ownership-verification";
+import { checkOwnershipVerification } from "../controllers/listings/check-ownership-verification";
 
 const router = Router();
 
@@ -99,6 +101,8 @@ router.get("/me/marketplace-orders", getMyMarketplaceOrders);
 router.get("/me/transactions", getMyTransactions);
 router.get("/me/auction-bids", getMyAuctionBids);
 router.get("/me/edit-meta", getSellerListingEditMeta);
+router.get("/:id/ownership-verification", getOwnershipVerification);
+router.post("/:id/ownership-verification/check", writeLimiter, checkOwnershipVerification);
 router.post("/draft", writeLimiter, saveDraftListing);
 router.post("/", writeLimiter, createListing);
 router.post(

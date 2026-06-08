@@ -96,6 +96,8 @@ export type ListingGaMetricsPanelProps = {
   /** When false, do not fetch (e.g. no GA property linked). */
   enabled?: boolean;
   title?: string;
+  /** Seller/owner only — reconnect copy is not shown to buyers. */
+  isListingOwner?: boolean;
   /** Owners see a reconnect CTA when GA OAuth needs to be re-granted. */
   reconnectHref?: string;
 };
@@ -105,6 +107,7 @@ export function ListingGaMetricsPanel(props: ListingGaMetricsPanelProps) {
     listingId,
     enabled = true,
     title = "Last 30 days (Google Analytics)",
+    isListingOwner = false,
     reconnectHref,
   } = props;
   const { getListingGoogleAnalyticsMetrics } = useListings();
@@ -138,6 +141,17 @@ export function ListingGaMetricsPanel(props: ListingGaMetricsPanelProps) {
       code === GA_NEEDS_RECONNECT ||
       Boolean(payload && payload.needsReconnect === true);
     if (needsReconnect) {
+      if (!isListingOwner) {
+        return (
+          <Alert severity="info" sx={{ borderRadius: 2 }}>
+            <AlertTitle sx={{ fontWeight: 800 }}>
+              Verified analytics unavailable
+            </AlertTitle>
+            This seller likely revoked this permission. Traffic metrics cannot be
+            shown until they reconnect Google Analytics.
+          </Alert>
+        );
+      }
       return (
         <Alert
           severity="warning"

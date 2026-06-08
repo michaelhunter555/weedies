@@ -10,13 +10,17 @@ import {
   type Theme,
 } from "@mui/material";
 
-import { PLATFORM_MAPPING } from "@/utils/listingOptions";
-import type { ListingPlatformUrl, Platforms } from "../../../types";
+import {
+  normalizeSocialMediaList,
+  normalizeSocialMediaPlatform,
+} from "@/lib/listing-link-urls";
+import { SOCIAL_MEDIA_MAPPING } from "@/utils/listingOptions";
+import type { ListingSocialMediaUrl, SocialMediaPlatform } from "../../../types";
 
-export type ListingPlatformsRowSize = "card" | "detail";
+export type ListingSocialMediaRowSize = "card" | "detail";
 
 const SIZE_STYLES: Record<
-  ListingPlatformsRowSize,
+  ListingSocialMediaRowSize,
   {
     minWidth: number;
     labelFontSize: number;
@@ -44,17 +48,17 @@ const SIZE_STYLES: Record<
   },
 };
 
-export type ListingPlatformsRowProps = {
-  platforms?: Platforms[] | null;
-  platformUrls?: ListingPlatformUrl[] | null;
-  size?: ListingPlatformsRowSize;
+export type ListingSocialMediaRowProps = {
+  socialMedia?: SocialMediaPlatform[] | null;
+  socialMediaUrls?: ListingSocialMediaUrl[] | null;
+  size?: ListingSocialMediaRowSize;
   /** Product detail only: icons open the stored public URL. */
   linkable?: boolean;
   showTooltips?: boolean;
   sx?: SxProps<Theme>;
 };
 
-function PlatformIconDisplay({
+function SocialIconDisplay({
   children,
   fontSize,
 }: {
@@ -78,32 +82,36 @@ function PlatformIconDisplay({
   );
 }
 
-function urlByPlatform(
-  platformUrls?: ListingPlatformUrl[] | null,
-): Map<Platforms, string> {
-  const map = new Map<Platforms, string>();
-  for (const entry of platformUrls ?? []) {
+function urlBySocial(
+  socialMediaUrls?: ListingSocialMediaUrl[] | null,
+): Map<SocialMediaPlatform, string> {
+  const map = new Map<SocialMediaPlatform, string>();
+  for (const entry of socialMediaUrls ?? []) {
     const url = entry.url?.trim();
-    if (url) map.set(entry.platform, url);
+    if (url) map.set(normalizeSocialMediaPlatform(String(entry.platform)), url);
   }
   return map;
 }
 
-export function ListingPlatformsRow({
-  platforms,
-  platformUrls,
-  size = "card",
+export function ListingSocialMediaRow({
+  socialMedia,
+  socialMediaUrls,
+  size = "detail",
   linkable = false,
   showTooltips = true,
   sx,
-}: ListingPlatformsRowProps) {
+}: ListingSocialMediaRowProps) {
   const styles = SIZE_STYLES[size];
-  const urls = urlByPlatform(platformUrls);
-  const available = PLATFORM_MAPPING.filter(
-    (p) => platforms?.includes(p.value) && p.iconCard,
+  const urls = urlBySocial(socialMediaUrls);
+  const normalizedSocial = normalizeSocialMediaList(socialMedia ?? undefined);
+  const available = SOCIAL_MEDIA_MAPPING.filter(
+    (p) => normalizedSocial.includes(p.value) && p.iconCard,
   );
+  const display = linkable
+    ? available.filter((p) => urls.has(p.value))
+    : available;
 
-  if (available.length === 0) return null;
+  if (display.length === 0) return null;
 
   return (
     <Stack spacing={0.75} sx={sx}>
@@ -113,16 +121,16 @@ export function ListingPlatformsRow({
           color="text.secondary"
           sx={{ fontWeight: 600, letterSpacing: 0.2 }}
         >
-          Currently launched on the following platform(s):
+          Social media included with this listing:
         </Typography>
       ) : null}
       <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap" useFlexGap>
-        {available.map((platform, platformIndex) => {
+        {display.map((platform, platformIndex) => {
           const href = linkable ? urls.get(platform.value) : undefined;
           const iconNode = (
-            <PlatformIconDisplay fontSize={styles.iconFontSize}>
+            <SocialIconDisplay fontSize={styles.iconFontSize}>
               {platform.iconCard}
-            </PlatformIconDisplay>
+            </SocialIconDisplay>
           );
           const icon = href ? (
             <Box
@@ -162,8 +170,8 @@ export function ListingPlatformsRow({
                   <Tooltip
                     title={
                       href
-                        ? `View ${platform.label} version`
-                        : `Sale includes ${platform.label} version`
+                        ? `Open ${platform.label} page/channel`
+                        : `${platform.label} included`
                     }
                   >
                     <span>{icon}</span>
@@ -179,7 +187,7 @@ export function ListingPlatformsRow({
                   {platform.label}
                 </Typography>
               </Stack>
-              {platformIndex < available.length - 1 ? (
+              {platformIndex < display.length - 1 ? (
                 <Divider
                   orientation="vertical"
                   flexItem

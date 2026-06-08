@@ -7,6 +7,7 @@ import {
   ListingStatus,
   ListingTurnaround,
   Platforms,
+  SocialMediaPlatform,
 } from "../types";
 
 /**
@@ -30,6 +31,17 @@ export interface Listing {
   difficulty: ListingDifficulty;
   turnaround: ListingTurnaround;
   ageOfBusinessMonths: number;
+
+
+  ownershipVerification?: {
+    isVerified?: boolean;
+    /** JWT for `/.well-known/` website verification. */
+    verificationToken?: string;
+    /** Short public code for App Store / Play Store listing text, e.g. DAPANDFLIP-VERIFY-A7F93C */
+    storeListingCode?: string;
+    verifiedVia?: "well_known" | "store_listing" | null;
+    dateVerified?: Date | null;
+  }
 
   // Pricing / sale
   saleType: ListingSaleType;
@@ -58,6 +70,15 @@ export interface Listing {
   tags: string[];
   techStack: string[];
   platforms: Platforms[];
+  platformUrls: {
+    platform: Platforms;
+    url: string;
+  }[];
+  socialMedia?: SocialMediaPlatform[];
+  socialMediaUrls?: {
+    platform: SocialMediaPlatform;
+    url: string;
+  }[];
 
   // Seller-reported traction - verified via analytics integrations
   monthlyRevenue?: number;
@@ -139,6 +160,23 @@ const ListingSchema = new mongoose.Schema<Listing>(
     /** Listing-fee Stripe PaymentIntent (manual capture). Used by admin to capture or cancel after review. */
     paymentIntentId: { type: String, required: false, default: null, index: true },
 
+    ownershipVerification: {
+      type: {
+        isVerified: { type: Boolean, required: true, default: false },
+        verificationToken: { type: String, required: false, default: null },
+        storeListingCode: { type: String, required: false, default: null },
+        verifiedVia: {
+          type: String,
+          required: false,
+          default: null,
+          enum: ["well_known", "store_listing"],
+        },
+        dateVerified: { type: Date, required: false, default: null },
+      },
+      required: false,
+      default: null,
+    },
+
     appName: { type: String, required: true, trim: true, maxlength: 80 },
     tagline: { type: String, required: true, trim: true, maxlength: 80 },
     appDescription: { type: String, required: true, maxlength: 16000 },
@@ -196,6 +234,40 @@ const ListingSchema = new mongoose.Schema<Listing>(
     tags: { type: [String], required: true, default: [], index: true },
     techStack: { type: [String], required: true, default: [] },
     platforms: { type: [String], required: true, default: [], enum: ["ios", "android", "web", "macOs", "windows", "chromeExtension", "other"] },
+    platformUrls: {
+      type: [
+        {
+          platform: {
+            type: String,
+            required: true,
+            enum: ["ios", "android", "web", "macOs", "windows", "chromeExtension", "other"],
+          },
+          url: { type: String, required: true },
+        },
+      ],
+      required: true,
+      default: [],
+    },
+    socialMedia: {
+      type: [String],
+      required: true,
+      default: [],
+      enum: ["instagram", "x", "youtube", "facebook", "tiktok", "linkedin", "discord", "other"],
+    },
+    socialMediaUrls: {
+      type: [
+        {
+          platform: {
+            type: String,
+            required: true,
+            enum: ["instagram", "x", "youtube", "facebook", "tiktok", "linkedin", "discord", "other"],
+          },
+          url: { type: String, required: true },
+        },
+      ],
+      required: true,
+      default: [],
+    },
     monthlyRevenue: { type: Number, required: false, min: 0 },
     monthlyActiveUsers: { type: Number, required: false, min: 0 },
 

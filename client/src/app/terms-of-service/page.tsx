@@ -68,7 +68,7 @@ export default function TermsOfServicePage() {
           Once an account is deleted, it cannot be reinstated.
           Any pending or active transactions unrelated to the account deletion must be canceled/refunded and the funds will be returned to the original customers.
           
-          You must also delete any active listings, resolve any open disputes, and no negative balances or pending payouts. Deleting your account does not affect your payouts, however, in the event that you do delete your account where A. Avaialble payout balance is greater than $0.00 USD or B. Pending payout balance is greater than $0.00 USD. 
+          You must also delete any active listings, resolve any open disputes, and no negative balances or pending payouts. Deleting your account does not affect your payouts, however, in the event that you do delete your account where A. Available payout balance is greater than $0.00 USD or B. Pending payout balance is greater than $0.00 USD. 
           Dap & Flip will claim no responsibility or liability in the accuracy of the payout. 
           When a user deletes their account, our access to your Stripe associated data is deleted alongside it. 
           This means, while you will still be paid any money owed to you, we no longer have access to verify the accuracy of any future payments or payouts.
@@ -79,11 +79,52 @@ export default function TermsOfServicePage() {
       <LegalSection
         title="4. Listings and seller obligations"
         paragraphs={[
-          `You represent that you have the right to sell or transfer what you list and that your listing is accurate and not misleading.
+          `You represent that you have the legal right to sell or transfer what you list, and that your listing information is accurate and not misleading.
           All listings require review before publication. We may remove or reject listings at our discretion.
           You are responsible for delivering what you promise after a sale, including access, assets, and documentation agreed with the buyer.
-          In order maintain a positive app experience, any listings that you sell must be delivered in your selected grace period; not exceeding 14 business days.
-          When a listing is sold, you must ensure the swift handover of all deliverables including assets not limited to, social media pages, branding assets, repos, and any other assets that are part of the listing.`,
+          In order to maintain a positive app experience, any listings that you sell must be delivered in your selected grace period; not exceeding 30 business days.
+          When a listing is sold, you must ensure the swift handover of all deliverables including assets not limited to, social media pages, branding assets, repos, and any other assets, whether listed in or not in the description that belong to this listing. For example, if a facebook page exists for an app being sold, it must be included in the sale as well unless the seller has explicitly stated otherwise.`,
+        ]}
+      />
+
+<LegalSection
+        title="4.1 Listing Quality"
+        paragraphs={[
+          `
+          In order to maintain a positive user experience, we expect a standard of quality for all listings. This includes, but is not limited to, the following:
+          The app being sold and all related 3rd party integrations are in good standing. Meaning you are not trying to sell an app where the app or account associated with the app is suspended or banned. An example of this would be selling an app where the google ads account associated with the app is suspended or banned.
+          When listing an app, you must ensure that the app is publicly accessible. Meaning users can publicly find your app on the web or app store and confirm its existence. Apps that are currently in development are not allowed to be listed. Incomplete apps are apps that are hosted, but displays signs of incompleteness, such as blank pages, nonfunctional buttons, nonfunctional forms, or any other signs of incompleteness.
+          In most cases, iOS and Android apps will be fine. However, if the app is a web app, it must be publicly accessible and if login is required, a demo login must be provided. Note, it is at our full discretion to determine if an app is incomplete or not.
+
+          `,
+        ]}
+      />
+
+<LegalSection
+        title="4.2 Listing Review"
+        paragraphs={[
+          `
+          All listings are reviewed by human moderators. The reviews focus on key areas such as, but not limited to, the listing quality, the app's existence, the app's functionality, and overall availability. Reviews check for both compliance and accuracy of the listing. Initial checks will confirm that the listing is free of offensive or discriminatory language, unrelated content, or images. Reviews will also verify all external links added for platform and social media are publicly accessible. The sale price of a listing, rated difficulty, handover period, and financial claims are not considered in reviews. App descriptions are checked, but lean on two factors: 1. Free of offensive or discriminatory language, and 2. Not prompting users for off-platform communication.
+          `,
+        ]}
+      />
+
+<LegalSection
+        title="4.3 Listing Rejection"
+        paragraphs={[
+          `
+         If your listing is rejected, you will have 7 days from the day of rejection to edit and resubmit. After 7 days, the listing will be deleted from records and cannot be resubmitted. Please note that listing fees are non-refundable. Common causes for rejection include, but are not limited to,
+         including personal or social contact details in the listing that would aim to take a buyer off-platform for further communication. Offensive or discriminatory language, unrelated content, or images. Listings that are not in compliance with the listing quality standards.
+          `,
+        ]}
+      />
+
+<LegalSection
+        title="4.4 Listing Spam"
+        paragraphs={[
+          `
+          Listing Spam is when a seller lists repackaged, copied, or strongly similar apps previously listed from their account. All sellers will refrain from this practice. An example would be listing multiple apps where the only differences vary in name and color scheme. While every listing will be assessed on a case by case basis, sellers should strongly avoid listing low-effort or repackaged versions of previously or newly listed apps.
+          `,
         ]}
       />
 
@@ -91,9 +132,10 @@ export default function TermsOfServicePage() {
         title="5. Listing Purchases"
         paragraphs={[
           `For listings under $1000.00 USD, payment will be handled through Stripe. 
-          After a buyer has completed payment, it is the sellers obligation to accept the payment, (or cancel the payment) and begin the process of handing over all deliverables.
+          After a buyer has completed payment, it is the seller's obligation to accept the payment, (or cancel the payment) and (if accepted) begin the process of handing over all deliverables.
           For listings over $1000.00 USD but less than $4000.00 USD, buyers will have the option to pay via Escrow.
           For listings over $4000.00 USD, escrow will be required. 
+          When escrow is optional but not required, the buyer will pay 100% of all escrow related fees. When escrow is required, the fees are split 50/50 between the buyer and seller.
           `
         ]}
       />
@@ -104,7 +146,7 @@ export default function TermsOfServicePage() {
           `For any Stripe related transactions, the seller will have a maximum of 7 business days from the date of payment to accept or reject. If no action is taken in this time, the payment will expire and the buyer will be fully refunded (100%).
           Stripe charges a flat fee of 2.9% + $0.30 USD per transaction. 
           This fee is the responsibility of the seller. 
-          Payouts via Stripe can take up 2-3 business days AFTER the seller has accepted payment. 
+          Payouts via Stripe can take up to 2-3 business days AFTER the seller has accepted payment. 
           Please note, your very first payout may be subject to Stripe risk assessment causing it to delay for up to 7 business days.
           `
         ]}
@@ -113,11 +155,39 @@ export default function TermsOfServicePage() {
 <LegalSection
         title="5.2 Escrow Payments"
         paragraphs={[
-          `Our platform utilizes Escrow.com to facilitate payments as an option for listings over $1000.00 USD and as a requirement for listings over $4000.00 USD. When a buyer selects this option, the seller and buyer will receive an email notification from Escrow.com. Escrow.com transactions require both users to accept the agreement, or in other words, agree to A. Buyer agrees to pay a set amount of funds and B. The seller agrees to handover all promised deliverables. Within this, we will act as a broker, so in every escrow.com transaction, you will see info@elevatedappgroup.com included as the initiator and creator.
+          `Our platform utilizes Escrow.com to facilitate payments as an option for listings over $1000.00 USD and as a requirement for listings over $4000.00 USD. When a buyer selects this option, the seller and buyer will receive an email notification from Escrow.com. Escrow.com transactions require both users to accept the agreement, or in other words, agree to A. Buyer agrees to pay a set amount of funds and B. The seller agrees to hand over all promised deliverables. Within this, we will act as a broker, so in every escrow.com transaction, you will see info@elevatedappgroup.com included as the initiator and creator.
           It is very important to strictly follow the directions set in this process to ensure a smooth transaction.
           For escrow transactions between $1000.00 USD and $3999.99 USD, the buyer will be 100% responsible for all escrow related fees.
           For any escrow transaction over $4000.00 USD, the fees will be split 50/50 between the buyer and seller. 
           `
+        ]}
+      />
+       <LegalSection
+        title="5.3 (a) Seller Requirements for sold listings"
+        paragraphs={[
+          `
+          Sellers can create after sale conversations with the buyer and share identifiable information such as email for asset ownership transfer.
+          Sellers are responsible for delivering all promised deliverables to the buyer.
+          This includes the safe transfer of all assets and documentation agreed upon in the listing.
+          It is the full responsibiility of the seller to initiate the safe transfer of any account, repo, social media pages, and any other assets that are part of the listing. 
+          Sellers are required to provide after sale setup support to the buyer. However, it is not the responsiblity of the seller to ensure that the buyer has the correct credentials, technical knowledge, and, or, infrastructure to ensure the asset being sold will be operate as previously owned.
+          It is at the discretion of the seller to provide end-to-end setup support to the buyer. Otherwise, the seller is expected to only provide guidance and transfer promised assets. 
+          The transfer of all assets should take place within the agreed handover period. Sellers who fail to deliver all promised deliverables within the agreed handover period will be subject to a dispute, and, or, issuing a buyer refund. In the event where a seller has delivered as promised, but the buyer has delayed confirmation, the seller will be able to open a dispute, or contact support directly for immediate review and, or, in some cases, resolution.
+          `,
+        ]}
+      />
+      <LegalSection
+        title="5.3 (b) Buyer Requirements for sold listings"
+        paragraphs={[
+          `
+          Buyers can create after sale conversations with the seller and share identifiable information such as email for asset ownership transfer.
+          Buyers are responsible for accepting delivery of all assets and documentation agreed upon in the listing. 
+          This responsibility extends to verifying the authenticity and accuracy of accounts and documentation provided by the seller.
+          Buyers are expected to have the correct credentials, technical knowledge, and, or, infrastructure to ensure the asset being sold will be operate as previously owned. This includes, but is not limited to, the following:
+          hosting, billing, analytics, networking, databases, and any other technical requirements that are necessary to operate the asset as previously owned. It is the responsibility of the buyer to ask as many questions pre-purchase before completing purchase. If promised assets are not delivered within the agreed handover period, buyers can open a dispute.
+          If the dispute is in favor of the buyer, buyers will be fully refunded and the seller subject to suspension or termination of their account.
+          When receiving deliverables from a seller, buyers should aim to confirm delivery once they are sure the asset is valid as described in the listing. Buyers should refrain from delaying confirmation in any manner that would appear malicious or in bad faith.
+          `,
         ]}
       />
 
@@ -129,9 +199,9 @@ export default function TermsOfServicePage() {
          `
          When a listing is sold, Dap & Flip will charge the seller a success fee that is a percentage of the listing price.
          The fee is taken immediately after the successful capture of payment. By using our platform, you agree to pay this fee in the event your listing sells. 
-         Morover, you agree to avoid any actions or attempts to circumvent this fee. This includes, attempting to influence or convince the buyer or seller to continue the transaction outside of Dap & Flip to avoid paying this fee. 
-         It is fully our right and discretion to determine if you have violated this clause. 
-         In the event that it is determined that a user has violated this clause, we will immediately terminate your account.
+         Moreover, you agree to avoid any actions or attempts to circumvent this fee. This includes, attempting to influence or convince the buyer or seller to continue the transaction outside of Dap & Flip to avoid paying this fee. 
+         It is fully our right and discretion to determine if a user has violated this clause. 
+         In the event that it is determined that a user has violated this clause, we will immediately terminate their account.
          
          `
         ]}
@@ -141,7 +211,7 @@ export default function TermsOfServicePage() {
         title="7. Prohibited conduct"
         paragraphs={[
          `
-         At the end of the day, we are a platform that links buyers and sellers. As a User, you aggree to engage in respectful behavior and avoid any actions that may be deemed as harassment, spam, or attempts to circumvent fees or payment flows.
+         At the end of the day, we are a platform that links buyers and sellers. As a User, you agree to engage in respectful behavior and avoid any actions that may be deemed as harassment, spam, or attempts to circumvent fees or payment flows.
          This means, no illegal content, fraud, malware, stolen assets, or infringement of intellectual property. You also agree not to verbally abuse users during conversations. This includes sending messages that contain racism, sexism, homophobia, transphobia, and any other form of discrimination.
          All conversations are subject to moderation at the request of either chat participant.
          `
@@ -152,8 +222,8 @@ export default function TermsOfServicePage() {
         title="7.1 User Account Suspension"
         paragraphs={[
          `
-        Dap & Flip reserves the right to susepend any account for any violation of these Terms, at any time, without notice. When an account is suspended, the user must cease from attempting to access the platform, engage with other users, or access any of their listings. Any listing fees paid are non-refundable.
-        During the suspension period, any payouts related the the suspension will be held. This does not include other transactions or payouts that are not related to the suspension. Once the suspension is lifted, the user will be able to access their account and listings again. You have the right to contact us at info@elevatedappgroup.com to appeal the suspension.
+        Dap & Flip reserves the right to suspend any account for any violation of these Terms, at any time, without notice. When an account is suspended, the user must cease from attempting to access the platform, engage with other users, or access any of their listings. Any listing fees paid are non-refundable.
+        During the suspension period, any payouts related to the suspension will be held. This does not include other transactions or payouts that are not related to the suspension. Once the suspension is lifted, the user will be able to access their account and listings again. You have the right to contact us at info@elevatedappgroup.com to appeal the suspension.
          `
         ]}
       />
@@ -167,7 +237,7 @@ export default function TermsOfServicePage() {
         Any listing fees paid are non-refundable. Any pending or active transactions unrelated to the account termination will be canceled/refunded and the funds will be returned to the original customers.
         Once an account is terminated, it cannot be reinstated.
         Further, a terminated account is equivalent to a lifetime ban. 
-        After account terminiation, Dap & Flip reserves the right to deny any future attempts to create, purchase, profit from listings, or engage with the platform in any way.
+        After account termination, Dap & Flip reserves the right to deny any future attempts by terminated users to create, purchase, profit from listings, or engage with the platform in any way.
          `
         ]}
       />
@@ -176,10 +246,10 @@ export default function TermsOfServicePage() {
         title="8. Payout Policies"
         paragraphs={[
          `
-         Payouts run and rolling 2-day basis for Stripe related transactions. A seller must onboard through our personalized Stripe onboarding process to receive payouts. 
-         Dap & Flip claims no responsibility or liability in the event where you are unable to onboard with Stripe whether to due to existing or recent issues with your account, identity, or any other reason.
+         Payouts run on a rolling 2-day basis for Stripe related transactions. A seller must onboard through our personalized Stripe onboarding process to receive payouts. 
+         Dap & Flip claims no responsibility or liability in the event where you are unable to onboard with Stripe whether due to existing issues with your account, verifiable identity, or lack of availability in your country.
          We have no say or control in the event where Stripe rejects your application for any reason. For escrow related transactions, payouts are sent directly to your bank via ACH. It is solely your responsibility to make sure you are providing accurate information. 
-         Dap & Flip claims no responsibility or liability in the event where your bank account details are incorrect, invalid, or your bank account rejects the transaction altogether.
+         Dap & Flip claims no responsibility or liability in the event where your bank account details are incorrect or invalid causing a disruption to your payouts.
 
          `
         ]}
@@ -198,7 +268,7 @@ export default function TermsOfServicePage() {
         title="10. Disclaimers"
         paragraphs={[
           'THE SERVICE IS PROVIDED "AS IS" AND "AS AVAILABLE" WITHOUT WARRANTIES OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT.',
-          `We do not guarantee that any listing will sell,that buyers will complete payment, that sellers will complete handover, or that integrations (e.g. analytics) will remain available.
+          `We do not guarantee that any listing will sell, that buyers will complete payment, that sellers will complete handover, or that integrations (e.g. analytics) will remain available.
           We do not guarantee the accuracy of any listing or information provided by the seller. The buyer is solely responsible for inquiring, scrutinizing, and verifying the accuracy of any listing or information provided by the seller. 
           Dap & Flip claims no responsibility or liability for any actions or decisions made by the buyer or seller.
           `,

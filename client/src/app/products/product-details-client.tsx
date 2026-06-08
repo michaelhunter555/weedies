@@ -21,6 +21,7 @@ import {
   getCategoryLabel,
 } from "@/utils/listingOptions";
 
+import VerifiedIcon from '@mui/icons-material/Verified';
 import EditRoundedIcon from "@mui/icons-material/EditRounded";
 import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
 import ChatRoundedIcon from "@mui/icons-material/ChatRounded";
@@ -59,6 +60,7 @@ import useTheme from "@mui/material/styles/useTheme";
 
 import { AppDescriptionHtml } from "@/components/Listings/AppDescriptionHtml";
 import { ListingPlatformsRow } from "@/components/Listings/ListingPlatformsRow";
+import { ListingSocialMediaRow } from "@/components/Listings/ListingSocialMediaRow";
 import { brandContainedButtonSx } from "@/theme/brand-palette";
 import type { Listing, ListingSellerPublic, ListingSellerRef } from "../../../types";
 import {
@@ -518,6 +520,7 @@ export function ProductDetailsClient({ fetchBy }: ProductDetailsClientProps) {
     ? listing.sellerId
     : null;
   const verifiedCreator = Boolean(populatedSeller?.isVerifiedCreator);
+  const verifiedOwnership = Boolean(listing.ownershipVerification?.isVerified);
 
   const messageSellerTooltip = !hydrated
     ? "One moment…"
@@ -737,6 +740,15 @@ export function ProductDetailsClient({ fetchBy }: ProductDetailsClientProps) {
             >
               <Stack spacing={2.5}>
                 <Box>
+                  <Box sx={{ display: "flex", alignItems: "start",  }}>
+                  <Tooltip title={`Verified on ${String(new Date(listing.ownershipVerification?.dateVerified ?? "").toLocaleDateString())}`} arrow placement="top">
+                    <Box>
+                      {verifiedOwnership ? <Alert icon={<VerifiedIcon sx={{ fontSize: 16 }} />} severity="success"  sx={{ padding: "0rem 1rem", fontSize: 12}}>
+                        Seller ownership verified
+                      </Alert>:null}
+                    </Box>
+                  </Tooltip>
+                  </Box>
                   <Typography variant="overline" color="text.secondary" fontWeight={700}>
                     About
                   </Typography>
@@ -800,10 +812,21 @@ export function ProductDetailsClient({ fetchBy }: ProductDetailsClientProps) {
           listing.platforms.length > 0 ? (
             <ListingPlatformsRow
               platforms={listing.platforms}
+              platformUrls={listing.platformUrls}
+              linkable
               size="detail"
               sx={{ mt: 0.5 }}
             />
           ) : null}
+                  {!isPrivateRestricted ? (
+                    <ListingSocialMediaRow
+                      socialMedia={listing.socialMedia}
+                      socialMediaUrls={listing.socialMediaUrls}
+                      linkable
+                      size="detail"
+                      sx={{ mt: 1 }}
+                    />
+                  ) : null}
                   <Stack spacing={1.5} sx={{ mt: 1 }}>
                     <Box>
                       <Typography variant="body2" component="div" fontWeight={700}>
@@ -894,6 +917,7 @@ export function ProductDetailsClient({ fetchBy }: ProductDetailsClientProps) {
                         <ListingGaMetricsPanel
                           listingId={listingMongoId}
                           title="Verified traffic (last 30 days)"
+                          isListingOwner={isOwner}
                           reconnectHref={
                             isOwner
                               ? `/products/verify?listingId=${encodeURIComponent(listingMongoId)}`
@@ -1506,6 +1530,22 @@ export function ProductDetailsClient({ fetchBy }: ProductDetailsClientProps) {
                             {pendingPrivateAccessCount === 1 ? "" : "s"}
                           </Button>
                         ) : null}
+                        <Button
+                          component={Link}
+                          href={`/verify-ownership?listingId=${encodeURIComponent(listingMongoId)}`}
+                          variant="outlined"
+                          size="large"
+                          startIcon={<VerifiedIcon />}
+                          sx={{
+                            borderRadius: 2,
+                            textTransform: "none",
+                            fontWeight: 600,
+                          }}
+                        >
+                          {listing.ownershipVerification?.isVerified
+                            ? "Ownership verified"
+                            : "Verify ownership"}
+                        </Button>
                         <Button
                           component={Link}
                           href={`/products/verify?listingId=${encodeURIComponent(listingMongoId)}`}

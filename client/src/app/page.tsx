@@ -239,11 +239,6 @@ export default function Home() {
           <Grid size={{ xs: 12, md: 7 }}>
             <Stack spacing={2}>
               <Chip
-                icon={
-                  <AutoAwesomeIcon
-                    sx={{ fontSize: 16, color: `${PALETTE.charcoal} !important` }}
-                  />
-                }
                 label="Discover apps to flip from indie builders"
                 size="small"
                 sx={{

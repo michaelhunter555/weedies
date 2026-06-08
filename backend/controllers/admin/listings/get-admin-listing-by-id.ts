@@ -7,6 +7,7 @@ import {
   type AuctionBidLean,
 } from "../../../lib/listing-auction-summary";
 import { auctionBidsClientJson } from "../../../lib/listing-auction-bids-client";
+import { buildAdminListingReviewContext } from "../../../lib/admin-listing-review-context";
 import { sanitizeListingDescriptionFields } from "../../../lib/listing-description";
 import type { Listing } from "../../../models/listing";
 import ListingModel from "../../../models/listing";
@@ -34,6 +35,8 @@ export async function getAdminListingById(req: Request, res: Response) {
       return void res.status(404).json({ message: "Listing not found" });
     }
 
+    const reviewContext = await buildAdminListingReviewContext(listing);
+
     const base = { ...listing } as Record<string, unknown>;
     if (listing.saleType === "auction") {
       const summarized = attachAuctionSummary({
@@ -48,12 +51,14 @@ export async function getAdminListingById(req: Request, res: Response) {
           auctionBids: auctionBidsClientJson(listing.auctionBids),
           auctionPendingBidCount: countPendingAuctionBids(listing.auctionBids),
         } as Record<string, unknown>),
+        reviewContext,
       });
     }
 
     return void res.json({
       ok: true,
       listing: sanitizeListingDescriptionFields(base),
+      reviewContext,
     });
   } catch (err) {
     console.error("getAdminListingById:", err);

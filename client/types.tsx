@@ -208,6 +208,26 @@ export type Platforms =
 | "chromeExtension"
 | "other";
 
+export type SocialMediaPlatform =
+  | "instagram"
+  | "x"
+  | "youtube"
+  | "facebook"
+  | "tiktok"
+  | "linkedin"
+  | "discord"
+  | "other";
+
+export type ListingPlatformUrl = {
+  platform: Platforms;
+  url: string;
+};
+
+export type ListingSocialMediaUrl = {
+  platform: SocialMediaPlatform;
+  url: string;
+};
+
 export type ListingCategory =
   | "ai-tools"
   | "productivity"
@@ -351,6 +371,9 @@ export type Listing = {
   tags?: string[];
   techStack?: string[];
   platforms?: Platforms[];
+  platformUrls?: ListingPlatformUrl[];
+  socialMedia?: SocialMediaPlatform[];
+  socialMediaUrls?: ListingSocialMediaUrl[];
 
   monthlyRevenue?: number;
   monthlyActiveUsers?: number;
@@ -430,6 +453,12 @@ export type Listing = {
     status: "none" | "pending" | "approved" | "denied";
     requestId?: string | null;
   };
+
+  ownershipVerification?: {
+    isVerified?: boolean;
+    verificationToken?: string;
+    dateVerified?: Date | null;
+  }
 };
 
 export type SellerListingEditMeta = {

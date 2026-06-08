@@ -16,6 +16,7 @@ import {
   applySanitizedListingFields,
   sanitizeListingDescriptionFields,
 } from "../../lib/listing-description";
+import { applyListingLinkFields } from "../../lib/listing-link-urls";
 import { parsePrivateListingFlag } from "../../lib/listing-submission-fields";
 
 /** Seller-only: patch mutable fields on their own listing (blocked if bids / buyer purchases exist). */
@@ -37,6 +38,7 @@ export async function updateListing(req: Request, res: Response) {
       publishedAt: _p,
       isListingVerified: _lv,
       isAnalyticsVerified: _av,
+      ownershipVerification: _ov,
       verifiedProviders: _vp,
       googleAnalyticsPropertyResourceName: _gapr,
       googleAnalyticsPropertyDisplayName: _gapd,
@@ -99,8 +101,15 @@ export async function updateListing(req: Request, res: Response) {
       return void res.status(400).json({ message: applied.message });
     }
 
+    const linkApplied = applyListingLinkFields(applied.data, {
+      requirePlatformUrls: true,
+    });
+    if (!linkApplied.ok) {
+      return void res.status(400).json({ message: linkApplied.message });
+    }
+
     const patch: Record<string, unknown> = {
-      ...applied.data,
+      ...linkApplied.data,
       status: "pending_review",
     };
 

@@ -63,7 +63,7 @@ export type ListingReviewsPanelProps = {
 export function ListingReviewsPanel({
   listingId,
   hideWhenEmpty,
-  title = "Buyer reviews",
+  title = "Buyer review",
 }: ListingReviewsPanelProps) {
   const { apiFetch } = useApiFetchOrThrow();
 
@@ -109,8 +109,7 @@ export function ListingReviewsPanel({
           sx={{ p: 2, borderRadius: 2, mt: 1, borderStyle: "dashed" }}
         >
           <Typography variant="body2" color="text.secondary">
-            No reviews yet. Buyers can leave optional feedback after a
-            confirmed handover.
+            An optional review from the future buyer may appear here post sale.
           </Typography>
         </Paper>
       </Box>

@@ -242,6 +242,7 @@ export function GaPropertyPicker(props: {
               <ListingGaMetricsPanel
                 listingId={listingId}
                 title="Last 30 days (preview)"
+                isListingOwner
               />
             ) : null}
             <Stack direction="row" spacing={1} justifyContent="flex-end" flexWrap="wrap">

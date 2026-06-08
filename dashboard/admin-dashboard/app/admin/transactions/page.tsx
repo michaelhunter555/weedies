@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import * as React from "react";
 import { useQuery } from "@tanstack/react-query";
 import Alert from "@mui/material/Alert";
@@ -29,9 +30,14 @@ const PAGE_SIZE = 10;
 type DateRange = "" | "7" | "14" | "30";
 
 export default function AdminTransactionsPage() {
+  const searchParams = useSearchParams();
   const { accessToken, hydrated } = useAdminAuth();
-  const [transactionId, setTransactionId] = React.useState("");
-  const [idDebounced, setIdDebounced] = React.useState("");
+  const [transactionId, setTransactionId] = React.useState(
+    () => searchParams.get("id")?.trim() ?? "",
+  );
+  const [idDebounced, setIdDebounced] = React.useState(
+    () => searchParams.get("id")?.trim() ?? "",
+  );
   const [status, setStatus] = React.useState("");
   const [paymentType, setPaymentType] = React.useState("");
   const [hasDispute, setHasDispute] = React.useState("");

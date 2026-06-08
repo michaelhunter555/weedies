@@ -20,6 +20,7 @@ import {
   patchListingReview,
   type ListingReviewAction,
 } from "@/lib/admin-api";
+import { ListingReviewContextPanels } from "@/components/admin/ListingReviewContextPanels";
 import { RejectListingDialog } from "@/components/admin/RejectListingDialog";
 import { AppDescriptionHtml } from "@/components/listings/AppDescriptionHtml";
 import { useAdminAuth } from "@/context/admin-auth-context";
@@ -64,6 +65,7 @@ export default function AdminListingDetailPage() {
   });
 
   const listing = data?.listing;
+  const reviewContext = data?.reviewContext;
 
   const runReview = async (action: ListingReviewAction) => {
     if (!listingId) return;
@@ -292,6 +294,8 @@ export default function AdminListingDetailPage() {
           ))}
         </Stack>
       ) : null}
+
+      <ListingReviewContextPanels reviewContext={reviewContext} />
 
       <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 2 }}>
         <Typography variant="subtitle2" fontWeight={700} gutterBottom>

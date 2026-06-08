@@ -1,3 +1,5 @@
+import type { AdminListingReviewContext } from "./admin-listing-types";
+
 function getApiBase(): string {
   const raw =
     process.env.NEXT_PUBLIC_API_BASE || "http://localhost:5001/api";
@@ -199,7 +201,11 @@ export async function fetchActiveListings(
 
 export async function fetchAdminListingById(
   listingId: string,
-): Promise<{ ok: boolean; listing: Record<string, unknown> }> {
+): Promise<{
+  ok: boolean;
+  listing: Record<string, unknown>;
+  reviewContext?: AdminListingReviewContext;
+}> {
   const url = `${getApiBase()}/admin/listings/${encodeURIComponent(listingId)}`;
   const res = await fetchWithAdminAuth(url);
   const data = await parseJson(res);
@@ -208,7 +214,11 @@ export async function fetchAdminListingById(
       typeof data.message === "string" ? data.message : "Request failed",
     );
   }
-  return data as { ok: boolean; listing: Record<string, unknown> };
+  return data as {
+    ok: boolean;
+    listing: Record<string, unknown>;
+    reviewContext?: AdminListingReviewContext;
+  };
 }
 
 export type AdminDisputeRow = {

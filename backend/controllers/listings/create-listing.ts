@@ -11,6 +11,7 @@ import {
   applySanitizedListingFields,
   sanitizeListingDescriptionFields,
 } from "../../lib/listing-description";
+import { applyListingLinkFields } from "../../lib/listing-link-urls";
 import {
   createListingFeeCheckoutSession,
   ensureStripeCustomerForUser,
@@ -20,6 +21,7 @@ import {
   ensureUniqueListingSlug,
   slugifyAppName,
 } from "../../utils/listing-slug";
+import { buildOwnershipVerificationFields } from "../../lib/ensure-listing-ownership-verification";
 
 /** Writable submission fields - same guard as `update-listing`. */
 function safeListingWrite(body: Record<string, unknown>) {
@@ -33,6 +35,7 @@ function safeListingWrite(body: Record<string, unknown>) {
     publishedAt: _p,
     isListingVerified: _lv,
     isAnalyticsVerified: _av,
+    ownershipVerification: _ov,
     verifiedProviders: _vp,
     googleAnalyticsPropertyResourceName: _gapr,
     googleAnalyticsPropertyDisplayName: _gapd,
@@ -93,7 +96,13 @@ export async function createListing(req: Request, res: Response) {
     if (!applied.ok) {
       return void res.status(400).json({ message: applied.message });
     }
-    const safe = applied.data;
+    const linkApplied = applyListingLinkFields(applied.data, {
+      requirePlatformUrls: true,
+    });
+    if (!linkApplied.ok) {
+      return void res.status(400).json({ message: linkApplied.message });
+    }
+    const safe = linkApplied.data;
 
     const fromClient =
       typeof body.slug === "string" && body.slug.trim().length > 0
@@ -162,6 +171,10 @@ export async function createListing(req: Request, res: Response) {
     listing.rejectionReason = undefined;
     listing.sellerCommittedAt = new Date();
 
+    listing.ownershipVerification = buildOwnershipVerificationFields(
+      String(listing._id),
+      String(sellerId),
+    );
     if (listingFeeUsd > 0) {
       const customerId = await ensureStripeCustomerForUser(user);
       listing.status = "pending_listing_fee";

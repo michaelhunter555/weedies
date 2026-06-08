@@ -9,6 +9,13 @@ import SportsEsportsRoundedIcon from "@mui/icons-material/SportsEsportsRounded";
 import TerminalRoundedIcon from "@mui/icons-material/TerminalRounded";
 import TuneRoundedIcon from "@mui/icons-material/TuneRounded";
 import WorkspacePremiumRoundedIcon from "@mui/icons-material/WorkspacePremiumRounded";
+import InstagramIcon from '@mui/icons-material/Instagram';
+import XIcon from "@mui/icons-material/X";
+import YouTubeIcon from '@mui/icons-material/YouTube';
+import FacebookIcon from '@mui/icons-material/Facebook';
+import AddIcon from '@mui/icons-material/Add';
+
+import LinkedInIcon from '@mui/icons-material/LinkedIn';
 
 
 // platform icons
@@ -18,7 +25,11 @@ import WebIcon from '@mui/icons-material/Web';
 import LaptopMacIcon from '@mui/icons-material/LaptopMac';
 import WindowIcon from '@mui/icons-material/Window';
 import ExtensionIcon from '@mui/icons-material/Extension';
-import type { ListingCategory, Platforms } from "../../types";
+import {
+  PLATFORM_URL_PREFIXES,
+  SOCIAL_URL_PREFIXES,
+} from "@/lib/listing-link-urls";
+import type { ListingCategory, Platforms, SocialMediaPlatform } from "../../types";
 import { BRAND_PALETTE } from "@/theme/brand-palette";
 
 export type { ListingCategory };
@@ -281,6 +292,8 @@ export type PlatformMap = {
   icon: React.ReactElement;
   checkedIcon: React.ReactElement;
   iconCard: React.ReactElement;
+  /** Fixed origin; user enters path only. Omitted for Web (freeform URL). */
+  urlPrefix?: string;
 };
 
 export const PLATFORM_MAPPING: PlatformMap[] = [
@@ -290,6 +303,7 @@ export const PLATFORM_MAPPING: PlatformMap[] = [
     icon: <AppleIcon />,
     checkedIcon: <AppleIcon sx={{ color: BRAND_PALETTE.seafoam }} />,
     iconCard: <AppleIcon sx={{ fontSize: 14, color: "#000000" }} />,
+    urlPrefix: PLATFORM_URL_PREFIXES.ios,
   },
   {
     value: "android",
@@ -297,6 +311,7 @@ export const PLATFORM_MAPPING: PlatformMap[] = [
     icon: <AndroidIcon />,
     iconCard: <AndroidIcon sx={{ fontSize: 14, color:  "#3DDC84" }} />,
     checkedIcon: <AndroidIcon sx={{ color: BRAND_PALETTE.seafoam }} />,
+    urlPrefix: PLATFORM_URL_PREFIXES.android,
   },
   {
     value: "web",
@@ -311,6 +326,7 @@ export const PLATFORM_MAPPING: PlatformMap[] = [
     icon: <LaptopMacIcon />,
     iconCard: <LaptopMacIcon sx={{ fontSize: 14, color: "#000" }} />,
     checkedIcon: <LaptopMacIcon sx={{ color: BRAND_PALETTE.seafoam }} />,
+    urlPrefix: PLATFORM_URL_PREFIXES.macOs,
   },
   {
     value: "windows",
@@ -318,6 +334,7 @@ export const PLATFORM_MAPPING: PlatformMap[] = [
     icon: <WindowIcon />,
     iconCard: <WindowIcon sx={{ fontSize: 14, color: "#0078D7" }} />,
     checkedIcon: <WindowIcon sx={{ color: BRAND_PALETTE.seafoam }} />,
+    urlPrefix: PLATFORM_URL_PREFIXES.windows,
   },
   {
     value: "chromeExtension",
@@ -325,6 +342,76 @@ export const PLATFORM_MAPPING: PlatformMap[] = [
     icon: <ExtensionIcon />,
     iconCard: <ExtensionIcon sx={{ fontSize: 14, color: "#4285F4" }} />,
     checkedIcon: <ExtensionIcon sx={{ color: BRAND_PALETTE.seafoam }} />,
+    urlPrefix: PLATFORM_URL_PREFIXES.chromeExtension,
+  },
+];
+
+export type SocialMediaMap = {
+  value: SocialMediaPlatform;
+  label: string;
+  icon: React.ReactElement;
+  checkedIcon: React.ReactElement;
+  iconCard: React.ReactElement;
+  /** Fixed profile origin; user enters path only. Omitted for Other (freeform URL). */
+  urlPrefix?: string;
+};
+
+const SOCIAL_BRAND_COLORS = {
+  instagram: "#E1306C",
+  x: "#000000",
+  youtube: "#FF0000",
+  facebook: "#1877F2",
+  linkedin: "#0A66C2",
+  other: "#6B7280",
+} as const;
+
+export const SOCIAL_MEDIA_MAPPING: SocialMediaMap[] = [
+  {
+    value: "instagram",
+    label: "Instagram",
+    icon: <InstagramIcon sx={{ color: SOCIAL_BRAND_COLORS.instagram }} />,
+    checkedIcon: <InstagramIcon sx={{ color: SOCIAL_BRAND_COLORS.instagram }} />,
+    iconCard: <InstagramIcon sx={{ fontSize: 14, color: SOCIAL_BRAND_COLORS.instagram }} />,
+    urlPrefix: SOCIAL_URL_PREFIXES.instagram,
+  },
+  {
+    value: "x",
+    label: "X",
+    icon: <XIcon sx={{ color: SOCIAL_BRAND_COLORS.x }} />,
+    checkedIcon: <XIcon sx={{ color: SOCIAL_BRAND_COLORS.x }} />,
+    iconCard: <XIcon sx={{ fontSize: 14, color: SOCIAL_BRAND_COLORS.x }} />,
+    urlPrefix: SOCIAL_URL_PREFIXES.x,
+  },
+  {
+    value: "youtube",
+    label: "YouTube",
+    icon: <YouTubeIcon sx={{ color: SOCIAL_BRAND_COLORS.youtube }} />,
+    checkedIcon: <YouTubeIcon sx={{ color: SOCIAL_BRAND_COLORS.youtube }} />,
+    iconCard: <YouTubeIcon sx={{ fontSize: 14, color: SOCIAL_BRAND_COLORS.youtube }} />,
+    urlPrefix: SOCIAL_URL_PREFIXES.youtube,
+  },
+  {
+    value: "facebook",
+    label: "Facebook",
+    icon: <FacebookIcon sx={{ color: SOCIAL_BRAND_COLORS.facebook }} />,
+    checkedIcon: <FacebookIcon sx={{ color: SOCIAL_BRAND_COLORS.facebook }} />,
+    iconCard: <FacebookIcon sx={{ fontSize: 14, color: SOCIAL_BRAND_COLORS.facebook }} />,
+    urlPrefix: SOCIAL_URL_PREFIXES.facebook,
+  },
+  {
+    value: "linkedin",
+    label: "LinkedIn",
+    icon: <LinkedInIcon sx={{ color: SOCIAL_BRAND_COLORS.linkedin }} />,
+    checkedIcon: <LinkedInIcon sx={{ color: SOCIAL_BRAND_COLORS.linkedin }} />,
+    iconCard: <LinkedInIcon sx={{ fontSize: 14, color: SOCIAL_BRAND_COLORS.linkedin }} />,
+    urlPrefix: SOCIAL_URL_PREFIXES.linkedin,
+  },
+  {
+    value: "other",
+    label: "Other",
+    icon: <AddIcon sx={{ color: SOCIAL_BRAND_COLORS.other }} />,
+    checkedIcon: <AddIcon sx={{ color: SOCIAL_BRAND_COLORS.other }} />,
+    iconCard: <AddIcon sx={{ fontSize: 14, color: SOCIAL_BRAND_COLORS.other }} />,
   },
 ];
 
