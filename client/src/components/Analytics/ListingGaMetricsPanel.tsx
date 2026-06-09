@@ -123,17 +123,6 @@ export function ListingGaMetricsPanel(props: ListingGaMetricsPanelProps) {
 
   if (!lid || !enabled) return null;
 
-  if (q.isLoading) {
-    return (
-      <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
-        <Typography variant="subtitle2" fontWeight={700} gutterBottom>
-          {title}
-        </Typography>
-        <Skeleton variant="rounded" height={260} sx={{ mt: 1 }} />
-      </Paper>
-    );
-  }
-
   if (q.isError) {
     const code = errorCode(q.error);
     const payload = errorPayload(q.error);
@@ -186,7 +175,20 @@ export function ListingGaMetricsPanel(props: ListingGaMetricsPanelProps) {
     );
   }
 
-  const data = q.data!;
+  // `isPending` (not `isLoading`) so this is safe during SSR/hydration, where
+  // react-query reports pending + idle (isLoading === false) with no data yet.
+  if (q.isPending || !q.data) {
+    return (
+      <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
+        <Typography variant="subtitle2" fontWeight={700} gutterBottom>
+          {title}
+        </Typography>
+        <Skeleton variant="rounded" height={260} sx={{ mt: 1 }} />
+      </Paper>
+    );
+  }
+
+  const data = q.data;
   const labels = data.dailySessions.map((p) => shortDayLabel(p.date));
   const values = data.dailySessions.map((p) => p.sessions);
   const dense = values.length > 14;

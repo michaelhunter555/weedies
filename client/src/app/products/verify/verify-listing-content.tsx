@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Alert,
+  Avatar,
   Box,
   Button,
   Chip,
@@ -129,7 +130,6 @@ export default function VerifyListingContent() {
   const [rcOauthError, setRcOauthError] = useState<string | null>(null);
   const [showGaPropertyPicker, setShowGaPropertyPicker] = useState(false);
   const [showRcLinker, setShowRcLinker] = useState(false);
-
   const [bootListingId, setBootListingId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -490,6 +490,10 @@ export default function VerifyListingContent() {
     setShowGaPropertyPicker(prev => !prev);
   }
 
+  const handleOpenRcProjectPicker = () => {
+    setShowRcLinker(prev => !prev);
+  }
+
   const showSalesSection = pending?.hasSalesToVerify !== false;
   const showAnalyticsSection =
     Boolean(bootListingId) || pending?.hasAnalyticsToVerify !== false;
@@ -513,7 +517,7 @@ export default function VerifyListingContent() {
             <Chip
               icon={
                 <VerifiedRoundedIcon
-                  sx={{ fontSize: 16, color: "#fde68a !important" }}
+                  sx={{ fontSize: 16, }}
                 />
               }
               label="Optional · Step 2 of 2"
@@ -521,7 +525,7 @@ export default function VerifyListingContent() {
               sx={{
                 width: "fit-content",
                 backgroundColor: "#fff",
-                color: BRAND_PALETTE.seafoam,
+                
                 border: `1px solid ${BRAND_PALETTE.sage}`,
                 fontWeight: 600,
               }}
@@ -605,14 +609,7 @@ export default function VerifyListingContent() {
               <Typography variant="h6" sx={{ fontWeight: 800 }}>
                 Sales data
               </Typography>
-              {salesConnected && (
-                <Chip
-                  size="small"
-                  color="success"
-                  icon={<CheckCircleRoundedIcon sx={{ fontSize: 14 }} />}
-                  label="Connected"
-                />
-              )}
+              
             </Stack>
             <Typography variant="body2" color="text.secondary">
               Connect one source so buyers can see verified revenue, MRR or
@@ -631,6 +628,12 @@ export default function VerifyListingContent() {
               ))}
             </Stack>
           </Stack>
+          <Box sx={{ display: 'flex', justifyContent: 'flex-start' }}>
+
+          <Button startIcon={<Avatar src="/logo-rc-small.svg" variant="square" sx={{ width: 16, height: 16, borderRadius: "3px" }} alt="" />} endIcon={showRcLinker ? <ExpandMoreIcon /> :  <ExpandLessIcon />} variant="outlined" sx={{ color: '#000', borderColor: '#000'}} size="small" onClick={handleOpenRcProjectPicker}>
+                Select RevenueCat Project
+              </Button>
+          </Box>
         
 
         {showRcLinker ? (
@@ -655,14 +658,7 @@ export default function VerifyListingContent() {
               <Typography variant="h6" sx={{ fontWeight: 800 }}>
                 Analytics data
               </Typography>
-              {analyticsConnected && (
-                <Chip
-                  size="small"
-                  color="success"
-                  icon={<CheckCircleRoundedIcon sx={{ fontSize: 14 }} />}
-                  label="Connected"
-                />
-              )}
+              
             </Stack>
             <Typography variant="body2" color="text.secondary">
               Show verified usage - MAUs, sessions, retention or conversion.
@@ -683,9 +679,7 @@ export default function VerifyListingContent() {
                 Select Analytics Property
               </Button>
               {/* <Divider orientation="vertical" flexItem />
-              <Button variant="outlined" sx={{ color: '#000', borderColor: '#000'}} size="small" onClick={handleOpenPropertyPicker}>
-                Select RevenueCat Project
-              </Button> */}
+               */}
               </Stack>
             </Stack>
           </Stack>

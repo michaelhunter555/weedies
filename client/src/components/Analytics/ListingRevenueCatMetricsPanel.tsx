@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { BarChart } from "@mui/x-charts/BarChart";
+import { BarChart, barElementClasses } from "@mui/x-charts/BarChart";
+import { useDrawingArea } from "@mui/x-charts/hooks";
 import {
   Alert,
   AlertTitle,
@@ -24,6 +25,30 @@ import type {
 } from "../../../types";
 
 const RC_NEEDS_RECONNECT = "RC_NEEDS_RECONNECT";
+const RC_CHART_GRADIENT_ID = "listing-rc-metrics-bar-gradient";
+
+/** Same seafoam → sage → mint fade as the GA sessions area chart. */
+function RcBarGradient() {
+  const { top, height, bottom } = useDrawingArea();
+  const svgHeight = top + bottom + height;
+
+  return (
+    <defs>
+      <linearGradient
+        id={RC_CHART_GRADIENT_ID}
+        x1="0"
+        x2="0"
+        y1="0"
+        y2={svgHeight}
+        gradientUnits="userSpaceOnUse"
+      >
+        <stop offset="0%" stopColor={BRAND_PALETTE.seafoam} stopOpacity={0.85} />
+        <stop offset="50%" stopColor={BRAND_PALETTE.sage} stopOpacity={0.45} />
+        <stop offset="100%" stopColor={BRAND_PALETTE.mint} stopOpacity={0.2} />
+      </linearGradient>
+    </defs>
+  );
+}
 
 /** Count metrics worth charting as a quick visual comparison. */
 const COUNT_METRIC_IDS = [
@@ -105,7 +130,7 @@ function MetricTile(props: {
         minWidth: 140,
         p: 1.5,
         borderRadius: 2,
-        border: `1px solid ${BRAND_PALETTE.border}`,
+        border: `1px solid #000`,
         bgcolor: emphasized ? BRAND_PALETTE.mint : "transparent",
       }}
     >
@@ -167,17 +192,6 @@ export function ListingRevenueCatMetricsPanel(
 
   if (!lid || !enabled) return null;
 
-  if (q.isLoading) {
-    return (
-      <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
-        <Typography variant="subtitle2" fontWeight={700} gutterBottom>
-          {title}
-        </Typography>
-        <Skeleton variant="rounded" height={300} sx={{ mt: 1 }} />
-      </Paper>
-    );
-  }
-
   if (q.isError) {
     const code = errorCode(q.error);
     const payload = errorPayload(q.error);
@@ -230,7 +244,20 @@ export function ListingRevenueCatMetricsPanel(
     );
   }
 
-  const data = q.data!;
+  // `isPending` (not `isLoading`) so this is safe during SSR/hydration, where
+  // react-query reports pending + idle (isLoading === false) with no data yet.
+  if (q.isPending || !q.data) {
+    return (
+      <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
+        <Typography variant="subtitle2" fontWeight={700} gutterBottom>
+          {title}
+        </Typography>
+        <Skeleton variant="rounded" height={300} sx={{ mt: 1 }} />
+      </Paper>
+    );
+  }
+
+  const data = q.data;
   const symbol = data.currencySymbol || "$";
 
   if (!data.metrics || data.metrics.length === 0) {
@@ -361,16 +388,19 @@ export function ListingRevenueCatMetricsPanel(
                     tickLabelStyle: { fontSize: 11 },
                   },
                 ]}
-                margin={{ left: 56, right: 12, top: 16, bottom: 48 }}
+                margin={{ left: 48, right: 12, top: 12, bottom: 48 }}
                 grid={{ horizontal: true }}
                 slotProps={{ legend: { hidden: true } }}
                 sx={{
-                  "& .MuiBarElement-root": {
+                  [`& .${barElementClasses.root}`]: {
+                    fill: `url(#${RC_CHART_GRADIENT_ID})`,
                     rx: 4,
                     ry: 4,
                   },
                 }}
-              />
+              >
+                <RcBarGradient />
+              </BarChart>
             </Box>
           </>
         ) : null}
@@ -380,7 +410,7 @@ export function ListingRevenueCatMetricsPanel(
           color="text.secondary"
           sx={{ display: "block", lineHeight: 1.45 }}
         >
-          Verified figured via RevenueCat as of {today}
+          Verified metrics via RevenueCat as of {today}
           {data.lastUpdatedAtIso
             ? ` Last updated ${new Date(
                 data.lastUpdatedAtIso,

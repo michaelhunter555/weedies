@@ -14,6 +14,7 @@ import {
   PLACEHOLDER_APP_COVER,
   resolveListingCoverUrl,
 } from "@/utils/listing-cover";
+import { mongoIdString } from "@/utils/mongo-id";
 import { scrollToSection } from "@/utils/sectionScroll";
 import {
   BRAND_PALETTE,
@@ -45,6 +46,7 @@ import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import useTheme from "@mui/material/styles/useTheme";
 import useMediaQuery from "@mui/material/useMediaQuery";
+import { useAuth } from "@/context/auth-context";
 const PALETTE = BRAND_PALETTE;
 
 /** Homepage highlight row — swap captions when final copy is ready. */
@@ -100,6 +102,7 @@ function monthlyRevenueLabel(listing: Listing): string | null {
 
 export default function Home() {
   const router = useRouter();
+  const { user } = useAuth();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const isTablet = useMediaQuery(theme.breakpoints.down("md"));
@@ -136,6 +139,21 @@ export default function Home() {
   const spotlightPath = useMemo(
     () => (spotlight ? listingProductPath(spotlight) : "/products"),
     [spotlight],
+  );
+
+  const spotlightSellerId = useMemo(
+    () => (spotlight ? mongoIdString(spotlight.sellerId) : ""),
+    [spotlight],
+  );
+
+  const isSpotlightOwner = useMemo(
+    () =>
+      Boolean(
+        spotlightSellerId &&
+          user?.id &&
+          mongoIdString(user.id) === spotlightSellerId,
+      ),
+    [spotlightSellerId, user?.id],
   );
 
   const handleSearch = () => {
@@ -583,7 +601,7 @@ export default function Home() {
                             );
                           }
                         }}
-                        disabled={!spotlight._id}
+                        disabled={!spotlight._id || isSpotlightOwner}
                       >
                         Buy {spotlight.appName}
                       </Button>

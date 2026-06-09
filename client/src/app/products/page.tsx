@@ -1905,7 +1905,7 @@ export default function ProductsPage() {
                     }
                   />
                   <Typography color="text.secondary">
-                    I have <b>sales</b> data I can connect (RevenueCat)
+                    I have <b>RevenueCat</b> data I can connect.
                   </Typography>
                 </Stack>
                 <Stack direction="row" alignItems="center" spacing={1}>
@@ -1921,7 +1921,7 @@ export default function ProductsPage() {
                     }
                   />
                   <Typography color="text.secondary">
-                    I have <b>Google Analytics</b> data I can connect
+                    I have <b>Google Analytics</b> data I can connect.
                   </Typography>
                 </Stack>
 
