@@ -6,6 +6,7 @@ import {
   activeChatFilterForUser,
   countActiveChatsForUser,
 } from "../../lib/chat-active";
+import { resolveChatActorUserId } from "../../lib/chat-actor";
 import { serializeChatForViewer } from "../../lib/chat-view-serialization";
 import Chat from "../../models/conversations";
 import Listing from "../../models/listing";
@@ -28,7 +29,7 @@ type ChatLean = {
  * Paginated chats for the authenticated user (sorted by `updatedAt`).
  */
 export async function getChats(req: Request, res: Response) {
-  const userId = req.user?.userId;
+  const userId = resolveChatActorUserId(req);
   if (!userId) {
     return void res.status(401).json({ message: "Unauthorized" });
   }

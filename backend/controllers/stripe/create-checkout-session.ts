@@ -12,6 +12,10 @@ import {
   listingBuyItNowPriceDollars,
   platformApplicationFeeCents,
 } from "../../lib/listing-asset-sale-fee";
+import {
+  isPlatformManagedListing,
+  isMarketplacePurchasePaymentType,
+} from "../../lib/platform-listing";
 
 function clientOrigin(): string {
   const raw = process.env.CLIENT_ORIGIN?.trim();
@@ -52,11 +56,13 @@ export default async function createCheckoutSession(req: Request, res: Response)
     }
 
     const listing = await Listing.findById(listingId).select(
-      "_id appName tagline slug photos coverIndex status saleType sellerId buyItNowPrice startingPrice currency buyerId auctionBids auctionWinningAmount",
+      "_id appName tagline slug photos coverIndex status saleType sellerId buyItNowPrice startingPrice currency buyerId auctionBids auctionWinningAmount isPlatformListing",
     );
     if (!listing) {
       return void res.status(404).json({ message: "Listing not found" });
     }
+
+    const isPlatformListing = isPlatformManagedListing(listing);
 
     const isAuctionWinnerCheckout =
       listing.saleType === "auction" &&
@@ -86,12 +92,15 @@ export default async function createCheckoutSession(req: Request, res: Response)
       return void res.status(400).json({ message: "You cannot purchase your own listing." });
     }
 
-    const seller = await User.findById(listing.sellerId).select("stripeConnectAccountId");
-    const destination = seller?.stripeConnectAccountId?.trim();
-    if (!destination) {
-      return void res.status(409).json({
-        message: "The seller cannot receive payments yet. Try again later or message them.",
-      });
+    let connectDestination: string | undefined;
+    if (!isPlatformListing) {
+      const seller = await User.findById(listing.sellerId).select("stripeConnectAccountId");
+      connectDestination = seller?.stripeConnectAccountId?.trim();
+      if (!connectDestination) {
+        return void res.status(409).json({
+          message: "The seller cannot receive payments yet. Try again later or message them.",
+        });
+      }
     }
 
     const priceDollars = isAuctionWinnerCheckout
@@ -110,8 +119,10 @@ export default async function createCheckoutSession(req: Request, res: Response)
     }
 
     const unitAmountCents = Math.round(priceDollars * 100);
-    const applicationFeeCents = platformApplicationFeeCents(priceDollars);
-    if (applicationFeeCents >= unitAmountCents) {
+    const applicationFeeCents = isPlatformListing
+      ? unitAmountCents
+      : platformApplicationFeeCents(priceDollars);
+    if (!isPlatformListing && applicationFeeCents >= unitAmountCents) {
       return void res.status(500).json({ message: "Invalid fee configuration" });
     }
 
@@ -128,12 +139,14 @@ export default async function createCheckoutSession(req: Request, res: Response)
     const images =
       typeof cover === "string" && /^https:\/\//i.test(cover) ? [cover] : undefined;
 
+    const paymentType = isPlatformListing ? "platform-sale" : "asset-sale";
     const meta = {
       listingId: String(listing._id),
       buyerId: buyerUserId,
       sellerId: sellerIdStr,
       serviceFee: String(applicationFeeCents),
-      paymentType: "asset-sale",
+      paymentType,
+      ...(isPlatformListing ? { isPlatformListing: "true" } : {}),
     };
 
     const randomId = crypto.randomUUID();
@@ -163,9 +176,13 @@ export default async function createCheckoutSession(req: Request, res: Response)
         payment_intent_data: {
           /** Authorize now; capture later (`requires_capture`) for controlled payouts. */
           capture_method: "manual",
-          transfer_data: { destination },
-          application_fee_amount: applicationFeeCents,
           metadata: meta,
+          ...(isPlatformListing
+            ? {}
+            : {
+                transfer_data: { destination: connectDestination! },
+                application_fee_amount: applicationFeeCents,
+              }),
         },
       },
       {

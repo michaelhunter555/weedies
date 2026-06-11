@@ -9,7 +9,6 @@ import {
   computeAuctionCurrentPriceCents,
   minimumNextBidCents,
 } from "../../lib/listing-auction-summary";
-
 /**
  * Records a no-charge auction bid. Bids must be whole dollars and at least
  * $1 above the current price (max of starting price and highest bid).

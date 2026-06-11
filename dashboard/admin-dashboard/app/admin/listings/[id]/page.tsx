@@ -222,6 +222,16 @@ export default function AdminListingDetailPage() {
           ) : null}
         </Box>
         <Stack direction="row" spacing={1} flexWrap="wrap">
+          {listing.isPlatformListing === true ? (
+            <Button
+              component={Link}
+              href={`/admin/platform-listings/${encodeURIComponent(listingId)}/edit`}
+              variant="contained"
+              sx={{ textTransform: "none" }}
+            >
+              Edit platform listing
+            </Button>
+          ) : null}
           <Button
             component="a"
             href={publicUrl}

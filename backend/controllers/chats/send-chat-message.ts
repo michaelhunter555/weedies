@@ -2,6 +2,7 @@ import type { Request, Response } from "express";
 import mongoose from "mongoose";
 
 import { otherParticipantId, userHasLeftChat } from "../../lib/chat-active";
+import { resolveChatActorUserId } from "../../lib/chat-actor";
 import { notifyChatRecipient } from "../../lib/chat-notifications";
 import { chatTypeOrDefault } from "../../lib/chat-type";
 import Chat from "../../models/conversations";
@@ -19,7 +20,7 @@ type Body = {
  * if the prior message in the thread was more than 2 hours ago.
  */
 export async function sendChatMessage(req: Request, res: Response) {
-  const userId = req.user?.userId;
+  const userId = resolveChatActorUserId(req);
   if (!userId) {
     return void res.status(401).json({ message: "Unauthorized" });
   }

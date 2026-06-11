@@ -156,6 +156,61 @@ export async function fetchPendingListings(
 
 export type ListingReviewAction = "approve" | "reject" | "unpublish";
 
+export async function uploadPlatformListingPhotos(
+  files: File[],
+): Promise<string[]> {
+  const fd = new FormData();
+  files.forEach((file) => fd.append("photos", file));
+  const url = `${getApiBase()}/admin/platform-listings/upload-photos`;
+  const res = await fetchWithAdminAuth(url, { method: "POST", body: fd });
+  const data = await parseJson(res);
+  if (!res.ok) {
+    throw new Error(
+      typeof data.message === "string" ? data.message : "Photo upload failed",
+    );
+  }
+  return (data.urls as string[]) ?? [];
+}
+
+export type CreatePlatformListingPayload = Record<string, unknown>;
+
+export async function createPlatformListing(
+  payload: CreatePlatformListingPayload,
+): Promise<{ ok: boolean; listing: Record<string, unknown> }> {
+  const url = `${getApiBase()}/admin/platform-listings`;
+  const res = await fetchWithAdminAuth(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const data = await parseJson(res);
+  if (!res.ok) {
+    throw new Error(
+      typeof data.message === "string" ? data.message : "Create failed",
+    );
+  }
+  return data as { ok: boolean; listing: Record<string, unknown> };
+}
+
+export async function updatePlatformListing(
+  listingId: string,
+  payload: CreatePlatformListingPayload,
+): Promise<{ ok: boolean; listing: Record<string, unknown> }> {
+  const url = `${getApiBase()}/admin/platform-listings/${encodeURIComponent(listingId)}`;
+  const res = await fetchWithAdminAuth(url, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const data = await parseJson(res);
+  if (!res.ok) {
+    throw new Error(
+      typeof data.message === "string" ? data.message : "Update failed",
+    );
+  }
+  return data as { ok: boolean; listing: Record<string, unknown> };
+}
+
 export async function patchListingReview(
   listingId: string,
   action: ListingReviewAction,
@@ -398,4 +453,136 @@ export async function patchAdminDisputeDecision(
     );
   }
   return data as { ok: boolean; message?: string };
+}
+
+export type AdminChatListingSummary = {
+  id: string;
+  appName: string;
+  slug?: string;
+  productPath: string;
+};
+
+export type AdminChatRow = {
+  _id: string;
+  lastMessage?: string;
+  lastMessageTime?: string;
+  updatedAt?: string;
+  listing?: AdminChatListingSummary | null;
+  viewerCounterpart: {
+    id: string | null;
+    displayName: string;
+    image: string;
+    masked: boolean;
+  };
+  unreadCount?: number;
+};
+
+export type AdminChatsResponse = {
+  ok?: boolean;
+  chats: AdminChatRow[];
+  page: number;
+  totalPages: number;
+  totalChats: number;
+  limit: number;
+  activeChatCount?: number;
+  maxActiveChats?: number;
+};
+
+export type AdminChatMessageRow = {
+  _id: string;
+  text: string;
+  read: boolean;
+  createdAt?: string;
+  fromMe: boolean;
+  senderLabel: string;
+  isSystem?: boolean;
+};
+
+export type AdminChatMessagesResponse = {
+  ok?: boolean;
+  chatPreview?: AdminChatRow;
+  chatMessages: AdminChatMessageRow[];
+  otherParticipantLeft?: boolean;
+};
+
+export type AdminUnreadCountResponse = {
+  ok?: boolean;
+  unreadCount: number;
+  unreadByChat: Record<string, number>;
+};
+
+export async function fetchAdminChats(params?: {
+  page?: number;
+  limit?: number;
+}): Promise<AdminChatsResponse> {
+  const q = new URLSearchParams();
+  if (params?.page) q.set("page", String(params.page));
+  if (params?.limit) q.set("limit", String(params.limit));
+  const qs = q.toString();
+  const url = `${getApiBase()}/admin/chats/mine${qs ? `?${qs}` : ""}`;
+  const res = await fetchWithAdminAuth(url);
+  const data = await parseJson(res);
+  if (!res.ok) {
+    throw new Error(
+      typeof data.message === "string" ? data.message : "Could not load messages",
+    );
+  }
+  return data as AdminChatsResponse;
+}
+
+export async function fetchAdminChatUnreadCount(): Promise<AdminUnreadCountResponse> {
+  const url = `${getApiBase()}/admin/chats/unread-count`;
+  const res = await fetchWithAdminAuth(url);
+  const data = await parseJson(res);
+  if (!res.ok) {
+    throw new Error(
+      typeof data.message === "string" ? data.message : "Could not load unread count",
+    );
+  }
+  return data as AdminUnreadCountResponse;
+}
+
+export async function fetchAdminChatMessages(
+  chatId: string,
+): Promise<AdminChatMessagesResponse> {
+  const url = `${getApiBase()}/admin/chats/${encodeURIComponent(chatId)}/messages?page=1&limit=100`;
+  const res = await fetchWithAdminAuth(url);
+  const data = await parseJson(res);
+  if (!res.ok) {
+    throw new Error(
+      typeof data.message === "string" ? data.message : "Could not load thread",
+    );
+  }
+  return data as AdminChatMessagesResponse;
+}
+
+export async function sendAdminChatMessage(
+  chatId: string,
+  text: string,
+): Promise<{ ok?: boolean }> {
+  const url = `${getApiBase()}/admin/chats/${encodeURIComponent(chatId)}/messages`;
+  const res = await fetchWithAdminAuth(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text }),
+  });
+  const data = await parseJson(res);
+  if (!res.ok) {
+    throw new Error(
+      typeof data.message === "string" ? data.message : "Could not send message",
+    );
+  }
+  return data as { ok?: boolean };
+}
+
+export async function closeAdminChat(chatId: string): Promise<{ ok?: boolean }> {
+  const url = `${getApiBase()}/admin/chats/${encodeURIComponent(chatId)}`;
+  const res = await fetchWithAdminAuth(url, { method: "DELETE" });
+  const data = await parseJson(res);
+  if (!res.ok) {
+    throw new Error(
+      typeof data.message === "string" ? data.message : "Could not close chat",
+    );
+  }
+  return data as { ok?: boolean };
 }

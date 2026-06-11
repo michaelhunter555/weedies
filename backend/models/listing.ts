@@ -98,6 +98,12 @@ export interface Listing {
   revenueCatProjectId?: string;
   revenueCatProjectDisplayName?: string;
 
+  /**
+   * Platform-owned inventory (admin-created). Not sold via marketplace asset checkout;
+   * revenue is listing-fee style, not Connect payouts to a seller.
+   */
+  isPlatformListing?: boolean;
+
   // Moderation / lifecycle
   status: ListingStatus;
   /** When the seller’s listing slot / fee was applied (prevents double-charge on resubmit). */
@@ -304,6 +310,7 @@ const ListingSchema = new mongoose.Schema<Listing>(
       required: false,
       default: null,
     },
+    isPlatformListing: { type: Boolean, required: false, default: false, index: true },
 
     status: {
       type: String,

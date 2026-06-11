@@ -29,19 +29,29 @@ const Events = {
   LISTING_FEE_REFUNDED: "listing.fee.refunded",
 } as const;
 
+import { isMarketplacePurchasePaymentType } from "../../../lib/platform-listing";
+
 /**
  * We stamp `paymentType` onto every PaymentIntent / Refund in metadata so
- * this webhook can decide which side-effects to run. Two flows today:
+ * this webhook can decide which side-effects to run:
  *
- *   - "asset-sale"  → buyer buys a listing from a seller (default)
- *   - "listing-fee" → seller pays the platform's listing fee
+ *   - "asset-sale"     → buyer buys from a Connect seller (default)
+ *   - "platform-sale"  → buyer buys a platform-owned listing (no Connect transfer)
+ *   - "listing-fee"    → seller pays the platform's listing fee
  */
-type PaymentType = "asset-sale" | "listing-fee";
+type PaymentType = "asset-sale" | "platform-sale" | "listing-fee";
 
 function readPaymentType(
   metadata: Record<string, string | undefined> | null | undefined,
 ): PaymentType {
-  return metadata?.paymentType === "listing-fee" ? "listing-fee" : "asset-sale";
+  const paymentType = metadata?.paymentType;
+  if (paymentType === "listing-fee") return "listing-fee";
+  if (paymentType === "platform-sale") return "platform-sale";
+  return "asset-sale";
+}
+
+function purchaseBillingReason(paymentType: PaymentType): string {
+  return paymentType === "platform-sale" ? "Platform listing purchase" : "Listing purchase";
 }
 
 /** Approximate last moment to capture an authorized card payment (PI `created` + 7d). */
@@ -202,7 +212,7 @@ export default async function appWebhook(req: Request, res: Response) {
           break;
         }
 
-        if (paymentType !== "asset-sale") {
+        if (!isMarketplacePurchasePaymentType(paymentType)) {
           break;
         }
         const { listingId, buyerId, sellerId, serviceFee } = metadata;
@@ -248,7 +258,7 @@ export default async function appWebhook(req: Request, res: Response) {
             amountCharged: pi.amount,
             amountPaid: pi.amount,
             serviceFee: Number(serviceFee) || 0,
-            billingReason: "Listing purchase",
+            billingReason: purchaseBillingReason(paymentType),
             paymentStatus,
             chargeId: chargeId || undefined,
             currency: pi.currency,
@@ -330,8 +340,9 @@ export default async function appWebhook(req: Request, res: Response) {
 
       // ────────────────────────────────────────────────────────────────
       // Payment intent succeeded. Branches on `paymentType`:
-      //   - "listing-fee" → seller paid the platform to list an app
-      //   - "asset-sale"  → buyer paid the seller to acquire the app
+      //   - "listing-fee"    → seller paid the platform to list an app
+      //   - "asset-sale"     → buyer paid a Connect seller
+      //   - "platform-sale"  → buyer paid the platform for a platform-owned listing
       // ────────────────────────────────────────────────────────────────
       case "payment_intent.succeeded": {
         const pi = event.data.object as Stripe.PaymentIntent;
@@ -357,7 +368,7 @@ export default async function appWebhook(req: Request, res: Response) {
         // The `new Transaction` block below is the **fallback** when (1) never
         // ran (e.g. only PI webhooks configured, or rare ordering) — not the
         // steady-state Checkout path.
-        if (paymentType === "asset-sale") {
+        if (isMarketplacePurchasePaymentType(paymentType)) {
           const existing = await Transaction.findOne({ stripePaymentIntentId: pi.id });
           if (existing) {
             if (existing.paymentStatus === "pending" && pi.status === "succeeded") {
@@ -443,7 +454,7 @@ export default async function appWebhook(req: Request, res: Response) {
             amountCharged: pi.amount,
             amountPaid: pi.amount,
             serviceFee: Number(serviceFee) || 0,
-            billingReason: "Listing purchase",
+            billingReason: purchaseBillingReason(paymentType),
             paymentStatus: "succeeded",
             chargeId,
             currency: pi.currency,
@@ -538,7 +549,7 @@ export default async function appWebhook(req: Request, res: Response) {
           });
         }
 
-        if (paymentType === "asset-sale" && mongoose.isValidObjectId(listingId)) {
+        if (isMarketplacePurchasePaymentType(paymentType) && mongoose.isValidObjectId(listingId)) {
           await ListingExchange.updateOne(
             { listingId: new mongoose.Types.ObjectId(listingId) },
             { $set: { paymentStatus: "canceled", sellerCapturedPayment: false } },
@@ -616,7 +627,9 @@ export default async function appWebhook(req: Request, res: Response) {
             text:
               paymentType === "listing-fee"
                 ? `Your listing fee refund is being processed.`
-                : `$${amount} will be deducted from your balance.`,
+                : paymentType === "platform-sale"
+                  ? `Platform sale refund is being processed.`
+                  : `$${amount} will be deducted from your balance.`,
             listingId,
             paymentType,
           });
@@ -638,10 +651,9 @@ export default async function appWebhook(req: Request, res: Response) {
           return void res.status(200).send({ received: true });
         }
 
-        // Listing-fee refunds come out of the platform's balance, not
-        // the seller's connected account. The insufficient-funds /
-        // transfer-reversal dance below is only relevant for asset sales.
-        if (paymentType === "listing-fee") {
+        // Listing-fee and platform-sale refunds come out of the platform balance,
+        // not a seller's connected account.
+        if (paymentType === "listing-fee" || paymentType === "platform-sale") {
           if (checkRoom(io, String(sellerId))) {
             const amount = (refund.amount / 100).toFixed(2);
             io.to(String(sellerId)).emit(Events.LISTING_FEE_REFUNDED, {

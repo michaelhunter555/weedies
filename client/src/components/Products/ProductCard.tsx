@@ -258,7 +258,7 @@ export default function ProductCard({ listing, id }: IProductCard) {
                 {listing?.ownershipVerification?.isVerified && (
                   <Tooltip title="Seller ownership verified" arrow placement="top">
                     <VerifiedRoundedIcon
-                      sx={{ fontSize: 15, color: "#000" }}
+                      sx={{ fontSize: 15, color: "rgba(255, 255, 255, 0.85)" }}
                     />
                   </Tooltip>
                 )}

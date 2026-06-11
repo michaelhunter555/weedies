@@ -410,6 +410,8 @@ export type Listing = {
   /** Linked RevenueCat project (manual / future API). */
   revenueCatProjectId?: string;
   revenueCatProjectDisplayName?: string;
+  /** Platform-owned listing (admin-created). Not sold via marketplace asset checkout. */
+  isPlatformListing?: boolean;
 
   status?: ListingStatus;
   rejectionReason?: string;

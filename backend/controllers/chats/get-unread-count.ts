@@ -2,6 +2,7 @@ import type { Request, Response } from "express";
 import mongoose from "mongoose";
 
 import { activeChatFilterForUser } from "../../lib/chat-active";
+import { resolveChatActorUserId } from "../../lib/chat-actor";
 import Chat from "../../models/conversations";
 import Message from "../../models/messages";
 
@@ -13,7 +14,7 @@ type ChatIdRow = { _id: unknown };
  * `read === false` AND the sender is not the viewer.
  */
 export async function getUnreadCount(req: Request, res: Response) {
-  const userId = req.user?.userId;
+  const userId = resolveChatActorUserId(req);
   if (!userId) {
     return void res.status(401).json({ message: "Unauthorized" });
   }

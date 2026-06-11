@@ -897,7 +897,7 @@ export function ProductDetailsClient({ fetchBy }: ProductDetailsClientProps) {
                           ) : null}
                           {listing.revenueCatProjectDisplayName ? (
                             <Chip
-                              icon={<Avatar src="/logo-rc-small.svg" variant="square" sx={{ backgroundColor: "#000", width: 16, height: 16, borderRadius: "3px" }} alt="" />}
+                              icon={<Avatar src="/logo-rc-small.svg" sx={{ backgroundColor: "transparent", width: 20, height: 20, borderRadius: "0px" }} alt="" />}
                               size="small"
                               label={`RevenueCat · ${listing.revenueCatProjectDisplayName}`}
                               variant="outlined"

@@ -7,6 +7,7 @@ import {
   type ListingMetaForChat,
 } from "../../lib/chat-view-serialization";
 import { otherParticipantId, userHasLeftChat } from "../../lib/chat-active";
+import { resolveChatActorUserId } from "../../lib/chat-actor";
 import Chat from "../../models/conversations";
 import Listing from "../../models/listing";
 import Message from "../../models/messages";
@@ -29,7 +30,7 @@ type ChatDocLean = {
  * Paginated messages for a chat the user belongs to.
  */
 export async function getChatMessages(req: Request, res: Response) {
-  const userId = req.user?.userId;
+  const userId = resolveChatActorUserId(req);
   if (!userId) {
     return void res.status(401).json({ message: "Unauthorized" });
   }

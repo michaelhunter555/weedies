@@ -630,9 +630,9 @@ export default function VerifyListingContent() {
           </Stack>
           <Box sx={{ display: 'flex', justifyContent: 'flex-start' }}>
 
-          <Button startIcon={<Avatar src="/logo-rc-small.svg" variant="square" sx={{ width: 16, height: 16, borderRadius: "3px" }} alt="" />} endIcon={showRcLinker ? <ExpandMoreIcon /> :  <ExpandLessIcon />} variant="outlined" sx={{ color: '#000', borderColor: '#000'}} size="small" onClick={handleOpenRcProjectPicker}>
+          {connected.revenuecat ? <Button startIcon={<Avatar src="/logo-rc-small.svg" variant="square" sx={{ width: 16, height: 16, borderRadius: "3px" }} alt="" />} endIcon={showRcLinker ? <ExpandMoreIcon /> :  <ExpandLessIcon />} variant="outlined" sx={{ color: '#000', borderColor: '#000'}} size="small" onClick={handleOpenRcProjectPicker}>
                 Select RevenueCat Project
-              </Button>
+              </Button> : null}
           </Box>
         
 
@@ -675,11 +675,9 @@ export default function VerifyListingContent() {
                 />
               ))}
               <Stack direction="row" spacing={1}>
-              <Button endIcon={showGaPropertyPicker ? <ExpandMoreIcon /> :  <ExpandLessIcon />} startIcon={<GoogleIcon />} variant="outlined" sx={{ color: '#000', borderColor: '#000'}} size="small" onClick={handleOpenPropertyPicker}>
+             {connected["google-analytics"] ? <Button endIcon={showGaPropertyPicker ? <ExpandMoreIcon /> :  <ExpandLessIcon />} startIcon={<GoogleIcon />} variant="outlined" sx={{ color: '#000', borderColor: '#000'}} size="small" onClick={handleOpenPropertyPicker}>
                 Select Analytics Property
-              </Button>
-              {/* <Divider orientation="vertical" flexItem />
-               */}
+              </Button> : null}
               </Stack>
             </Stack>
           </Stack>

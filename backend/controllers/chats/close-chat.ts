@@ -7,6 +7,7 @@ import {
   userHasLeftChat,
   userObjectId,
 } from "../../lib/chat-active";
+import { resolveChatActorUserId } from "../../lib/chat-actor";
 import { notifyChatParticipantLeft } from "../../lib/chat-participant-left";
 import Chat from "../../models/conversations";
 
@@ -15,7 +16,7 @@ import Chat from "../../models/conversations";
  * The other participant keeps the thread and sees a system message.
  */
 export async function closeChat(req: Request, res: Response) {
-  const userId = req.user?.userId;
+  const userId = resolveChatActorUserId(req);
   if (!userId) {
     return void res.status(401).json({ message: "Unauthorized", ok: false });
   }
