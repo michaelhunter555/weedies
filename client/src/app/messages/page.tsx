@@ -866,7 +866,12 @@ function MessagesPageContent() {
         direction={{ xs: "column", md: "row" }}
         spacing={2}
         alignItems="stretch"
-        sx={{ minHeight: { md: 620 } }}
+        sx={{
+          height: { md: "min(620px, calc(100vh - 220px))" },
+          maxHeight: { md: "min(620px, calc(100vh - 220px))" },
+          minHeight: { xs: 0, md: 0 },
+          overflow: { md: "hidden" },
+        }}
       >
         <Paper
           variant="outlined"
@@ -878,10 +883,19 @@ function MessagesPageContent() {
             overflow: "hidden",
             display: showConversationList ? "flex" : "none",
             flexDirection: "column",
-            minHeight: { xs: showConversationList ? 480 : 0, md: "auto" },
+            minHeight: { xs: showConversationList ? 480 : 0, md: 0 },
+            height: { md: "100%" },
+            maxHeight: { md: "100%" },
           }}
         >
-          <Box sx={{ px: 2.5, py: 2, borderBottom: "1px solid #ececec" }}>
+          <Box
+            sx={{
+              px: 2.5,
+              py: 2,
+              borderBottom: "1px solid #ececec",
+              flexShrink: 0,
+            }}
+          >
             <Typography variant="h6" sx={{ fontWeight: 800 }}>
               Conversations
             </Typography>
@@ -892,52 +906,63 @@ function MessagesPageContent() {
             ) : null}
           </Box>
 
-          <Stack
-            divider={<Box sx={{ borderBottom: "1px solid #f1f1f1" }} />}
-            sx={{ flex: 1, overflowY: "auto", position: "relative" }}
+          <Box
+            sx={{
+              flex: 1,
+              minHeight: 0,
+              display: "flex",
+              flexDirection: "column",
+              overflow: "hidden",
+            }}
           >
-            {chatsQuery.isLoading ? (
-              <Box sx={{ p: 4, display: "flex", justifyContent: "center" }}>
-                <CircularProgress size={28} />
-              </Box>
-            ) : conversations.length === 0 ? (
-              <Box sx={{ p: 3, textAlign: "center" }}>
-                <Typography variant="body2" color="text.secondary">
-                  No conversations yet.
-                </Typography>
-              </Box>
-            ) : (
-              conversations.map((c) => (
-                <ConversationRow
-                  key={c.id}
-                  conversation={c}
-                  selected={c.id === selectedId}
-                  onSelect={handleSelectConversation}
-                />
-              ))
-            )}
-          </Stack>
-
-          {totalListPages > 1 && (
-            <Box
-              sx={{
-                px: 2,
-                py: 1.5,
-                borderTop: "1px solid #ececec",
-                display: "flex",
-                justifyContent: "center",
-              }}
+            <Stack
+              divider={<Box sx={{ borderBottom: "1px solid #f1f1f1" }} />}
+              sx={{ flex: 1, minHeight: 0, overflowY: "auto", position: "relative" }}
             >
-              <Pagination
-                count={totalListPages}
-                page={listPage}
-                onChange={(_e, p) => setListPage(p)}
-                size="small"
-                color="primary"
-                shape="rounded"
-              />
-            </Box>
-          )}
+              {chatsQuery.isLoading ? (
+                <Box sx={{ p: 4, display: "flex", justifyContent: "center" }}>
+                  <CircularProgress size={28} />
+                </Box>
+              ) : conversations.length === 0 ? (
+                <Box sx={{ p: 3, textAlign: "center" }}>
+                  <Typography variant="body2" color="text.secondary">
+                    No conversations yet.
+                  </Typography>
+                </Box>
+              ) : (
+                conversations.map((c) => (
+                  <ConversationRow
+                    key={c.id}
+                    conversation={c}
+                    selected={c.id === selectedId}
+                    onSelect={handleSelectConversation}
+                  />
+                ))
+              )}
+            </Stack>
+
+            {totalListPages > 1 && (
+              <Box
+                sx={{
+                  px: 2,
+                  py: 1.5,
+                  borderTop: "1px solid #ececec",
+                  display: "flex",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                }}
+              >
+                <Pagination
+                  count={totalListPages}
+                  page={listPage}
+                  onChange={(_e, p) => setListPage(p)}
+                  size="small"
+                  color="primary"
+                  shape="rounded"
+                />
+              </Box>
+            )}
+          </Box>
         </Paper>
 
         <Paper
@@ -949,11 +974,21 @@ function MessagesPageContent() {
             overflow: "hidden",
             display: showActiveThread ? "flex" : "none",
             flexDirection: "column",
-            minHeight: { xs: showActiveThread ? 520 : 0, md: "auto" },
+            minHeight: { xs: showActiveThread ? 520 : 0, md: 0 },
+            height: { md: "100%" },
+            maxHeight: { md: "100%" },
           }}
         >
           {composeIntent && !selectedId ? (
-            <>
+            <Box
+              sx={{
+                flex: 1,
+                minHeight: 0,
+                display: "flex",
+                flexDirection: "column",
+                overflow: "hidden",
+              }}
+            >
               <Stack
                 direction="row"
                 alignItems="center"
@@ -963,6 +998,7 @@ function MessagesPageContent() {
                   py: 1.75,
                   borderBottom: "1px solid #ececec",
                   bgcolor: "#fff",
+                  flexShrink: 0,
                 }}
               >
                 <Stack direction="row" spacing={1} alignItems="center" sx={{ minWidth: 0 }}>
@@ -1000,7 +1036,7 @@ function MessagesPageContent() {
                 ) : null}
               </Stack>
 
-              <Box sx={{ px: { xs: 2, md: 3 }, py: 2, bgcolor: "#fafafa", borderBottom: "1px solid #ececec" }}>
+              <Box sx={{ px: { xs: 2, md: 3 }, py: 2, bgcolor: "#fafafa", borderBottom: "1px solid #ececec", flexShrink: 0 }}>
                 {composeIntent.fromExchange ? (
                   <>
                     <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
@@ -1054,6 +1090,7 @@ function MessagesPageContent() {
               <Box
                 sx={{
                   flex: 1,
+                  minHeight: 0,
                   overflowY: "auto",
                   px: { xs: 2, md: 3 },
                   py: 3,
@@ -1081,6 +1118,7 @@ function MessagesPageContent() {
                   py: 1.5,
                   borderTop: "1px solid #ececec",
                   bgcolor: "#fff",
+                  flexShrink: 0,
                 }}
               >
                 <Stack direction="row" spacing={1} alignItems="center">
@@ -1136,10 +1174,18 @@ function MessagesPageContent() {
                   </IconButton>
                 </Stack>
               </Box>
-            </>
+            </Box>
           ) : selectedId ? (
             selectedConversation ? (
-            <>
+            <Box
+              sx={{
+                flex: 1,
+                minHeight: 0,
+                display: "flex",
+                flexDirection: "column",
+                overflow: "hidden",
+              }}
+            >
               <Stack
                 direction="row"
                 alignItems="center"
@@ -1149,6 +1195,7 @@ function MessagesPageContent() {
                   py: 1.75,
                   borderBottom: "1px solid #ececec",
                   bgcolor: "#fff",
+                  flexShrink: 0,
                 }}
               >
                 <Stack
@@ -1232,6 +1279,7 @@ function MessagesPageContent() {
                 ref={messagesScrollRef}
                 sx={{
                   flex: 1,
+                  minHeight: 0,
                   overflowY: "auto",
                   px: { xs: 2, md: 3 },
                   py: 2,
@@ -1288,7 +1336,7 @@ function MessagesPageContent() {
               </Box>
 
               {otherParticipantLeft ? (
-                <Alert severity="warning" sx={{ mx: 2, mt: 1, borderRadius: 2 }}>
+                <Alert severity="warning" sx={{ mx: 2, mt: 1, borderRadius: 2, flexShrink: 0 }}>
                   The other person left this chat. New messages will not reach them until
                   they open the conversation again.
                 </Alert>
@@ -1302,6 +1350,7 @@ function MessagesPageContent() {
                   py: 1.5,
                   borderTop: "1px solid #ececec",
                   bgcolor: "#fff",
+                  flexShrink: 0,
                 }}
               >
                 <Stack direction="row" spacing={1} alignItems="center">
@@ -1364,7 +1413,7 @@ function MessagesPageContent() {
                   </IconButton>
                 </Stack>
               </Box>
-            </>
+            </Box>
           ) : messagesQuery.isError ? (
             <Stack
               alignItems="center"

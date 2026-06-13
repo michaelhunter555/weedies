@@ -9,6 +9,7 @@ import {
 } from "../../lib/auth-provider-identity";
 import { toAppUserJson } from "../../lib/serialize-app-user";
 import { issueUserSession } from "../../lib/issue-user-session";
+import { tryAssignEarlyAdopterOnSignup } from "../../lib/app-promotions";
 
 export async function signup(req: Request, res: Response) {
   try {
@@ -34,6 +35,12 @@ export async function signup(req: Request, res: Response) {
       });
       user.stripeCustomerId = customer.id;
       await user.save();
+    }
+
+    // EARLY ADOPTER CHECK ON SIGNUP
+    const totalUsers = await UserModel.countDocuments();
+    if(totalUsers <= 50) {
+      await tryAssignEarlyAdopterOnSignup(user.id);
     }
 
     const session = await issueUserSession(res, user, { isNewUser: true });
