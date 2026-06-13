@@ -67,6 +67,22 @@ export default function RootLayout({
   return (
     <html lang="en">
       <GoogleAnalytics gaId="G-Q43283MQVN" />
+      <Script id="reddit-pixel" strategy="afterInteractive">
+        {`!function(w,d){
+        if(!w.rdt){
+        var p=w.rdt=function(){p.sendEvent?
+        p.sendEvent.apply(p,arguments):
+        p.callQueue.push(arguments)
+        };
+        p.callQueue=[];
+        var t=d.createElement("script");
+        t.src="https://www.redditstatic.com/ads/pixel.js?pixel_id=a2_if30zgqsoklk",t.async=!0;
+        var s=d.getElementsByTagName("script")[0];
+        s.parentNode.insertBefore(t,s)}}(window,document);
+        rdt('init','a2_if30zgqsoklk');
+        rdt('track', 'PageVisit');`}
+      </Script>
+
       <body>
         <Script id="google-ads-gtag" strategy="afterInteractive">
           {`gtag('config', '${GOOGLE_ADS_ID}');`}
