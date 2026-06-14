@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { useAuth } from "@/context/auth-context";
 import { useListings } from "@/hooks/use-listings";
+import { trackRedditPurchase } from "@/lib/reddit-pixel";
 import { brandContainedButtonSx } from "@/theme/brand-palette";
 import ArrowForwardRoundedIcon from "@mui/icons-material/ArrowForwardRounded";
 import CheckCircleRoundedIcon from "@mui/icons-material/CheckCircleRounded";
@@ -29,6 +30,7 @@ export default function CheckoutSuccessPage() {
   const { user, hydrated } = useAuth();
   const { getListing } = useListings();
   const pollStartedAt = useRef(Date.now());
+  const purchaseTracked = useRef(false);
   const [exchangeGateOpen, setExchangeGateOpen] = useState(false);
 
   const listingId = decodeURIComponent(params?.id ?? "").trim();
@@ -80,6 +82,27 @@ export default function CheckoutSuccessPage() {
     void queryClient.invalidateQueries({ queryKey: ["my-marketplace-orders"] });
     void queryClient.invalidateQueries({ queryKey: ["my-transactions"] });
   }, [saleReady, listingId, queryClient]);
+
+  useEffect(() => {
+    if (purchaseTracked.current || isEscrowSuccess || !sessionId) return;
+    if (listingId && !listing) return;
+
+    purchaseTracked.current = true;
+    const value = Number(listing?.buyItNowPrice ?? listing?.startingPrice ?? 0);
+    trackRedditPurchase({
+      conversionId: sessionId,
+      currency: listing?.currency ?? "USD",
+      ...(value > 0 ? { value, itemCount: 1 } : {}),
+    });
+  }, [
+    sessionId,
+    isEscrowSuccess,
+    listingId,
+    listing,
+    listing?.currency,
+    listing?.buyItNowPrice,
+    listing?.startingPrice,
+  ]);
 
   return (
     <Container maxWidth="sm" sx={{ py: { xs: 4, md: 6 } }}>

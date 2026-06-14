@@ -69,6 +69,7 @@ import {
   hasAuctionBuyItNow,
 } from "@/lib/auction-buy-it-now";
 import { countPendingPrivateAccessRequests } from "@/utils/private-listing-access";
+import { trackRedditAddToCart } from "@/lib/reddit-pixel";
 const PLACEHOLDER_COVER = "/placeholder-app-cover.svg";
 const PENDING_AUCTION_BID_KEY = "weedies.pendingAuctionBid";
 
@@ -452,11 +453,25 @@ export function ProductDetailsClient({ fetchBy }: ProductDetailsClientProps) {
 
   const handleBuyItNow = () => {
     if (!listing?._id || buyItNowDisabled || isAuction) return;
+    trackRedditAddToCart({
+      listingId: String(listing._id),
+      name: listing.appName,
+      category: listing.category,
+      value: buyPrice,
+      currency,
+    });
     router.push(`/checkout/${encodeURIComponent(String(listing._id))}`);
   };
 
   const handleAuctionBuyItNow = () => {
     if (!listing?._id || auctionBuyItNowDisabled) return;
+    trackRedditAddToCart({
+      listingId: String(listing._id),
+      name: listing.appName,
+      category: listing.category,
+      value: buyPrice,
+      currency,
+    });
     router.push(
       `/checkout/${encodeURIComponent(String(listing._id))}?purchase=buy-it-now`,
     );

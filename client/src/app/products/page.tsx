@@ -105,6 +105,11 @@ import type {
 } from "../../../types";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { PlatformCheckbox } from "@/components/PlatformCheckbox/PlatformCheckbox";
+import {
+  REDDIT_CUSTOM_EVENTS,
+  trackRedditCustom,
+  trackRedditCustomThenAssign,
+} from "@/lib/reddit-pixel";
 
 const MAX_PHOTOS = 6;
 // Mirror the backend multer limit so we reject giant files client-side
@@ -877,7 +882,11 @@ export default function ProductsPage() {
         }
         const updated = await updateListing(workListingId, basePayload);
         if (updated.listingFeeCheckoutUrl) {
-          window.location.assign(updated.listingFeeCheckoutUrl);
+          trackRedditCustomThenAssign(
+            updated.listingFeeCheckoutUrl,
+            REDDIT_CUSTOM_EVENTS.PAID_LISTING_FEE_STARTED,
+            { conversionId: workListingId },
+          );
           return;
         }
         await queryClient.invalidateQueries({
@@ -907,9 +916,16 @@ export default function ProductsPage() {
             totalListings: Number(auth.user.totalListings ?? 0) + 1,
           });
         }
-        window.location.assign(created.listingFeeCheckoutUrl);
+        trackRedditCustomThenAssign(
+          created.listingFeeCheckoutUrl,
+          REDDIT_CUSTOM_EVENTS.PAID_LISTING_FEE_STARTED,
+          { conversionId: String(created._id ?? workListingId ?? "") },
+        );
         return;
       }
+      trackRedditCustom(REDDIT_CUSTOM_EVENTS.FREE_LISTING_CREATED, {
+        conversionId: String(created._id ?? ""),
+      });
       if (auth.user) {
         auth.update({
           ...auth.user,

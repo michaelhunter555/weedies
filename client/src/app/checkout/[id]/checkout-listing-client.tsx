@@ -18,6 +18,11 @@ import {
 } from "@/lib/escrow-eligible";
 import { TURNAROUND_OPTIONS } from "@/utils/listingOptions";
 import { brandContainedButtonSx } from "@/theme/brand-palette";
+import {
+  REDDIT_CUSTOM_EVENTS,
+  trackRedditCustom,
+  trackRedditCustomThenAssign,
+} from "@/lib/reddit-pixel";
 
 import ArrowBackRoundedIcon from "@mui/icons-material/ArrowBackRounded";
 import ChatRoundedIcon from "@mui/icons-material/ChatRounded";
@@ -327,7 +332,9 @@ export function CheckoutListingClient() {
     try {
       const url = await createCheckoutSession(String(listing._id));
       if (!url) throw new Error("Stripe did not return a checkout URL.");
-      window.location.assign(url);
+      trackRedditCustomThenAssign(url, REDDIT_CUSTOM_EVENTS.STRIPE_CHECKOUT_STARTED, {
+        conversionId: String(listing._id),
+      });
     } catch (e) {
       setConfirmError(e instanceof Error ? e.message : "Could not start checkout.");
       setCheckoutSubmitting(false);
@@ -341,8 +348,11 @@ export function CheckoutListingClient() {
     setOpenEscrowConfirm(false);
     setIsEscrowSubmitting(true);
     try {
-      await initEscrowTransaction(String(listing._id));
+      const { escrowTransactionId } = await initEscrowTransaction(String(listing._id));
       await queryClient.invalidateQueries({ queryKey: ["listing", listingId] });
+      trackRedditCustom(REDDIT_CUSTOM_EVENTS.ESCROW_CHECKOUT_STARTED, {
+        conversionId: escrowTransactionId,
+      });
       router.replace(escrowSuccessPath(listingId));
     } catch (e) {
       setConfirmError(e instanceof Error ? e.message : "Could not start Escrow checkout.");
