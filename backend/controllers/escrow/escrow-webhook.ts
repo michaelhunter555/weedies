@@ -5,8 +5,11 @@ import {
   type EscrowWebhookPayload,
 } from "../../lib/escrow-api";
 import { syncEscrowTransactionFromWebhook } from "../../lib/escrow-webhook-sync";
+import { enqueueRedditEvent } from "../../lib/reddit-events";
+import Listing from "../../models/listing";
 import ProcessedWebhookEvent from "../../models/proccessedWebhookEvents";
 import Transaction from "../../models/transactions";
+import User from "../../models/user";
 
 const LOG_PREFIX = "[escrow-webhook]";
 
@@ -69,7 +72,38 @@ export async function escrowWebhook(req: Request, res: Response) {
     }
 
     const escrowTx = await getEscrowTransaction(escrowTransactionId);
+    const wasPending = localTx.paymentStatus === "pending";
     const action = await syncEscrowTransactionFromWebhook(localTx, escrowTx, body.event);
+
+    if (wasPending && action === "funded") {
+      const [listing, buyer] = await Promise.all([
+        Listing.findById(localTx.ListingId).select("appName category"),
+        User.findById(localTx.customerId).select("email"),
+      ]);
+      const amountCents = Number(localTx.amountPaid ?? localTx.amountCharged ?? 0);
+      enqueueRedditEvent(
+        "Purchase",
+        {
+          email: buyer?.email ?? undefined,
+          external_id: String(localTx.customerId),
+        },
+        {
+          conversion_id: escrowTransactionId,
+          value: amountCents / 100,
+          currency: localTx.currency ?? escrowTx.currency ?? "usd",
+          item_count: 1,
+          products: listing
+            ? [
+                {
+                  id: String(listing._id),
+                  name: listing.appName,
+                  category: listing.category,
+                },
+              ]
+            : undefined,
+        },
+      );
+    }
 
     // console.log(
     //   `${LOG_PREFIX} tx=${escrowTransactionId} event=${body.event} action=${action} localTx=${String(localTx._id)}`,

@@ -10,6 +10,7 @@ import {
 import { toAppUserJson } from "../../lib/serialize-app-user";
 import { issueUserSession } from "../../lib/issue-user-session";
 import { tryAssignEarlyAdopterOnSignup } from "../../lib/app-promotions";
+import { enqueueRedditEvent } from "../../lib/reddit-events";
 
 export async function signup(req: Request, res: Response) {
   try {
@@ -42,6 +43,18 @@ export async function signup(req: Request, res: Response) {
     if(totalUsers <= 50) {
       await tryAssignEarlyAdopterOnSignup(user.id);
     }
+    
+    enqueueRedditEvent(
+      "SignUp",
+      {
+        ip_address: req.ip,
+        email: user.email,
+        external_id: user.id,
+      },
+      {
+        conversion_id: user.id,
+      },
+    );
 
     const session = await issueUserSession(res, user, { isNewUser: true });
     return void res.status(200).json(session);

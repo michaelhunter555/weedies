@@ -30,6 +30,7 @@ const Events = {
 } as const;
 
 import { isMarketplacePurchasePaymentType } from "../../../lib/platform-listing";
+import { enqueueRedditEvent } from "../../../lib/reddit-events";
 
 /**
  * We stamp `paymentType` onto every PaymentIntent / Refund in metadata so
@@ -206,6 +207,27 @@ export default async function appWebhook(req: Request, res: Response) {
         if (paymentType === "listing-fee") {
           try {
             await finalizeListingFeeFromPaymentIntent(pi);
+            const listingIdForFee = metadata.listingId?.trim() ?? "";
+            enqueueRedditEvent(
+              "Purchase",
+              {
+                email: session.customer_details?.email ?? undefined,
+                external_id: metadata.sellerId?.trim() || undefined,
+              },
+              {
+                conversion_id: session.id,
+                value: Number(pi.amount / 100),
+                currency: pi.currency ?? "usd",
+                item_count: 1,
+                products: [
+                  {
+                    id: listingIdForFee || pi.id,
+                    name: "listing-fee",
+                    category: "listing-fee",
+                  },
+                ],
+              },
+            );
           } catch (err) {
             console.error("checkout.session.completed listing-fee:", err);
           }
@@ -303,33 +325,58 @@ export default async function appWebhook(req: Request, res: Response) {
             currency: pi.currency,
           };
 
-          if (checkRoom(io, String(sellerId))) {
-            // notify in-app if user is live.
-            io.to(String(sellerId)).emit(Events.PURCHASE_SUCCEEDED, {
-              ...payload,
-              message: `Your listing "${listing.appName}" just sold!`,
-            });
+          try {
+            if (checkRoom(io, String(sellerId))) {
+              io.to(String(sellerId)).emit(Events.PURCHASE_SUCCEEDED, {
+                ...payload,
+                message: `Your listing "${listing.appName}" just sold!`,
+              });
+            }
+
+            if (seller?.email) {
+              await userSaleNotificationEmail(
+                seller.email as string,
+                seller.name as string,
+                Number(amountFmt),
+                new Date(),
+                listing.appName,
+                listingId,
+                listing.slug,
+                String(sellerId),
+                "stripe",
+              );
+            }
+
+            if (checkRoom(io, String(buyerId))) {
+              io.to(String(buyerId)).emit(Events.PURCHASE_SUCCEEDED, {
+                ...payload,
+                message: `Purchase confirmed for "${listing.appName}"`,
+              });
+            }
+          } catch (postCommitErr) {
+            console.error("checkout.session.completed post-commit:", postCommitErr);
           }
 
-          // send email notification to seller.
-          await userSaleNotificationEmail(
-            seller.email as string,
-            seller.name as string,
-            Number(amountFmt),
-            new Date(),
-            listing.appName,
-            listingId,
-            listing.slug,
-            String(sellerId),
-            "stripe",
+          enqueueRedditEvent(
+            "Purchase",
+            {
+              email: session.customer_details?.email ?? undefined,
+              external_id: buyerId,
+            },
+            {
+              conversion_id: session.id,
+              value: Number(amountFmt),
+              currency: pi.currency,
+              item_count: 1,
+              products: [
+                {
+                  name: listing.appName,
+                  category: listing.category,
+                  id: String(listing._id),
+                },
+              ],
+            },
           );
-
-          if (checkRoom(io, String(buyerId))) {
-            io.to(String(buyerId)).emit(Events.PURCHASE_SUCCEEDED, {
-              ...payload,
-              message: `Purchase confirmed for "${listing.appName}"`,
-            });
-          }
         } catch (err) {
           await dbSession.abortTransaction();
           dbSession.endSession();
