@@ -47,6 +47,9 @@ import Typography from "@mui/material/Typography";
 import useTheme from "@mui/material/styles/useTheme";
 import useMediaQuery from "@mui/material/useMediaQuery";
 import { useAuth } from "@/context/auth-context";
+import TrustPoints from "@/components/TrustCheckpoints/TrustPoints";
+import { Card, CardContent } from "@mui/material";
+import CustomEditChatChip from "@/components/SparkleGradientChip/SparkleGradientChip";
 const PALETTE = BRAND_PALETTE;
 
 /** Homepage highlight row — swap captions when final copy is ready. */
@@ -54,6 +57,34 @@ const HIGHLIGHT_CARDS = [
   { image: "your_apps.png", caption: "You list apps that you've built and are ready to sell. " },
   { image: "homepage_pack/1.png", caption: "Connect with users interested in buying your app in the U.S and Canada." },
   { image: "homepage_pack/3.png", caption: "We provide the platform and security to guarantee a safe & secure exchange." },
+] as const;
+
+/** Editorial cards at the foot of the homepage. Link to static guide pages. */
+const CONTENT_CARDS = [
+  {
+    image: "/flipapp.png",
+    eyebrow: "Guide",
+    title: "How to flip your app in 2026 to 2027",
+    description:
+      "A practical playbook for finding, improving, and reselling indie apps this cycle.",
+    href: "/guides/how-to-flip-your-app",
+  },
+  {
+    image: "/valuesdapandflip.png",
+    eyebrow: "Our story",
+    title: "The culture and values of Dap & Flip",
+    description:
+      "Trust, honesty, and respect. The principles behind every exchange.",
+    href: "/guides/culture-and-values",
+  },
+  {
+    image: "/yourapps.png",
+    eyebrow: "Get started",
+    title: "How to use Dap & Flip",
+    description:
+      "From listing your first app to a secure handover. The full walkthrough.",
+    href: "/guides/how-to-use-our-site",
+  },
 ] as const;
 
 const HERO_CATEGORIES = LISTING_CATEGORIES;
@@ -164,6 +195,19 @@ export default function Home() {
     router.push(`/products?q=${encodeURIComponent(query.trim())}`);
   };
 
+  const handleMessageSpotlightSeller = () => {
+    if (!spotlight || isSpotlightOwner || !spotlightSellerId) return;
+    if (!user?.id) {
+      router.push("/signup");
+      return;
+    }
+    const q = new URLSearchParams();
+    q.set("sellerId", spotlightSellerId);
+    if (spotlight._id) q.set("listingId", String(spotlight._id));
+    if (spotlight.appName) q.set("subject", spotlight.appName);
+    router.push(`/messages?${q}`);
+  };
+
   return (
     <Container maxWidth="lg" sx={{ py: { xs: 3, md: 5 } }}>
 
@@ -192,7 +236,7 @@ export default function Home() {
         sx={{
           mb: 2,
           p: { xs: 2, md: 2.5 },
-          borderRadius: 4,
+          borderRadius: 1,
           
           backgroundColor: "#fff",
         }}
@@ -212,7 +256,7 @@ export default function Home() {
             }}
             InputProps={{
               sx: {
-                borderRadius: 999,
+                borderRadius: "10px",
               },
               startAdornment: (
                 <InputAdornment position="start">
@@ -225,7 +269,7 @@ export default function Home() {
             onClick={handleSearch}
             variant="contained"
             sx={{
-              borderRadius: 999,
+              borderRadius: "10px",
               textTransform: "none",
               fontWeight: 700,
               px: 3,
@@ -245,7 +289,7 @@ export default function Home() {
       <Paper
         elevation={0}
         sx={{
-          borderRadius: 5,
+          borderRadius: 1,
           px: { xs: 3, md: 5 },
           py: { xs: 4, md: 5 },
           color: PALETTE.charcoal,
@@ -329,7 +373,7 @@ export default function Home() {
                 alignItems: "center",
                 justifyContent: "center",
                 border: `1px solid ${PALETTE.sage}`,
-                borderRadius: 2,
+                borderRadius: 1,
                 p: 2,
               }}
             >
@@ -389,32 +433,36 @@ export default function Home() {
         </Divider>
 
         {/* Spotlight — random live listing (fixed image height; do not stretch row) */}
-        <Grid
+        
+        <Card elevation={5} sx={{ height: "100%", width: "100%" }}>
+          <CardContent>
+           
+            <Grid
           id="product"
           container
           spacing={{ xs: 2, md: 3 }}
           alignItems="flex-start"
         >
-          <Grid size={{ xs: 12, md: 6 }}>
+          <Grid size={{ xs: 12, md: 5 }}>
             <Paper
               variant="outlined"
               sx={{
                 p: 2,
-                borderRadius: 3,
+                borderRadius: 1,
                 borderColor: PALETTE.sage,
               }}
             >
               {spotlightLoading ? (
                 <Skeleton
                   variant="rounded"
-                  sx={{ width: "100%", height: { xs: 220, md: 320 }, borderRadius: 3 }}
+                  sx={{ width: "100%", height: { xs: 220, md: 320 }, borderRadius: 1 }}
                 />
               ) : spotlight ? (
                 <Box
                   sx={{
                     width: "100%",
                     height: { xs: 220, md: 320 },
-                    borderRadius: 3,
+                    borderRadius: 1,
                     overflow: "hidden",
                    
                   }}
@@ -435,7 +483,7 @@ export default function Home() {
                 <Box
                   sx={{
                     height: { xs: 220, md: 320 },
-                    borderRadius: 3,
+                    borderRadius: 1,
                     border: `1px dashed ${PALETTE.sage}`,
                     display: "flex",
                     alignItems: "center",
@@ -451,12 +499,14 @@ export default function Home() {
             </Paper>
           </Grid>
 
+          <Divider sx={{ display: { xs: "none", md: "block" } }} orientation="vertical" flexItem />
+
           <Grid size={{ xs: 12, md: 6 }}>
             <Paper
               variant="outlined"
               sx={{
                 p: { xs: 2, md: 3 },
-                borderRadius: 3,
+                borderRadius: 1,
                 borderColor: PALETTE.sage,
               }}
             >
@@ -503,7 +553,7 @@ export default function Home() {
                     listing={spotlight}
                     alt={`${spotlight.appName} cover`}
                     sx={{
-                      borderRadius: 2,
+                      borderRadius: 1,
                       width: 40,
                       height: 40,
                       objectFit: "contain",
@@ -521,6 +571,13 @@ export default function Home() {
                   <Typography variant="h4" sx={{ fontWeight: 800, color: PALETTE.charcoal }}>
                     {formatPrice(spotlight)}
                   </Typography>
+                  <Stack direction="row" spacing={1} alignItems="start">
+                    <CustomEditChatChip
+                      disabled={!spotlightSellerId || isSpotlightOwner}
+                      onClick={handleMessageSpotlightSeller}
+                    />
+                  </Stack>
+
 
                   {spotlight.platforms && spotlight.platforms.length > 0 ? (
                     <ListingPlatformsRow
@@ -562,6 +619,8 @@ export default function Home() {
                     />
                   </Stack>
 
+                  <TrustPoints />
+
                   <Stack
                     direction={{ xs: "column", sm: "row" }}
                     spacing={1}
@@ -572,7 +631,7 @@ export default function Home() {
                       variant="outlined"
                       startIcon={<StorefrontRoundedIcon />}
                       sx={{
-                        borderRadius: 2,
+                        borderRadius: 1,
                         textTransform: "none",
                         borderColor: PALETTE.seafoam,
                         color: PALETTE.charcoal,
@@ -587,7 +646,7 @@ export default function Home() {
                         size="medium"
                         endIcon={<RocketLaunchRoundedIcon />}
                         sx={{
-                          borderRadius: 2,
+                          borderRadius: 1,
                           textTransform: "none",
                           fontWeight: 700,
                           backgroundColor: PALETTE.charcoal,
@@ -621,7 +680,7 @@ export default function Home() {
                     onClick={() => router.push("/products?list=new")}
                     sx={{
                       width: "fit-content",
-                      borderRadius: 999,
+                      borderRadius: "10px",
                       textTransform: "none",
                       backgroundColor: PALETTE.charcoal,
                     }}
@@ -633,6 +692,8 @@ export default function Home() {
             </Paper>
           </Grid>
         </Grid>
+          </CardContent>
+        </Card>
 
         {isMobile && isTablet && (
           <Divider sx={{ borderColor: PALETTE.sage }} />
@@ -642,7 +703,7 @@ export default function Home() {
         <Paper
           elevation={0}
           sx={{
-            borderRadius: 4,
+            borderRadius: 1,
             p: { xs: 3, md: 5 },
             backgroundColor: PALETTE.mint,
             border: `1px solid ${PALETTE.sage}`,
@@ -674,7 +735,7 @@ export default function Home() {
                   size="large"
                   onClick={() => router.push("/products?list=new")}
                   sx={{
-                    borderRadius: 999,
+                    borderRadius: "10px",
                     textTransform: "none",
                     fontWeight: 700,
                     px: 3,
@@ -819,7 +880,7 @@ export default function Home() {
                         elevation={0}
                         variant="outlined"
                         sx={{
-                          borderRadius: 3,
+                          borderRadius: 1,
                           borderColor: PALETTE.sage,
                           bgcolor: "background.paper",
                           height: "100%",
@@ -840,7 +901,7 @@ export default function Home() {
                             alignItems: "center",
                             justifyContent: "center",
                             bgcolor: PALETTE.mint,
-                            borderRadius: 2,
+                            borderRadius: 1,
                             border: `1px solid ${PALETTE.sage}`,
                           }}
                         >
@@ -877,7 +938,7 @@ export default function Home() {
         <Paper
           elevation={0}
           sx={{
-            borderRadius: 4,
+            borderRadius: 1,
             p: { xs: 3, md: 5 },
             background: 'linear-gradient(135deg, #f4fff8 0%, #c4e0d3 100%)',
             border: `1px solid ${PALETTE.sage}`,
@@ -907,7 +968,7 @@ export default function Home() {
                   startIcon={<SupportAgentIcon />}
                   onClick={() => router.push("/contact-us")}
                   sx={{
-                    borderRadius: 999,
+                    borderRadius: "10px",
                     textTransform: "none",
                     fontWeight: 700,
                     px: 3,
@@ -923,6 +984,108 @@ export default function Home() {
             </Grid>
           </Grid>
         </Paper>
+
+        {/* Learn / editorial cards — link to static guide pages */}
+        <Stack spacing={2}>
+          <Stack spacing={0.5} alignItems="center" textAlign="center">
+            <Typography
+              variant="overline"
+              sx={{ fontWeight: 700, color: PALETTE.seafoam }}
+            >
+              Learn the ropes
+            </Typography>
+            <Typography
+              variant="h5"
+              fontWeight={800}
+              sx={{ color: PALETTE.charcoal }}
+            >
+              Guides to help you flip with confidence
+            </Typography>
+          </Stack>
+
+          <Box
+            sx={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: { xs: 2, md: 2.5 },
+            }}
+          >
+            {CONTENT_CARDS.map((card) => (
+              <Paper
+                key={card.href}
+                variant="outlined"
+                onClick={() => router.push(card.href)}
+                sx={{
+                  flex: "1 1 340px",
+                  minWidth: { xs: "100%", sm: 320 },
+                  borderRadius: 1,
+                  borderColor: PALETTE.sage,
+                  cursor: "pointer",
+                  p: { xs: 1.5, md: 2 },
+                  transition:
+                    "transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease",
+                  "&:hover": {
+                    transform: "translateY(-2px)",
+                    borderColor: PALETTE.seafoam,
+                    boxShadow: "0 12px 28px rgba(37,52,58,0.12)",
+                  },
+                }}
+              >
+                <Stack
+                  direction="row"
+                  spacing={2}
+                  alignItems="center"
+                  sx={{ height: "100%" }}
+                >
+                  <Box
+                    sx={{
+                      flexShrink: 0,
+                      width: { xs: 88, md: 96 },
+                      height: { xs: 88, md: 96 },
+                      borderRadius: 1,
+                      overflow: "hidden",
+                      bgcolor: PALETTE.mint,
+                      border: `1px solid ${PALETTE.sage}`,
+                    }}
+                  >
+                    <Box
+                      component="img"
+                      src={card.image}
+                      alt={card.title}
+                      sx={{
+                        width: "100%",
+                        height: "100%",
+                        objectFit: "cover",
+                        display: "block",
+                      }}
+                    />
+                  </Box>
+                  <Stack spacing={0.5} sx={{ flex: 1, minWidth: 0 }}>
+                    <Typography
+                      variant="caption"
+                      sx={{ fontWeight: 600, color: "text.secondary" }}
+                    >
+                      {card.eyebrow}
+                    </Typography>
+                    <Typography
+                      variant="subtitle1"
+                      sx={{ fontWeight: 800, color: PALETTE.charcoal, lineHeight: 1.25 }}
+                    >
+                      {card.title}
+                    </Typography>
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      sx={{ lineHeight: 1.5 }}
+                    >
+                      {card.description}
+                    </Typography>
+                  </Stack>
+                </Stack>
+              </Paper>
+            ))}
+          </Box>
+        </Stack>
       </Stack>
 
       <PlatformSecurityModal

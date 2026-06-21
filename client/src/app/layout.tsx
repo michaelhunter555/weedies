@@ -18,7 +18,7 @@ import { EmailVerificationGate } from "@/components/Auth/EmailVerificationGate";
 import { LiveChatWidget } from "@/components/SupportChat/LiveChatWidget";
 import { LiveChatProvider } from "@/context/live-chat-context";
 import { AppThemeProvider } from "@/theme/app-theme";
-import { APP_DOMAIN } from "@/brand";
+import { APP_DOMAIN, APP_NAME_SOCIAL } from "@/brand";
 import { GoogleAnalytics } from "@next/third-parties/google";
 import Script from "next/script";
 
@@ -27,30 +27,30 @@ const GOOGLE_ADS_ID = "AW-18151888903";
 
 export const metadata: Metadata = {
   metadataBase: new URL(`https://${APP_DOMAIN}`),
-  title: "Dap & Flip - Discover & Sell Apps | Dapandflip.com",
+  title: `${APP_NAME_SOCIAL} - #1 MVP Marketplace | Dapandflip.com`,
   description:
-    "Dapandflip.com is the marketplace to discover, buy, and sell indie apps. List your app on Dap & Flip or find your next flip — secure checkout and seller payouts built in.",
-  applicationName: "Dap & Flip",
+    "Dapandflip.com is the marketplace to discover, buy, and sell production ready apps. Skip the 0 to 1 hustle and start with something meaningful. Dap and Flip or find your next flip - secure checkout and seller payouts built in.",
+  applicationName: APP_NAME_SOCIAL,
   icons: {
     icon: [{ url: "/favicon.png", type: "image/png" }],
     shortcut: "/favicon.png",
     apple: "/favicon.png",
   },
   openGraph: {
-    title: "Dap & Flip | Dapandflip.com",
+    title: `${APP_NAME_SOCIAL} | Dapandflip.com`,
     description:
-      "Discover, buy, and sell indie apps. The marketplace to list and flip digital products.",
-    siteName: "Dap & Flip",
+      "Discover MVP & Production Ready Apps. The marketplace to list and flip digital products.",
+    siteName: APP_NAME_SOCIAL,
     images: [
       {
         url: SITE_OG_IMAGE,
-        alt: "Dap & Flip",
+        alt: APP_NAME_SOCIAL,
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Dap & Flip | Dapandflip.com",
+    title: `${APP_NAME_SOCIAL} | Dapandflip.com`,
     description:
       "Discover, buy, and sell indie apps on dapandflip.com.",
     images: [SITE_OG_IMAGE],

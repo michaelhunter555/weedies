@@ -25,7 +25,7 @@ import {
 import VerifiedIcon from '@mui/icons-material/Verified';
 import EditRoundedIcon from "@mui/icons-material/EditRounded";
 import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
-import ChatRoundedIcon from "@mui/icons-material/ChatRounded";
+import CustomEditChatChip from "@/components/SparkleGradientChip/SparkleGradientChip";
 import GavelRoundedIcon from "@mui/icons-material/GavelRounded";
 import InsightsRoundedIcon from "@mui/icons-material/InsightsRounded";
 import OpenInNewRoundedIcon from "@mui/icons-material/OpenInNewRounded";
@@ -70,6 +70,7 @@ import {
 } from "@/lib/auction-buy-it-now";
 import { countPendingPrivateAccessRequests } from "@/utils/private-listing-access";
 import { trackRedditAddToCart } from "@/lib/reddit-pixel";
+import TrustPoints from "@/components/TrustCheckpoints/TrustPoints";
 const PLACEHOLDER_COVER = "/placeholder-app-cover.svg";
 const PENDING_AUCTION_BID_KEY = "weedies.pendingAuctionBid";
 
@@ -1435,11 +1436,9 @@ export function ProductDetailsClient({ fetchBy }: ProductDetailsClientProps) {
                         <InfoRoundedIcon sx={{ fontSize: 16 }} />
                        </Tooltip>
                       </Stack>}
-                      {listing.monthlyRevenue != null ? (
-                        <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 600 }}>
-                          {formatMoney(listing.monthlyRevenue, currency)}/mo reported revenue
-                        </Typography>
-                      ) : null}
+
+                      <TrustPoints />
+
                       {isPrivateRestricted ? (
                         <>
                           {privateAccessMutation.isError ? (
@@ -1509,30 +1508,18 @@ export function ProductDetailsClient({ fetchBy }: ProductDetailsClientProps) {
                   )}
                   {messageSellerDisabled && messageSellerTooltip ? (
                     <Tooltip title={messageSellerTooltip}>
-                      <Box component="span" sx={{ display: "block" }}>
-                        <Button
-                          variant="outlined"
-                          size="large"
-                          startIcon={<ChatRoundedIcon />}
+                      <Box component="span" sx={{ display: "inline-flex" }}>
+                        <CustomEditChatChip
                           disabled={messageSellerDisabled}
                           onClick={handleMessageSeller}
-                          sx={{ borderRadius: 2, textTransform: "none", fontWeight: 600 }}
-                        >
-                          Message seller
-                        </Button>
+                        />
                       </Box>
                     </Tooltip>
                   ) : (
-                    <Button
-                      variant="outlined"
-                      size="large"
-                      startIcon={<ChatRoundedIcon />}
+                    <CustomEditChatChip
                       disabled={messageSellerDisabled}
                       onClick={handleMessageSeller}
-                      sx={{ borderRadius: 2, textTransform: "none", fontWeight: 600 }}
-                    >
-                      Message seller
-                    </Button>
+                    />
                   )}
 
                   {isOwner &&

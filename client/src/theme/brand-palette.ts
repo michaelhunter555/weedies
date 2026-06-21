@@ -21,7 +21,7 @@ export const BRAND_PALETTE = {
 export const listFormOutlinedFieldSx: SxProps<Theme> = {
   "& .MuiOutlinedInput-root": {
     backgroundColor: BRAND_PALETTE.listFormField,
-    borderRadius: 2,
+    borderRadius: 1,
   },
 };
 
@@ -34,7 +34,7 @@ export const BRAND_STAT_TINTS = {
 
 /** Primary contained actions — high contrast charcoal on white */
 export const brandContainedButtonSx: SxProps<Theme> = {
-  borderRadius: 999,
+  borderRadius: 1,
   textTransform: "none",
   fontWeight: 700,
   color: BRAND_PALETTE.onPrimary,

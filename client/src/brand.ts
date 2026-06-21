@@ -1,5 +1,7 @@
 /** Public-facing brand — Dapandflip.com */
 export const APP_NAME = "Dap & Flip";
+/** OG/Twitter titles — avoid "&" (scrapers often show "&amp;" literally). */
+export const APP_NAME_SOCIAL = "Dap and Flip";
 export const APP_DOMAIN = "dapandflip.com";
 export const APP_TAGLINE = "You list it, we push it, you flip it.";
 

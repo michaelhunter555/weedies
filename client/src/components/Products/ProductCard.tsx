@@ -140,16 +140,16 @@ export default function ProductCard({ listing, id }: IProductCard) {
     <Paper
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
-      variant="outlined"
+      elevation={2}
       sx={{
-        borderRadius: 3,
+        borderRadius: 1,
         padding: 0,
         overflow: "hidden",
         transition:
           "transform .18s ease, box-shadow .18s ease, border-color .18s ease",
         borderColor: hover ? BRAND_PALETTE.seafoam : BRAND_PALETTE.borderSubtle,
         transform: hover ? "translateY(-2px)" : "none",
-        boxShadow: hover ? "0 10px 24px rgba(17,17,17,0.08)" : "none",
+        boxShadow: hover ? "0 10px 24px rgba(17,17,17,0.08)" : "0 10px 24px rgba(8, 8, 8, 0.08)",
         cursor: pathSegment ? "pointer" : "default",
       }}
       onClick={handleOpen}

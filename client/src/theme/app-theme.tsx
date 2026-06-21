@@ -28,7 +28,7 @@ export const appTheme = createTheme({
     },
   },
   shape: {
-    borderRadius: 12,
+    borderRadius: 10,
   },
   components: {
     MuiCssBaseline: {
