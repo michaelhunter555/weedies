@@ -31,6 +31,7 @@ import SearchRoundedIcon from "@mui/icons-material/SearchRounded";
 import SportsEsportsRoundedIcon from "@mui/icons-material/SportsEsportsRounded";
 import StorefrontRoundedIcon from "@mui/icons-material/StorefrontRounded";
 import TerminalRoundedIcon from "@mui/icons-material/TerminalRounded";
+import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
 import LockIcon from '@mui/icons-material/Lock';
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
@@ -48,16 +49,11 @@ import useTheme from "@mui/material/styles/useTheme";
 import useMediaQuery from "@mui/material/useMediaQuery";
 import { useAuth } from "@/context/auth-context";
 import TrustPoints from "@/components/TrustCheckpoints/TrustPoints";
-import { Card, CardContent } from "@mui/material";
+import { Card, CardContent, Tooltip } from "@mui/material";
 import CustomEditChatChip from "@/components/SparkleGradientChip/SparkleGradientChip";
+import { HomeMosiacGrid } from "@/components/MosiacHome/MosiacGrid";
+import { HowItWorksStepper } from "@/components/Marketing/HowItWorksStepper";
 const PALETTE = BRAND_PALETTE;
-
-/** Homepage highlight row — swap captions when final copy is ready. */
-const HIGHLIGHT_CARDS = [
-  { image: "your_apps.png", caption: "You list apps that you've built and are ready to sell. " },
-  { image: "homepage_pack/1.png", caption: "Connect with users interested in buying your app in the U.S and Canada." },
-  { image: "homepage_pack/3.png", caption: "We provide the platform and security to guarantee a safe & secure exchange." },
-] as const;
 
 /** Editorial cards at the foot of the homepage. Link to static guide pages. */
 const CONTENT_CARDS = [
@@ -131,9 +127,21 @@ function monthlyRevenueLabel(listing: Listing): string | null {
   return `${formatMoney(Number(listing.monthlyRevenue), listing.currency ?? "USD")}/mo revenue`;
 }
 
+function hasStoredAppSession() {
+  if (typeof window === "undefined") return false;
+  try {
+    return Boolean(
+      localStorage.getItem("weedies.user") &&
+        localStorage.getItem("weedies.accessToken"),
+    );
+  } catch {
+    return false;
+  }
+}
+
 export default function Home() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, isLoggedIn, hydrated, sessionReady, accessToken } = useAuth();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const isTablet = useMediaQuery(theme.breakpoints.down("md"));
@@ -142,6 +150,14 @@ export default function Home() {
   const [securityModalOpen, setSecurityModalOpen] = useState(false);
 
   const { getAllListings } = useListings();
+
+  const hasActiveSession = useMemo(() => {
+    if (isLoggedIn || Boolean(user?.id) || Boolean(accessToken)) return true;
+    if (!hydrated) return false;
+    return hasStoredAppSession();
+  }, [hydrated, isLoggedIn, user?.id, accessToken, sessionReady]);
+
+  const showHomeMosaic = hydrated && sessionReady && !hasActiveSession;
 
   const { data: feed, isLoading: spotlightLoading } = useQuery({
     queryKey: ["homepage-spotlight-feed"],
@@ -198,7 +214,7 @@ export default function Home() {
   const handleMessageSpotlightSeller = () => {
     if (!spotlight || isSpotlightOwner || !spotlightSellerId) return;
     if (!user?.id) {
-      router.push("/signup");
+      router.push("/signup?action=signup");
       return;
     }
     const q = new URLSearchParams();
@@ -295,13 +311,14 @@ export default function Home() {
           color: PALETTE.charcoal,
           backgroundColor: PALETTE.mint,
           border: `1px solid ${PALETTE.sage}`,
+          mb: 5
         }}
       >
         <Grid container spacing={{ xs: 3, md: 4 }} alignItems="center">
           <Grid size={{ xs: 12, md: 7 }}>
             <Stack spacing={2}>
               <Chip
-                label="Discover apps to flip from indie builders"
+                label="Starter and Established Apps for sale"
                 size="small"
                 sx={{
                   width: "fit-content",
@@ -315,9 +332,9 @@ export default function Home() {
                 variant={isMobile ? "h4" : "h3"}
                 sx={{ fontWeight: 900, lineHeight: 1.1, color: PALETTE.charcoal }}
               >
-                Discover and flip apps on{" "}
+                Your Digital Business Journey{" "}
                 <Box component="span" sx={{ color: PALETTE.seafoam }}>
-                  Dap & Flip
+                  Starts Here
                 </Box>
                 .
               </Typography>
@@ -325,8 +342,7 @@ export default function Home() {
                 variant="subtitle1"
                 sx={{ color: "rgba(37,52,58,0.82)", maxWidth: 520 }}
               >
-                Buy and sell indie apps on dapandflip.com. List what you built
-                and start earning.
+                Skip to the 0 to 1 hustle. Start with something ready to go.
               </Typography>
 
               <Stack
@@ -412,6 +428,8 @@ export default function Home() {
         </Grid>
       </Paper>
 
+      {showHomeMosaic ? <HomeMosiacGrid /> : null}
+
       <Stack spacing={5} sx={{ mt: 5 }}>
         <Collection
           collectionName="Trending this week"
@@ -436,7 +454,6 @@ export default function Home() {
         
         <Card elevation={5} sx={{ height: "100%", width: "100%" }}>
           <CardContent>
-           
             <Grid
           id="product"
           container
@@ -445,7 +462,7 @@ export default function Home() {
         >
           <Grid size={{ xs: 12, md: 5 }}>
             <Paper
-              variant="outlined"
+            elevation={0}
               sx={{
                 p: 2,
                 borderRadius: 1,
@@ -471,7 +488,6 @@ export default function Home() {
                     listing={spotlight}
                     alt={`${spotlight.appName} cover`}
                     sx={{
-                      
                       width: "100%",
                       height: "100%",
                       objectFit: "contain",
@@ -503,7 +519,7 @@ export default function Home() {
 
           <Grid size={{ xs: 12, md: 6 }}>
             <Paper
-              variant="outlined"
+              elevation={0}
               sx={{
                 p: { xs: 2, md: 3 },
                 borderRadius: 1,
@@ -529,22 +545,22 @@ export default function Home() {
                         color: PALETTE.charcoal,
                       }}
                     />
-                    {Number(spotlight.startingPrice ?? 0) > 0 ? (
-                      <Chip
-                        label="Pro"
-                        size="small"
-                        variant="outlined"
-                        sx={{ borderColor: PALETTE.seafoam, color: PALETTE.charcoal }}
-                      />
-                    ) : (
-                      <Chip
-                        label="Free"
-                        size="small"
-                        color="success"
-                        variant="outlined"
-                        sx={{ fontWeight: 700 }}
-                      />
-                    )}
+                    {monthlyRevenueLabel(spotlight) && Number(monthlyRevenueLabel(spotlight)) > 0 ? (
+                    <Tooltip title={`${monthlyRevenueLabel(spotlight)}/mo revenue`}>
+                     <AttachMoneyIcon
+                       sx={{
+                         fontSize: 18,
+                         color: "#2f5f52",
+                         backgroundColor: "rgba(244, 255, 248, 0.94)",
+                         border: `1px solid ${BRAND_PALETTE.sage}`,
+                         borderRadius: "50%",
+                         p: 0.45,
+                         boxShadow: "0 1px 2px rgba(37, 52, 58, 0.12)",
+                       }}
+                     />
+                   </Tooltip>
+                    ) : null}
+            
                   </Stack>
 
                   <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
@@ -752,187 +768,7 @@ export default function Home() {
         </Paper>
 
         {/* How it works — 1 → 2 → 3 stepper */}
-        <Stack spacing={2}>
-          <Typography
-            variant="h5"
-            fontWeight={800}
-            textAlign="center"
-            sx={{ color: PALETTE.charcoal }}
-          >
-            How it works
-          </Typography>
-
-          <Grid container spacing={{ xs: 0, md: 2 }} justifyContent="center">
-            {HIGHLIGHT_CARDS.map((card, index) => {
-              const step = index + 1;
-              const isFirst = index === 0;
-              const isLast = index === HIGHLIGHT_CARDS.length - 1;
-
-              return (
-                <Grid key={card.image} size={{ xs: 12, md: 4 }}>
-                  <Stack
-                    direction={{ xs: "row", md: "column" }}
-                    alignItems={{ xs: "flex-start", md: "center" }}
-                    sx={{ height: "100%" }}
-                  >
-                    {/* Vertical rail (mobile) */}
-                    <Stack
-                      alignItems="center"
-                      sx={{
-                        display: { xs: "flex", md: "none" },
-                        width: 40,
-                        flexShrink: 0,
-                        alignSelf: "stretch",
-                        pt: 0.5,
-                      }}
-                    >
-                      {!isFirst ? (
-                        <Box
-                          sx={{
-                            width: 2,
-                            flex: 1,
-                            minHeight: 16,
-                            bgcolor: PALETTE.sage,
-                            borderRadius: 1,
-                          }}
-                        />
-                      ) : null}
-                      <Box
-                        sx={{
-                          width: 32,
-                          height: 32,
-                          borderRadius: "50%",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          fontWeight: 800,
-                          fontSize: "0.95rem",
-                          flexShrink: 0,
-                          bgcolor: PALETTE.charcoal,
-                          color: PALETTE.onPrimary,
-                          border: `2px solid ${PALETTE.seafoam}`,
-                        }}
-                      >
-                        {step}
-                      </Box>
-                      {!isLast ? (
-                        <Box
-                          sx={{
-                            width: 2,
-                            flex: 1,
-                            minHeight: 24,
-                            bgcolor: PALETTE.sage,
-                            borderRadius: 1,
-                          }}
-                        />
-                      ) : null}
-                    </Stack>
-
-                    <Stack sx={{ flex: 1, width: "100%", minWidth: 0 }} spacing={1.5}>
-                      {/* Horizontal rail (desktop) */}
-                      <Stack
-                        direction="row"
-                        alignItems="center"
-                        sx={{
-                          display: { xs: "none", md: "flex" },
-                          width: "100%",
-                          px: 1,
-                        }}
-                      >
-                        <Box
-                          sx={{
-                            flex: 1,
-                            height: 2,
-                            bgcolor: isFirst ? "transparent" : PALETTE.sage,
-                            borderRadius: 1,
-                          }}
-                        />
-                        <Box
-                          sx={{
-                            width: 36,
-                            height: 36,
-                            mx: 1,
-                            borderRadius: "50%",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            fontWeight: 800,
-                            fontSize: "1rem",
-                            flexShrink: 0,
-                            bgcolor: PALETTE.charcoal,
-                            color: PALETTE.onPrimary,
-                            border: `2px solid ${PALETTE.seafoam}`,
-                          }}
-                        >
-                          {step}
-                        </Box>
-                        <Box
-                          sx={{
-                            flex: 1,
-                            height: 2,
-                            bgcolor: isLast ? "transparent" : PALETTE.sage,
-                            borderRadius: 1,
-                          }}
-                        />
-                      </Stack>
-
-                      <Paper
-                        elevation={0}
-                        variant="outlined"
-                        sx={{
-                          borderRadius: 1,
-                          borderColor: PALETTE.sage,
-                          bgcolor: "background.paper",
-                          height: "100%",
-                          display: "flex",
-                          flexDirection: "column",
-                          alignItems: "center",
-                          p: 2,
-                          ml: { xs: 0, md: 0 },
-                        }}
-                      >
-                        <Box
-                          sx={{
-                            width: "100%",
-                            maxWidth: 220,
-                            aspectRatio: "1",
-                            mx: "auto",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            bgcolor: PALETTE.mint,
-                            borderRadius: 1,
-                            border: `1px solid ${PALETTE.sage}`,
-                          }}
-                        >
-                          <Box
-                            component="img"
-                            src={card.image}
-                            alt={`Step ${step}`}
-                            sx={{
-                              width: "100%",
-                              height: "100%",
-                              objectFit: "contain",
-                              display: "block",
-                            }}
-                          />
-                        </Box>
-                        <Typography
-                          variant="body2"
-                          color="text.secondary"
-                          align="center"
-                          sx={{ mt: 1.5, fontWeight: 600, lineHeight: 1.5 }}
-                        >
-                          {card.caption}
-                        </Typography>
-                      </Paper>
-                    </Stack>
-                  </Stack>
-                </Grid>
-              );
-            })}
-          </Grid>
-        </Stack>
+        <HowItWorksStepper />
 
         {/* Full 100% Support */}
         <Paper

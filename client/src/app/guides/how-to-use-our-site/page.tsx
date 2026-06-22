@@ -7,6 +7,7 @@ import {
   LegalSection,
   MarketingPageShell,
 } from "@/components/Marketing/MarketingPageShell";
+import { HowItWorksStepper } from "@/components/Marketing/HowItWorksStepper";
 import { APP_NAME } from "@/brand";
 import { BRAND_PALETTE } from "@/theme/brand-palette";
 
@@ -50,9 +51,11 @@ export default function HowToUseOurSitePage() {
         sx={{ lineHeight: 1.7 }}
       >
         {APP_NAME} is a marketplace where indie builders list apps for sale and
-        buyers discover, purchase, and take over projects. Here’s how to get the
-        most out of it, whether you’re selling or buying.
+        buyers discover, purchase, and take over projects. Here's how to get the
+        most out of it, whether you're selling or buying.
       </Typography>
+
+      <HowItWorksStepper sx={{ my: 4 }} />
 
       <LegalSection
         title="1. Create your account"
@@ -101,8 +104,16 @@ export default function HowToUseOurSitePage() {
         Still have questions? Visit{" "}
         <a href="/support" style={{ color: "inherit", fontWeight: 700 }}>
           support
-        </a>{" "}
-        or{" "}
+        </a>
+        , read{" "}
+        <a href="/guides/how-verification-works" style={{ color: "inherit", fontWeight: 700 }}>
+          how verification works
+        </a>
+        {" "}or{" "}
+        <a href="/guides/handover-flow" style={{ color: "inherit", fontWeight: 700 }}>
+          the handover flow
+        </a>
+        , or{" "}
         <a href="/contact-us" style={{ color: "inherit", fontWeight: 700 }}>
           contact us
         </a>

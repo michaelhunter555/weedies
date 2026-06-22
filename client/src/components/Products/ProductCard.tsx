@@ -21,6 +21,7 @@ import { BRAND_PALETTE } from "@/theme/brand-palette";
 import { getCategoryLabel } from "@/utils/listingOptions";
 import type { Listing, Platforms } from "../../../types";
 import { PLATFORM_MAPPING } from "@/utils/listingOptions";
+import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
 
 interface IProductCard {
   /** Preferred: the full listing document from the API. */
@@ -200,6 +201,21 @@ export default function ProductCard({ listing, id }: IProductCard) {
               fontSize: 11,
             }}
           />
+          {monthlyRevenueLabel && Number(listing?.monthlyRevenue ) > 0 ?
+          <Tooltip title={`${monthlyRevenueLabel}/mo revenue`}>
+            <AttachMoneyIcon
+              sx={{
+                fontSize: 18,
+                color: "#2f5f52",
+                backgroundColor: "rgba(244, 255, 248, 0.94)",
+                border: `1px solid ${BRAND_PALETTE.sage}`,
+                borderRadius: "50%",
+                p: 0.45,
+                boxShadow: "0 1px 2px rgba(37, 52, 58, 0.12)",
+              }}
+            />
+          </Tooltip>
+            : null}
         </Stack>
         <Chip
           size="small"
@@ -300,14 +316,7 @@ export default function ProductCard({ listing, id }: IProductCard) {
               ? "Request access to unlock full listing details."
               : resolvedTagline}
           </Typography>
-          {monthlyRevenueLabel && Number(listing?.monthlyRevenue ) > 0 ? (
-            <Typography
-              variant="caption"
-              sx={{ fontWeight: 600, lineHeight: 1.2 }}
-            >
-              {monthlyRevenueLabel}/mo revenue
-            </Typography>
-          ) : null}
+          
         </Stack>
 
         <Stack direction="row" alignItems="center" spacing={0.5}>

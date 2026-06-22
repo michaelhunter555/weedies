@@ -29,7 +29,7 @@ export const metadata: Metadata = {
   metadataBase: new URL(`https://${APP_DOMAIN}`),
   title: `${APP_NAME_SOCIAL} - #1 MVP Marketplace | Dapandflip.com`,
   description:
-    "Dapandflip.com is the marketplace to discover, buy, and sell production ready apps. Skip the 0 to 1 hustle and start with something meaningful. Dap and Flip or find your next flip - secure checkout and seller payouts built in.",
+    "Dapandflip.com is the marketplace to discover, buy, and sell MVP and production ready apps. Skip the 0 to 1 hustle and start with something meaningful. Dap and Flip or find your next flip - secure checkout and seller payouts built in.",
   applicationName: APP_NAME_SOCIAL,
   icons: {
     icon: [{ url: "/favicon.png", type: "image/png" }],
@@ -52,7 +52,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: `${APP_NAME_SOCIAL} | Dapandflip.com`,
     description:
-      "Discover, buy, and sell indie apps on dapandflip.com.",
+      "Discover, buy, and sell starter and established apps on dapandflip.com.",
     images: [SITE_OG_IMAGE],
   },
 };

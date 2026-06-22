@@ -38,6 +38,45 @@ export const baseMainMenuItems: MenuItemsProps[] = [
   },
 ];
 
+/** Hover flyout links under Discover in the header. */
+export const discoverFlyoutItems = [
+  {
+    href: "/guides/how-to-flip-your-app",
+    image: "/flipapp.png",
+    title: "How to flip your app",
+    description: "A practical playbook for finding and reselling indie apps.",
+  },
+  {
+    href: "/guides/culture-and-values",
+    image: "/valuesdapandflip.png",
+    title: "Culture and values",
+    description: "Trust, honesty, and respect behind every exchange.",
+  },
+  {
+    href: "/guides/how-to-use-our-site",
+    image: "/yourapps.png",
+    title: "How to use Dap & Flip",
+    description: "From your first listing to a secure handover.",
+  },
+  {
+    href: "/guides/how-verification-works",
+    image: "/homepage_pack/3.png",
+    title: "How verification works",
+    description: "Ownership checks, listing review, and connected analytics.",
+  },
+  {
+    href: "/guides/handover-flow",
+    image: "/homepage_pack/1.png",
+    title: "See the handover flow",
+    description: "Checkout, exchange room, transfer, and confirmation.",
+  },
+  {
+    href: "/products",
+    title: "Browse marketplace",
+    description: "Explore live app listings on Dap & Flip.",
+  },
+] as const;
+
 export function getMainMenuItems(opts?: { userId?: string }): MenuItemsProps[] {
   const items = [...baseMainMenuItems];
   return items;

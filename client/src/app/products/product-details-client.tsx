@@ -254,7 +254,6 @@ export function ProductDetailsClient({ fetchBy }: ProductDetailsClientProps) {
 
   const messageSellerDisabled =
     !hydrated ||
-    !isLoggedIn ||
     isListingOwner ||
     (listing?.isPrivateListing && listing?.privateAccess?.canView === false);
 
@@ -344,7 +343,6 @@ export function ProductDetailsClient({ fetchBy }: ProductDetailsClientProps) {
 
   const buyItNowDisabled =
     !hydrated ||
-    !isLoggedIn ||
     isAuction ||
     !listing ||
     listing.status !== "live" ||
@@ -353,7 +351,6 @@ export function ProductDetailsClient({ fetchBy }: ProductDetailsClientProps) {
 
   const buyTooltip = useMemo(() => {
     if (!hydrated) return "One moment…";
-    if (!isLoggedIn) return "Sign in to buy.";
     if (listing?.isPrivateListing && listing?.privateAccess?.canView === false) {
       return "Request access from the seller first.";
     }
@@ -364,7 +361,7 @@ export function ProductDetailsClient({ fetchBy }: ProductDetailsClientProps) {
     if (!listing || listing.status !== "live") return "This listing is not available to buy.";
     if (isListingOwner) return "You can't purchase your own listing.";
     return "";
-  }, [hydrated, isLoggedIn, isAuction, listing, isListingOwner]);
+  }, [hydrated, isAuction, listing, isListingOwner]);
 
   const { data: editMeta, isLoading: editMetaLoading } = useQuery({
     queryKey: ["listing-edit-meta", listingMongoId],
@@ -453,7 +450,14 @@ export function ProductDetailsClient({ fetchBy }: ProductDetailsClientProps) {
   }, [listing, countdown.ended, hydrated, isLoggedIn, isListingOwner]);
 
   const handleBuyItNow = () => {
-    if (!listing?._id || buyItNowDisabled || isAuction) return;
+    if (!listing?._id || isAuction || isListingOwner) return;
+    if (listing.status !== "live") return;
+    if (listing.isPrivateListing && listing.privateAccess?.canView === false) return;
+    if (!hydrated) return;
+    if (!isLoggedIn) {
+      router.push("/signup?action=signup");
+      return;
+    }
     trackRedditAddToCart({
       listingId: String(listing._id),
       name: listing.appName,
@@ -484,7 +488,12 @@ export function ProductDetailsClient({ fetchBy }: ProductDetailsClientProps) {
   };
 
   const handleMessageSeller = () => {
-    if (!hydrated || !isLoggedIn || isListingOwner) return;
+    if (!hydrated || isListingOwner) return;
+    if (listing?.isPrivateListing && listing?.privateAccess?.canView === false) return;
+    if (!isLoggedIn) {
+      router.push("/signup?action=signup");
+      return;
+    }
     const q = new URLSearchParams();
     if (seller.id) q.set("sellerId", seller.id);
     if (listing?._id) q.set("listingId", String(listing._id));
@@ -543,9 +552,7 @@ export function ProductDetailsClient({ fetchBy }: ProductDetailsClientProps) {
     ? "One moment…"
     : isListingOwner
       ? "You cannot message yourself."
-      : !isLoggedIn
-        ? "Sign in to message the seller."
-        : listing.isPrivateListing && listing.privateAccess?.canView === false
+      : listing.isPrivateListing && listing.privateAccess?.canView === false
           ? "Request access first."
           : "";
 

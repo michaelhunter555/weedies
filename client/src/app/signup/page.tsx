@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import LoginForm from "@/components/AuthForms/LoginForm";
 import { AppGoogleOAuthProvider } from "@/components/Auth/AppGoogleOAuthProvider";
 import { BRAND_PALETTE } from "@/theme/brand-palette";
@@ -19,7 +20,9 @@ const LoginPage = () => {
       }}
     >
       <AppGoogleOAuthProvider>
-        <LoginForm />
+        <Suspense fallback={null}>
+          <LoginForm />
+        </Suspense>
       </AppGoogleOAuthProvider>
     </Box>
   );

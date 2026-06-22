@@ -52,15 +52,15 @@ export async function revenueCatOAuthCallback(req: Request, res: Response) {
         ? req.query.error_description
         : "";
 
-    console.info(
-      `${LOG_PREFIX} callback hit:`,
-      JSON.stringify({
-        hasCode: Boolean(code),
-        hasState: Boolean(state),
-        oauthError: err || null,
-        oauthErrorDescription: errDesc || null,
-      }),
-    );
+    // console.info(
+    //   `${LOG_PREFIX} callback hit:`,
+    //   JSON.stringify({
+    //     hasCode: Boolean(code),
+    //     hasState: Boolean(state),
+    //     oauthError: err || null,
+    //     oauthErrorDescription: errDesc || null,
+    //   }),
+    // );
 
     if (state) {
       try {

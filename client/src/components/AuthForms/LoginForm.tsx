@@ -1,7 +1,7 @@
 "use client";
 import { useContext, useEffect, useMemo, useState } from "react";
 
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   createUserWithEmailAndPassword,
   sendEmailVerification,
@@ -94,8 +94,10 @@ function passwordStrength(pw: string): { score: number; label: string; color: "e
 const LoginForm = () => {
   const authCtx = useContext(AuthContext);
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const initialIsLogin = searchParams.get("action") !== "signup";
 
-  const [isLogin, setIsLogin] = useState<boolean>(true);
+  const [isLogin, setIsLogin] = useState<boolean>(initialIsLogin);
   const [showPassword, setShowPassword] = useState<boolean>(false);
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -110,6 +112,10 @@ const LoginForm = () => {
       needsEmailVerification(authCtx.user) ? VERIFY_EMAIL_PATH : "/",
     );
   }, [authCtx.hydrated, authCtx.isLoggedIn, authCtx.user, router]);
+
+  useEffect(() => {
+    setIsLogin(searchParams.get("action") !== "signup");
+  }, [searchParams]);
 
   const passwordValue = String(formState?.inputs?.password?.value || "");
   const pwMeter = useMemo(() => passwordStrength(passwordValue), [passwordValue]);
