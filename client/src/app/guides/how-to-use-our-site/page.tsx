@@ -51,8 +51,8 @@ export default function HowToUseOurSitePage() {
         sx={{ lineHeight: 1.7 }}
       >
         {APP_NAME} is a marketplace where indie builders list apps for sale and
-        buyers discover, purchase, and take over projects. Here's how to get the
-        most out of it, whether you're selling or buying.
+        buyers discover, purchase, and take over projects. Here is how to get the
+        most out of it, whether you are selling or buying.
       </Typography>
 
       <HowItWorksStepper sx={{ my: 4 }} />

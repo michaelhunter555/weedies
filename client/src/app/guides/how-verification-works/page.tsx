@@ -141,7 +141,7 @@ export default function HowVerificationWorksPage() {
           paragraph
           sx={{ mb: 2, lineHeight: 1.7 }}
         >
-         We encourage but don't require sellers to connect 3rd party tools like Google Analytics or RevenueCat to show live metrics on the product page.
+         We encourage but do not require sellers to connect 3rd party tools like Google Analytics or RevenueCat to show live metrics on the product page.
         </Typography>
         <Paper
           variant="outlined"
